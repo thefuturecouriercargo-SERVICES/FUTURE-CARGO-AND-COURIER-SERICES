@@ -1,0 +1,28 @@
+import { Router } from "express";
+import authRoutes from "./auth.routes";
+import vendorRoutes from "./vendor.routes";
+import employeeRoutes from "./employee.routes";
+import orderRoutes from "./order.routes";
+import driverRoutes from "./driver.routes";
+import cashClosingRoutes from "./cashClosing.routes";
+import dashboardRoutes from "./dashboard.routes";
+import reportsRoutes from "./reports.routes";
+import auditRoutes from "./audit.routes";
+import settingsRoutes from "./settings.routes";
+
+const router = Router();
+
+router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
+
+router.use("/auth", authRoutes);
+router.use("/vendors", vendorRoutes);
+router.use("/employees", employeeRoutes);
+router.use("/orders", orderRoutes);
+router.use("/driver", driverRoutes);
+router.use("/cash-closings", cashClosingRoutes);
+router.use("/dashboard", dashboardRoutes);
+router.use("/reports", reportsRoutes);
+router.use("/audit-logs", auditRoutes);
+router.use("/settings", settingsRoutes);
+
+export default router;

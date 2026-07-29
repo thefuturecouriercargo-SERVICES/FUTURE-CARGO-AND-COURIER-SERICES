@@ -1,0 +1,159 @@
+// Future Courier Service - Delivery Management System
+// Prisma schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  DRIVER
+}
+
+enum PaymentMode {
+  CASH
+  BANK
+}
+
+enum OrderStatus {
+  PENDING
+  DELIVERED
+  TRANSFER
+  CANCELLED
+}
+
+enum ClosingStatus {
+  SUBMITTED
+  REVIEWED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  username      String   @unique
+  email         String?  @unique
+  passwordHash  String
+  role          Role     @default(DRIVER)
+  active        Boolean  @default(true)
+  phone         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ordersAssigned     Order[]         @relation("OrderEmployee")
+  transfersFrom      OrderTransfer[] @relation("TransferFrom")
+  transfersTo        OrderTransfer[] @relation("TransferTo")
+  cashClosings       CashClosing[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model Vendor {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  deliveryCharge Int
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("vendors")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  date           DateTime    @db.Date
+  slNo           Int
+  cnNo           Int
+  vendorId       String
+  vendor         Vendor      @relation(fields: [vendorId], references: [id])
+  brandName      String
+  deliveryCharge Int
+  total          Int
+  payment        PaymentMode @default(CASH)
+  emirate        String      @default("DUBAI")
+  employeeId     String
+  employee       User        @relation("OrderEmployee", fields: [employeeId], references: [id])
+  status         OrderStatus @default(PENDING)
+  remarks        String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  transfers OrderTransfer[]
+
+  @@unique([date, slNo])
+  @@index([date])
+  @@index([employeeId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([cnNo])
+  @@map("orders")
+}
+
+model OrderTransfer {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromEmployeeId String
+  fromEmployee   User     @relation("TransferFrom", fields: [fromEmployeeId], references: [id])
+  toEmployeeId   String
+  toEmployee     User     @relation("TransferTo", fields: [toEmployeeId], references: [id])
+  note           String?
+  transferredAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_transfers")
+}
+
+model CashClosing {
+  id                  String        @id @default(cuid())
+  employeeId          String
+  employee            User          @relation(fields: [employeeId], references: [id])
+  date                DateTime      @db.Date
+  totalDelivered      Int
+  totalDeliveryCharge Int
+  cashPayments        Int
+  onlinePayments      Int
+  expenses            Int           @default(0)
+  expenseRemarks      String?
+  balanceCash         Int
+  status              ClosingStatus @default(SUBMITTED)
+  submittedAt         DateTime      @default(now())
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("cash_closings")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model CompanySettings {
+  id        String   @id @default(cuid())
+  name      String   @default("The Future Courier Service L.L.C")
+  address   String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  updatedAt DateTime @updatedAt
+
+  @@map("company_settings")
+}

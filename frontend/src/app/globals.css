@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: #f4f1e8;
+  color: #1b1b18;
+}
+
+.dark html,
+.dark body {
+  background: #0e1524;
+  color: #ece7d8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.stamp {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1.5px dashed currentColor;
+  border-radius: 3px;
+  transform: rotate(-1.5deg);
+}
+
+.stamp.delivered {
+  color: #1e7145;
+  background: #e4f0e7;
+}
+.stamp.pending {
+  color: #b9760c;
+  background: #fbeeda;
+}
+.stamp.cancelled {
+  color: #ac3529;
+  background: #f7e6e3;
+}
+.stamp.transfer {
+  color: #2b5aa6;
+  background: #e4ebf7;
+}
+
+.table-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+table.data-table th {
+  text-align: left;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5b5a52;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d9d2bc;
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+table.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #efebdf;
+}
+table.data-table tbody tr:hover {
+  background: #fbfaf5;
+}
