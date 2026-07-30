@@ -26,16 +26,26 @@ export default function DailyDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
-
+const [useRange, setUseRange] = useState(false);
+const [fromDate, setFromDate] = useState(todayStr());
+const [toDate, setToDate] = useState(todayStr());
+const [paymentFilter, setPaymentFilter] = useState<"" | "CASH" | "BANK">("");
+const [emirateFilter, setEmirateFilter] = useState("");
+const [employeeFilter, setEmployeeFilter] = useState("");
+const [minAmount, setMinAmount] = useState("");
+const [maxAmount, setMaxAmount] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiFetch<DailyResponse>("/dashboard/daily", { query: { date } });
+    const query: Record<string, string> = useRange
+  ? { from: fromDate, to: toDate }
+  : { date };
+const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
       setData(res);
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, useRange, fromDate, toDate]);
 
   useEffect(() => {
     load();
@@ -75,6 +85,19 @@ export default function DailyDashboardPage() {
             Today
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+  <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
+    <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
+    Use date range
+  </label>
+  {useRange && (
+    <>
+      <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+      <span className="text-xs text-ink-soft">to</span>
+      <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+    </>
+  )}
+</div>
       </div>
 
       {loading && !data ? (
