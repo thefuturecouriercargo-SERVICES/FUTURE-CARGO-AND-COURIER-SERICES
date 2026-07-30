@@ -53,7 +53,11 @@ export default function DriverPortalPage() {
     showToast(`CN ${order.cnNo} marked ${status}`);
     await load();
   }
-
+async function updatePayment(order: Order, payment: "CASH" | "BANK") {
+  await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment } });
+  showToast(`CN ${order.cnNo} payment set to ${payment}`);
+  await load();
+}
   const filtered = useMemo(() => {
     return orders.filter((o) => {
       if (tab !== "ALL" && o.status !== tab) return false;
@@ -110,7 +114,12 @@ export default function DriverPortalPage() {
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
                 <div className="mt-1 text-xs text-ink-soft">
-                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · {o.payment} · {o.emirate}
+                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> ·<button
+  onClick={() => updatePayment(o, o.payment === "CASH" ? "BANK" : "CASH")}
+  className="underline decoration-dotted font-semibold text-ink hover:text-brass"
+>
+  {o.payment}
+</button> · {o.emirate}
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
