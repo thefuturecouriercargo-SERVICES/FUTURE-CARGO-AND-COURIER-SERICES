@@ -221,7 +221,36 @@ router.patch(
     res.json(order);
   })
 );
+const paymentSchema = z.object({ payment: z.enum(PAYMENTS) });
 
+router.patch(
+  "/:id/payment",
+  asyncHandler(async (req, res) => {
+    const { payment } = paymentSchema.parse(req.body);
+    const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Order not found");
+
+    if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
+      throw new ApiError(403, "You can only update your own deliveries");
+    }
+
+    const order = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { payment },
+      include: { vendor: true, employee: { select: { id: true, name: true } } },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "PAYMENT_UPDATE",
+      entity: "Order",
+      entityId: order.id,
+      meta: { from: existing.payment, to: payment },
+    });
+    emitGlobal("order:changed", { type: "updated", order });
+    res.json(order);
+  })
+);
 const transferSchema = z.object({ toEmployeeId: z.string(), note: z.string().max(300).optional() });
 
 router.post(
