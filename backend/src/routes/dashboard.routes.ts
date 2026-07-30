@@ -37,7 +37,7 @@ function summarize(orders: Order[]) {
     } else {
       const { start, date } = dayRange(req.query.date as string | undefined);
       where = { date: start };
-      label = date;
+      label = formatDate(date);
     }
 
     const orders = await prisma.order.findMany({
