@@ -25,7 +25,9 @@ export default function OrdersPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+const [saving, setSaving] = useState(false);
+  const [lockFields, setLockFields] = useState(false);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,10 +51,16 @@ export default function OrdersPage() {
 
   useSocketEvent("order:changed", load);
 
-  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
+ const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 
-  function resetForm() {
-    setForm(emptyForm);
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return orders;
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) => String(o.cnNo).includes(q) || o.brandName?.toLowerCase().includes(q));
+  }, [orders, search]);
+
+ function resetForm() {
+    setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
     setEditingId(null);
   }
 
@@ -234,7 +242,12 @@ export default function OrdersPage() {
                 ))}
               </select>
             </div>
-            <button type="submit" disabled={saving} className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
+          <label className="flex items-center gap-1.5 text-xs font-mono text-ink-soft mr-2">
+                <input type="checkbox" checked={lockFields} onChange={(e) => setLockFields(e.target.checked)} />
+                Lock Emirate & Employee
+              </label>
+              <button type="submit" disabled={saving} className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
+
               {saving ? "Saving…" : editingId ? "Save changes" : "Add consignment"}
             </button>
             {editingId && (
@@ -256,7 +269,13 @@ export default function OrdersPage() {
             Delivered total <b className="text-ink">{fmtNumber(totals.total)} AED</b> · DL charge <b className="text-ink">{fmtNumber(totals.dl)} AED</b>
           </div>
         </div>
-        <div className="table-scroll">
+      <input
+              placeholder="Search CN No. or brand…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="mb-3 w-full max-w-xs rounded border border-line px-3 py-1.5 text-sm"
+            />
+            <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -279,14 +298,14 @@ export default function OrdersPage() {
                     Loading…
                   </td>
                 </tr>
-              ) : orders.length === 0 ? (
+             ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-ink-soft">
                     No consignments entered for this date yet.
                   </td>
                 </tr>
               ) : (
-                orders.map((o) => (
+              filteredOrders.map((o) => (
                   <tr key={o.id}>
                     <td className="font-mono">{o.slNo}</td>
                     <td className="font-mono">{o.cnNo}</td>
