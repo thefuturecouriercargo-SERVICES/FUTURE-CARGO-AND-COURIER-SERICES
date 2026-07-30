@@ -248,8 +248,13 @@ function TransferModal({ order, onClose, onDone }: { order: Order; onClose: () =
 function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: () => void }) {
   const [preview, setPreview] = useState<{ totalDelivered: number; totalDeliveryCharge: number; cashPayments: number; onlinePayments: number } | null>(null);
   const [existing, setExisting] = useState<CashClosing | null>(null);
-  const [expenses, setExpenses] = useState("0");
-  const [remarks, setRemarks] = useState("");
+ const [expenseLines, setExpenseLines] = useState<{ id: string; category: string; amount: string }[]>([]);
+
+const EXPENSE_CATEGORIES = [
+  "FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT",
+  "STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB",
+  "SALIK","INTERNET","LICENSE",
+];
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -259,10 +264,6 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
     ]);
     setPreview(p);
     setExisting(closings[0] ?? null);
-    if (closings[0]) {
-      setExpenses(String(closings[0].expenses));
-      setRemarks(closings[0].expenseRemarks ?? "");
-    }
   }, [date]);
 
   useEffect(() => {
@@ -271,14 +272,15 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
 
   useSocketEvent("order:changed", load);
 
-  const balance = preview ? preview.cashPayments - Number(expenses || 0) : 0;
+ const totalExpenses = expenseLines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+const balance = preview ? preview.cashPayments - totalExpenses : 0;
 
   async function submit() {
     setBusy(true);
     try {
       const closing = await apiFetch<CashClosing>("/cash-closings", {
         method: "POST",
-        body: { date, expenses: Number(expenses || 0), expenseRemarks: remarks },
+       body: { date, expenseLines: expenseLines.map((l) => ({ category: l.category, amount: Number(l.amount) || 0 })) },
       });
       setExisting(closing);
       onSubmitted();
@@ -304,16 +306,41 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
         <Kpi label="Online Payments" value={fmtNumber(preview.onlinePayments)} />
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Expenses (AED)</label>
-          <input type="number" value={expenses} onChange={(e) => setExpenses(e.target.value)} className="w-full rounded border border-line px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Expense remarks</label>
-          <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="w-full rounded border border-line px-3 py-2 text-sm" placeholder="Fuel, tolls, etc." />
-        </div>
-      </div>
+     <div className="mb-4">
+  <label className="mb-2 block font-mono text-[10px] uppercase text-ink-soft">Today&apos;s Expenses</label>
+  {expenseLines.map((line) => (
+    <div key={line.id} className="mb-2 flex gap-2">
+      <select
+        value={line.category}
+        onChange={(e) => setExpenseLines(expenseLines.map((l) => (l.id === line.id ? { ...l, category: e.target.value } : l)))}
+        className="flex-1 rounded border border-line px-3 py-2 text-sm"
+      >
+        {EXPENSE_CATEGORIES.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
+      <input
+        type="number"
+        value={line.amount}
+        onChange={(e) => setExpenseLines(expenseLines.map((l) => (l.id === line.id ? { ...l, amount: e.target.value } : l)))}
+        placeholder="Amount"
+        className="w-28 rounded border border-line px-3 py-2 text-sm"
+      />
+      <button
+        onClick={() => setExpenseLines(expenseLines.filter((l) => l.id !== line.id))}
+        className="rounded border border-line px-3 py-2 text-xs text-ink-soft hover:border-brass"
+      >
+        Remove
+      </button>
+    </div>
+  ))}
+  <button
+    onClick={() => setExpenseLines([...expenseLines, { id: crypto.randomUUID(), category: EXPENSE_CATEGORIES[0], amount: "" }])}
+    className="mt-1 rounded border border-line px-3 py-1.5 text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
+  >
+    + Add expense
+  </button>
+</div>
 
       <div className="mb-5 flex items-center justify-between rounded border border-brass/40 bg-paper-2 px-4 py-3">
         <span className="font-mono text-xs uppercase tracking-wide text-ink-soft">Balance Cash</span>
