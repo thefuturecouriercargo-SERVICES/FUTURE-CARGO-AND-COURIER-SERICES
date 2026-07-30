@@ -31,7 +31,25 @@ enum ClosingStatus {
   SUBMITTED
   REVIEWED
 }
-
+enum ExpenseCategory {
+  FUEL
+  INSURANCE
+  SALARY
+  WORKSHOP
+  CAR_WASH
+  ROOM_RENT
+  CAR_RENT
+  STATIONARY
+  PARKING
+  VISA
+  MEDICAL
+  COMMISSION
+  OTHER
+  DARB
+  SALIK
+  INTERNET
+  LICENSE
+}
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -49,7 +67,7 @@ model User {
   transfersTo        OrderTransfer[] @relation("TransferTo")
   cashClosings       CashClosing[]
   auditLogs          AuditLog[]
-
+expenseEntries ExpenseEntry[]
   @@map("users")
 }
 
@@ -156,4 +174,21 @@ model CompanySettings {
   updatedAt DateTime @updatedAt
 
   @@map("company_settings")
+}
+model ExpenseEntry {
+  id           String          @id @default(cuid())
+  date         DateTime        @db.Date
+  category     ExpenseCategory
+  amount       Int
+  remarks      String?
+  source       String          @default("ADMIN") // "ADMIN" or "DRIVER"
+  employeeId   String?
+  employee     User?           @relation(fields: [employeeId], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([date])
+  @@index([category])
+  @@index([employeeId])
+  @@map("expense_entries")
 }
