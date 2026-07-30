@@ -13,7 +13,9 @@ export function addDays(dateStr: string, delta: number): string {
 }
 
 export function todayStr(): string {
-  return fmtDateInput(new Date());
+  const dubaiOffsetMs = 4 * 60 * 60 * 1000;
+  const now = new Date(Date.now() + dubaiOffsetMs);
+  return now.toISOString().slice(0, 10);
 }
 
 export function currentMonthStr(): string {
