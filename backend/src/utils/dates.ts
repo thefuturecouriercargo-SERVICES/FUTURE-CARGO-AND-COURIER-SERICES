@@ -5,9 +5,15 @@
  * server timezone.
  */
 
+const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000;
+
+function dubaiNow(): Date {
+  return new Date(Date.now() + DUBAI_OFFSET_MS);
+}
+
 export function parseDateParam(value?: string): Date {
   if (!value) {
-    const now = new Date();
+    const now = dubaiNow();
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }
   const [y, m, d] = value.split("-").map(Number);
@@ -29,11 +35,11 @@ export function monthRange(monthStr?: string): { start: Date; end: Date; year: n
     const [y, m] = monthStr.split("-").map(Number);
     year = y;
     month = m;
-  } else {
-    const now = new Date();
-    year = now.getUTCFullYear();
-    month = now.getUTCMonth() + 1;
-  }
+ } else {
+      const now = dubaiNow();
+      year = now.getUTCFullYear();
+      month = now.getUTCMonth() + 1;
+    }
   const start = new Date(Date.UTC(year, month - 1, 1));
   const end = new Date(Date.UTC(year, month, 0)); // last day of month
   return { start, end, year, month };
