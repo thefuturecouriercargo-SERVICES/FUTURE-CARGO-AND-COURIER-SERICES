@@ -29,10 +29,10 @@ router.post(
       where: { employeeId: req.user!.sub, date: start, status: "DELIVERED" },
     });
 
-    const totalDeliveryCharge = orders.reduce((s, o) => s + o.deliveryCharge, 0);
-    const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
-    const onlinePayments = orders.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0);
-    const balanceCash = cashPayments - data.expenses;
+ const totalDeliveryCharge = orders.reduce((s, o) => s + o.deliveryCharge, 0);
+const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
+const onlinePayments = orders.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0);
+const balanceCash = cashPayments - data.expenses;
 
     const closing = await prisma.cashClosing.upsert({
       where: { employeeId_date: { employeeId: req.user!.sub, date: start } },
