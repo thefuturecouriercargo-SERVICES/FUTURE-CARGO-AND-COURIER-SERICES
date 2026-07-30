@@ -10,10 +10,14 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate);
 
+const expenseLineSchema = z.object({
+  category: z.enum(["FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT","STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB","SALIK","INTERNET","LICENSE"]),
+  amount: z.number().int().min(0),
+});
+
 const submitSchema = z.object({
   date: z.string().optional(),
-  expenses: z.number().int().min(0).default(0),
-  expenseRemarks: z.string().max(500).optional(),
+  expenseLines: z.array(expenseLineSchema).default([]),
 });
 
 // Driver submits (or re-submits) their day-end cash closing.
@@ -32,7 +36,8 @@ router.post(
  const totalDeliveryCharge = orders.reduce((s, o) => s + o.deliveryCharge, 0);
 const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
 const onlinePayments = orders.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0);
-const balanceCash = cashPayments - data.expenses;
+const totalExpenses = data.expenseLines.reduce((s, e) => s + e.amount, 0);
+const balanceCash = cashPayments - totalExpenses;
 
     const closing = await prisma.cashClosing.upsert({
       where: { employeeId_date: { employeeId: req.user!.sub, date: start } },
@@ -43,8 +48,7 @@ const balanceCash = cashPayments - data.expenses;
         totalDeliveryCharge,
         cashPayments,
         onlinePayments,
-        expenses: data.expenses,
-        expenseRemarks: data.expenseRemarks,
+       expenses: totalExpenses,
         balanceCash,
       },
       update: {
@@ -52,8 +56,7 @@ const balanceCash = cashPayments - data.expenses;
         totalDeliveryCharge,
         cashPayments,
         onlinePayments,
-        expenses: data.expenses,
-        expenseRemarks: data.expenseRemarks,
+       expenses: totalExpenses,
         balanceCash,
         submittedAt: new Date(),
       },
@@ -66,6 +69,21 @@ const balanceCash = cashPayments - data.expenses;
       entity: "CashClosing",
       entityId: closing.id,
     });
+    // Create individual expense entries so they flow into the admin ledger.
+if (data.expenseLines.length > 0) {
+  await prisma.expenseEntry.deleteMany({
+    where: { date: start, employeeId: req.user!.sub, source: "DRIVER" },
+  });
+  await prisma.expenseEntry.createMany({
+    data: data.expenseLines.map((line) => ({
+      date: start,
+      category: line.category,
+      amount: line.amount,
+      source: "DRIVER",
+      employeeId: req.user!.sub,
+    })),
+  });
+}
     emitGlobal("cashClosing:submitted", { closing });
 
     res.status(201).json(closing);
