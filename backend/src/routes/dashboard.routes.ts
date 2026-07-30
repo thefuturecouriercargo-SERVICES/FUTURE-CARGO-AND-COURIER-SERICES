@@ -23,12 +23,25 @@ function summarize(orders: Order[]) {
   };
 }
 
-router.get(
+ router.get(
   "/daily",
   asyncHandler(async (req, res) => {
-    const { start, date } = dayRange(req.query.date as string | undefined);
+    let where: { date: Date } | { date: { gte: Date; lte: Date } };
+    let label: string;
+
+    if (req.query.from || req.query.to) {
+      const { start: fromStart } = dayRange(req.query.from as string | undefined);
+      const { start: toStart } = dayRange(req.query.to as string | undefined);
+      where = { date: { gte: fromStart, lte: toStart } };
+      label = `${formatDate(fromStart)} to ${formatDate(toStart)}`;
+    } else {
+      const { start, date } = dayRange(req.query.date as string | undefined);
+      where = { date: start };
+      label = date;
+    }
+
     const orders = await prisma.order.findMany({
-      where: { date: start },
+      where,
       include: { vendor: true, employee: { select: { id: true, name: true } } },
     });
 
@@ -63,7 +76,7 @@ router.get(
     ];
 
     res.json({
-      date: formatDate(date),
+      date: label,
       summary: summarize(orders),
       employeeBreakdown,
       vendorBreakdown,
