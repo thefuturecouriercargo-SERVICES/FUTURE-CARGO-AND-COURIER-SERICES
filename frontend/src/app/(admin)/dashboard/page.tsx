@@ -56,10 +56,15 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   const employeeRows = data?.employeeBreakdown ?? [];
 
   const filteredOrders = (data?.orders ?? []).filter((o) => {
-    if (statusFilter && o.status !== statusFilter) return false;
-    if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
-    return true;
-  });
+  if (statusFilter && o.status !== statusFilter) return false;
+  if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
+  if (paymentFilter && o.payment !== paymentFilter) return false;
+  if (emirateFilter && o.emirate !== emirateFilter) return false;
+  if (employeeFilter && o.employee.id !== employeeFilter) return false;
+  if (minAmount && o.total < Number(minAmount)) return false;
+  if (maxAmount && o.total > Number(maxAmount)) return false;
+  return true;
+});
 
   return (
     <div>
@@ -268,6 +273,25 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
                 <option value="TRANSFER">Transfer</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
+              <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as "" | "CASH" | "BANK")} className="rounded border border-line px-3 py-1.5 text-sm">
+  <option value="">All payments</option>
+  <option value="CASH">Cash</option>
+  <option value="BANK">Bank</option>
+</select>
+<select value={emirateFilter} onChange={(e) => setEmirateFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+  <option value="">All emirates</option>
+  {(data.emirateBreakdown ?? []).map((e) => (
+    <option key={e.emirate} value={e.emirate}>{e.emirate}</option>
+  ))}
+</select>
+<select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+  <option value="">All employees</option>
+  {employeeRows.map((r) => (
+    <option key={r.employee.id} value={r.employee.id}>{r.employee.name}</option>
+  ))}
+</select>
+<input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
+<input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
             </div>
             <div className="table-scroll">
               <table className="data-table">
