@@ -120,5 +120,44 @@ router.get(
     res.end();
   })
 );
+router.get(
+  "/pnl",
+  asyncHandler(async (req, res) => {
+    const where = buildWhere(req.query as Record<string, unknown>);
 
+    const delivered = await prisma.order.findMany({
+      where: { ...where, status: "DELIVERED" },
+      select: { deliveryCharge: true },
+    });
+    const revenue = delivered.reduce((s, o) => s + o.deliveryCharge, 0);
+
+    const expenseWhere: Record<string, unknown> = {};
+    if (req.query.from || req.query.to) {
+      expenseWhere.date = {
+        ...(req.query.from ? { gte: parseDateParam(req.query.from as string) } : {}),
+        ...(req.query.to ? { lte: parseDateParam(req.query.to as string) } : {}),
+      };
+    }
+
+    const expenses = await prisma.expenseEntry.findMany({ where: expenseWhere });
+    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+
+    const byCategory: Record<string, number> = {};
+    for (const e of expenses) {
+      byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
+    }
+    const categoryBreakdown = Object.entries(byCategory)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    res.json({
+      revenue,
+      totalExpenses,
+      netProfit: revenue - totalExpenses,
+      deliveredCount: delivered.length,
+      categoryBreakdown,
+      topCategory: categoryBreakdown[0] ?? null,
+    });
+  })
+);
 export default router;
