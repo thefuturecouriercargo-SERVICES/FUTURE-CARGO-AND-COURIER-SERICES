@@ -22,7 +22,12 @@ interface Employee {
   name: string;
 }
 
-const emptyForm = { date: new Date().toISOString().slice(0, 10), category: CATEGORIES[0], amount: "", remarks: "", employeeId: "" };
+function dubaiToday(): string {
+  const d = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+const emptyForm = { date: dubaiToday(), category: CATEGORIES[0], amount: "", remarks: "", employeeId: "" };
 export default function ExpensesPage() {
  const [entries, setEntries] = useState<ExpenseEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
