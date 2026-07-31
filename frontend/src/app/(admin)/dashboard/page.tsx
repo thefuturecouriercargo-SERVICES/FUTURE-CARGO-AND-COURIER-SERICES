@@ -123,7 +123,7 @@ return (
               <KpiCard label="Delivered" value={data.summary.delivered} />
             </div>
             <div className="bg-white">
-              <KpiCard label="Pending" value={data.summary.pending} />
+            <KpiCard label="Pending" value={data.summary.pending + pendingCarryover.length} />
             </div>
             <div className="bg-white">
               <KpiCard label="Transfer" value={data.summary.transferred} />
@@ -156,7 +156,7 @@ return (
                       <td className="text-right font-mono">{r.delivered}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
-                      <td className="text-right font-mono">{r.pending}</td>
+                     <td className="text-right font-mono">{r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length}</td>
                       <td className="text-right font-mono">{r.cancelled}</td>
                     </tr>
                   ))}
