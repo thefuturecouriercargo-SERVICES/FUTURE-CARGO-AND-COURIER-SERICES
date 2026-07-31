@@ -320,9 +320,9 @@ return (
                       </td>
                     </tr>
                   ) : (
-                    filteredOrders.map((o) => (
-                      <tr key={o.id}>
-                        <td className="font-mono">{o.slNo}</td>
+                   filteredOrders.map((o, i) => (
+                <tr key={o.id}>
+                  <td className="font-mono">{i + 1}</td>
                         <td className="font-mono">{o.cnNo}</td>
                         <td>{o.brandName}</td>
                         <td className="text-right font-mono">{fmtNumber(o.total)}</td>
