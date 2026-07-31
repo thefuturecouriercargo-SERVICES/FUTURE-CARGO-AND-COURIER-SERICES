@@ -56,11 +56,12 @@ const [saving, setSaving] = useState(false);
 
  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 
-  const filteredOrders = useMemo(() => {
-    if (!search.trim()) return orders;
+const filteredOrders = useMemo(() => {
+    const allOrders = [...orders, ...pendingCarryover];
+    if (!search.trim()) return allOrders;
     const q = search.trim().toLowerCase();
-    return orders.filter((o) => String(o.cnNo).includes(q) || o.brandName?.toLowerCase().includes(q));
-  }, [orders, search]);
+    return allOrders.filter((o) => String(o.cnNo).includes(q) || o.brandName?.toLowerCase().includes(q));
+  }, [orders, pendingCarryover, search]);
 
  function resetForm() {
     setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
@@ -263,20 +264,6 @@ const [saving, setSaving] = useState(false);
         </form>
       </div>
 
-     {pendingCarryover.length > 0 && (
-            <div className="mb-5 rounded border border-amber-400 bg-amber-50 p-3 text-sm">
-              <span className="font-semibold text-amber-800">
-                {pendingCarryover.length} pending consignment{pendingCarryover.length === 1 ? "" : "s"} carried over from previous days
-              </span>
-              <ul className="mt-1 text-xs text-amber-700">
-                {pendingCarryover.map((o) => (
-                  <li key={o.id}>
-                    CN {o.cnNo} — {o.brandName} · {o.date} · {o.employee?.name ?? "Unassigned"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           <div className="border border-line bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-[17px] font-semibold text-navy">
