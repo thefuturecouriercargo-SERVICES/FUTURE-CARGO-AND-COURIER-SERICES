@@ -267,7 +267,7 @@ const filteredOrders = useMemo(() => {
           <div className="border border-line bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-[17px] font-semibold text-navy">
-                {orders.length} consignment{orders.length === 1 ? "" : "s"}
+               {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
           </h2>
           <div className="font-mono text-xs text-ink-soft">
             Delivered total <b className="text-ink">{fmtNumber(totals.total)} AED</b> · DL charge <b className="text-ink">{fmtNumber(totals.dl)} AED</b>
@@ -309,9 +309,9 @@ const filteredOrders = useMemo(() => {
                   </td>
                 </tr>
               ) : (
-              filteredOrders.map((o) => (
-                  <tr key={o.id}>
-                    <td className="font-mono">{o.slNo}</td>
+            filteredOrders.map((o, i) => (
+                <tr key={o.id}>
+                  <td className="font-mono">{i + 1}</td>
                     <td className="font-mono">{o.cnNo}</td>
                     <td>{o.brandName}</td>
                     <td className="text-right font-mono">{fmtNumber(o.total)}</td>
