@@ -21,6 +21,7 @@ const createSchema = z.object({
   category: z.enum(CATEGORIES),
   amount: z.number().int().min(0),
   remarks: z.string().max(500).optional(),
+  employeeId: z.string().optional(),
 });
 
 // Admin creates a manual expense entry.
@@ -30,17 +31,17 @@ router.post(
   asyncHandler(async (req, res) => {
     const data = createSchema.parse(req.body);
     const { start } = dayRange(data.date);
-
-    const entry = await prisma.expenseEntry.create({
+const entry = await prisma.expenseEntry.create({
       data: {
         date: start,
         category: data.category,
         amount: data.amount,
         remarks: data.remarks,
         source: "ADMIN",
+        employeeId: data.employeeId,
       },
     });
-
+  
     await writeAuditLog({
       userId: req.user!.sub,
       action: "EXPENSE_CREATE",
