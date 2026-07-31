@@ -204,19 +204,32 @@ router.patch(
       throw new ApiError(403, "You can only update your own deliveries");
     }
 
-    const order = await prisma.order.update({
-      where: { id: req.params.id },
-      data: { status },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
-    });
+  const { start: todayStart } = dayRange();
+      const isCarryover = status !== "PENDING" && existing.date.getTime() < todayStart.getTime();
 
-    await writeAuditLog({
-      userId: req.user!.sub,
-      action: "STATUS_UPDATE",
-      entity: "Order",
-      entityId: order.id,
-      meta: { from: existing.status, to: status },
-    });
+      const order = await prisma.$transaction(async (tx) => {
+        let carryFields: { date?: Date; slNo?: number } = {};
+        if (isCarryover) {
+          const lastSl = await tx.order.aggregate({
+            where: { date: todayStart },
+            _max: { slNo: true },
+          });
+          carryFields = { date: todayStart, slNo: (lastSl._max.slNo ?? 0) + 1 };
+        }
+        return tx.order.update({
+          where: { id: req.params.id },
+          data: { status, ...carryFields },
+          include: { vendor: true, employee: { select: { id: true, name: true } } },
+        });
+      });
+
+      await writeAuditLog({
+        userId: req.user!.sub,
+        action: "STATUS_UPDATE",
+        entity: "Order",
+        entityId: order.id,
+        meta: { from: existing.status, to: status, carriedOverToToday: isCarryover },
+      });
     emitGlobal("order:changed", { type: "updated", order });
     res.json(order);
   })
