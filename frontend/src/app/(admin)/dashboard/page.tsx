@@ -58,7 +58,7 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
-  const filteredOrders = (data?.orders ?? []).filter((o) => {
+ const filteredOrders = [...(data?.orders ?? []), ...pendingCarryover].filter((o) => {
   if (statusFilter && o.status !== statusFilter) return false;
   if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
   if (paymentFilter && o.payment !== paymentFilter) return false;
@@ -254,20 +254,7 @@ return (
             </div>
           </div>
 
-         {pendingCarryover.length > 0 && (
-              <div className="mb-5 rounded border border-amber-400 bg-amber-50 p-3 text-sm">
-                <span className="font-semibold text-amber-800">
-                  {pendingCarryover.length} pending consignment{pendingCarryover.length === 1 ? "" : "s"} carried over from previous days
-                </span>
-                <ul className="mt-1 text-xs text-amber-700">
-                  {pendingCarryover.map((o) => (
-                    <li key={o.id}>
-                      CN {o.cnNo} — {o.brandName} · {o.date} · {o.employee?.name ?? "Unassigned"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+       
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
                 Consignment Ledger — {data.date}
