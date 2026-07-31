@@ -24,6 +24,7 @@ export default function DailyDashboardPage() {
   const [date, setDate] = useState(todayStr());
   const [data, setData] = useState<DailyResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
 const [useRange, setUseRange] = useState(false);
@@ -41,10 +42,12 @@ const [maxAmount, setMaxAmount] = useState("");
   ? { from: fromDate, to: toDate }
   : { date };
 const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
-      setData(res);
-    } finally {
-      setLoading(false);
-    }
+        setData(res);
+        const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
+        setPendingCarryover(carryoverRes.orders);
+      } finally {
+        setLoading(false);
+      }
   }, [date, useRange, fromDate, toDate]);
 
   useEffect(() => {
@@ -67,14 +70,28 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 });
 
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            {pendingCarryover.length > 0 && (
+              <div className="mb-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm">
+                <span className="font-semibold text-amber-800">
+                  {pendingCarryover.length} pending consignment{pendingCarryover.length === 1 ? "" : "s"} carried over from previous days
+                </span>
+                <ul className="mt-1 text-xs text-amber-700">
+                  {pendingCarryover.map((o) => (
+                    <li key={o.id}>
+                      CN {o.cnNo} — {o.brandName} · {o.date} · {o.employee?.name ?? "Unassigned"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Manifest Summary</p>
           <h1 className="font-display text-3xl font-semibold text-navy">Operations Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+       </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
             ← Prev
           </button>
           <input
