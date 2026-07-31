@@ -28,6 +28,7 @@ export default function OrdersPage() {
 const [saving, setSaving] = useState(false);
   const [lockFields, setLockFields] = useState(false);
   const [search, setSearch] = useState("");
+  const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,12 +38,14 @@ const [saving, setSaving] = useState(false);
         apiFetch<Vendor[]>("/vendors"),
         apiFetch<Employee[]>("/employees"),
       ]);
-      setOrders(ordersRes.orders);
-      setVendors(vendorsRes);
-      setEmployees(employeesRes);
-    } finally {
-      setLoading(false);
-    }
+    setOrders(ordersRes.orders);
+        setVendors(vendorsRes);
+        setEmployees(employeesRes);
+        const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
+        setPendingCarryover(carryoverRes.orders);
+      } finally {
+        setLoading(false);
+      }
   }, [date]);
 
   useEffect(() => {
@@ -260,10 +263,24 @@ const [saving, setSaving] = useState(false);
         </form>
       </div>
 
-      <div className="border border-line bg-white p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-[17px] font-semibold text-navy">
-            {orders.length} consignment{orders.length === 1 ? "" : "s"}
+     {pendingCarryover.length > 0 && (
+            <div className="mb-5 rounded border border-amber-400 bg-amber-50 p-3 text-sm">
+              <span className="font-semibold text-amber-800">
+                {pendingCarryover.length} pending consignment{pendingCarryover.length === 1 ? "" : "s"} carried over from previous days
+              </span>
+              <ul className="mt-1 text-xs text-amber-700">
+                {pendingCarryover.map((o) => (
+                  <li key={o.id}>
+                    CN {o.cnNo} — {o.brandName} · {o.date} · {o.employee?.name ?? "Unassigned"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="border border-line bg-white p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-[17px] font-semibold text-navy">
+                {orders.length} consignment{orders.length === 1 ? "" : "s"}
           </h2>
           <div className="font-mono text-xs text-ink-soft">
             Delivered total <b className="text-ink">{fmtNumber(totals.total)} AED</b> · DL charge <b className="text-ink">{fmtNumber(totals.dl)} AED</b>
