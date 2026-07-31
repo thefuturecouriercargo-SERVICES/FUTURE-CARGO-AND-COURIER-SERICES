@@ -12,9 +12,13 @@ interface PnlData {
   topCategory: { category: string; amount: number } | null;
 }
 
+function dubaiNow() {
+  return new Date(Date.now() + 4 * 60 * 60 * 1000);
+}
+
 function monthRangeDefaults() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const now = dubaiNow();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
   const to = now.toISOString().slice(0, 10);
   return { from, to };
 }
@@ -32,16 +36,16 @@ export default function PnlPage() {
     load();
   }, [load]);
 
-  function setThisMonth() {
+ function setThisMonth() {
     const d = monthRangeDefaults();
     setFrom(d.from);
     setTo(d.to);
   }
 
   function setLastMonth() {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    const now = dubaiNow();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
     setFrom(start.toISOString().slice(0, 10));
     setTo(end.toISOString().slice(0, 10));
   }
