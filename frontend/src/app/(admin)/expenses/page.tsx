@@ -75,10 +75,7 @@ export default function ExpensesPage() {
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Expense</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-         <div>
-          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Amount (AED)</label>
-          <input required type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm" />
-        </div>
+      
         <div>
           <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Driver (optional)</label>
           <select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm">
