@@ -246,15 +246,9 @@ function TransferModal({ order, onClose, onDone }: { order: Order; onClose: () =
 }
 
 function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: () => void }) {
-  const [preview, setPreview] = useState<{ totalDelivered: number; totalDeliveryCharge: number; cashPayments: number; onlinePayments: number } | null>(null);
+const [preview, setPreview] = useState<{ totalDelivered: number; totalDeliveryCharge: number; cashPayments: number; onlinePayments: number; expenses: { id: string; category: string; amount: number }[]; totalExpenses: number } | null>(null);
   const [existing, setExisting] = useState<CashClosing | null>(null);
- const [expenseLines, setExpenseLines] = useState<{ id: string; category: string; amount: string }[]>([]);
 
-const EXPENSE_CATEGORIES = [
-  "FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT",
-  "STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB",
-  "SALIK","INTERNET","LICENSE",
-];
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -272,16 +266,15 @@ const EXPENSE_CATEGORIES = [
 
   useSocketEvent("order:changed", load);
 
- const totalExpenses = expenseLines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
-const balance = preview ? preview.cashPayments - totalExpenses : 0;
+const balance = preview ? preview.cashPayments - preview.totalExpenses : 0;
 
   async function submit() {
     setBusy(true);
     try {
-      const closing = await apiFetch<CashClosing>("/cash-closings", {
-        method: "POST",
-       body: { date, expenseLines: expenseLines.map((l) => ({ category: l.category, amount: Number(l.amount) || 0 })) },
-      });
+   const closing = await apiFetch<CashClosing>("/cash-closings", {
+          method: "POST",
+          body: { date },
+        });
       setExisting(closing);
       onSubmitted();
     } finally {
@@ -306,41 +299,19 @@ const balance = preview ? preview.cashPayments - totalExpenses : 0;
         <Kpi label="Online Payments" value={fmtNumber(preview.onlinePayments)} />
       </div>
 
-     <div className="mb-4">
-  <label className="mb-2 block font-mono text-[10px] uppercase text-ink-soft">Today&apos;s Expenses</label>
-  {expenseLines.map((line) => (
-    <div key={line.id} className="mb-2 flex gap-2">
-      <select
-        value={line.category}
-        onChange={(e) => setExpenseLines(expenseLines.map((l) => (l.id === line.id ? { ...l, category: e.target.value } : l)))}
-        className="flex-1 rounded border border-line px-3 py-2 text-sm"
-      >
-        {EXPENSE_CATEGORIES.map((c) => (
-          <option key={c} value={c}>{c}</option>
-        ))}
-      </select>
-      <input
-        type="number"
-        value={line.amount}
-        onChange={(e) => setExpenseLines(expenseLines.map((l) => (l.id === line.id ? { ...l, amount: e.target.value } : l)))}
-        placeholder="Amount"
-        className="w-28 rounded border border-line px-3 py-2 text-sm"
-      />
-      <button
-        onClick={() => setExpenseLines(expenseLines.filter((l) => l.id !== line.id))}
-        className="rounded border border-line px-3 py-2 text-xs text-ink-soft hover:border-brass"
-      >
-        Remove
-      </button>
-    </div>
-  ))}
-  <button
-    onClick={() => setExpenseLines([...expenseLines, { id: crypto.randomUUID(), category: EXPENSE_CATEGORIES[0], amount: "" }])}
-    className="mt-1 rounded border border-line px-3 py-1.5 text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
-  >
-    + Add expense
-  </button>
-</div>
+    <div className="mb-4">
+          <label className="mb-2 block font-mono text-[10px] uppercase text-ink-soft">Today&apos;s Expenses (entered by admin)</label>
+          {preview.expenses.length === 0 ? (
+            <p className="text-xs text-ink-soft">No expenses entered for you today.</p>
+          ) : (
+            preview.expenses.map((exp) => (
+              <div key={exp.id} className="mb-2 flex items-center justify-between rounded border border-line px-3 py-2 text-sm">
+                <span>{exp.category}</span>
+                <span className="font-mono">{fmtNumber(exp.amount)} AED</span>
+              </div>
+            ))
+          )}
+        </div>
 
       <div className="mb-5 flex items-center justify-between rounded border border-brass/40 bg-paper-2 px-4 py-3">
         <span className="font-mono text-xs uppercase tracking-wide text-ink-soft">Balance Cash</span>
