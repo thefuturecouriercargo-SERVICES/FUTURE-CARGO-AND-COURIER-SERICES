@@ -8,7 +8,6 @@ const CATEGORIES = [
   "STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB",
   "SALIK","INTERNET","LICENSE",
 ];
-
 interface ExpenseEntry {
   id: string;
   date: string;
@@ -18,17 +17,24 @@ interface ExpenseEntry {
   source: string;
   employee?: { id: string; name: string } | null;
 }
+interface Employee {
+  id: string;
+  name: string;
+}
 
-const emptyForm = { date: new Date().toISOString().slice(0, 10), category: CATEGORIES[0], amount: "", remarks: "" };
-
+const emptyForm = { date: new Date().toISOString().slice(0, 10), category: CATEGORIES[0], amount: "", remarks: "", employeeId: "" };
 export default function ExpensesPage() {
-  const [entries, setEntries] = useState<ExpenseEntry[]>([]);
+ const [entries, setEntries] = useState<ExpenseEntry[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
+ const load = useCallback(async () => {
     setEntries(await apiFetch<ExpenseEntry[]>("/expenses"));
+  }, []);
+
+  useEffect(() => {
+    apiFetch<Employee[]>("/employees").then(setEmployees);
   }, []);
 
   useEffect(() => {
@@ -42,7 +48,7 @@ export default function ExpensesPage() {
     try {
       await apiFetch("/expenses", {
         method: "POST",
-        body: { date: form.date, category: form.category, amount: Number(form.amount), remarks: form.remarks || undefined },
+       body: { date: form.date, category: form.category, amount: Number(form.amount), remarks: form.remarks || undefined, employeeId: form.employeeId || undefined },
       });
       setForm(emptyForm);
       await load();
@@ -69,10 +75,19 @@ export default function ExpensesPage() {
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Expense</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
-            <input required type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm" />
-          </div>
+         <div>
+          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Amount (AED)</label>
+          <input required type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Driver (optional)</label>
+          <select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm">
+            <option value="">None (company expense)</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>{emp.name}</option>
+            ))}
+          </select>
+        </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Category</label>
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm">
