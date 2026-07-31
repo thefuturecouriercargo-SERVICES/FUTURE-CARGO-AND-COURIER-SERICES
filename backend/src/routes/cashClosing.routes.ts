@@ -10,14 +10,8 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate);
 
-const expenseLineSchema = z.object({
-  category: z.enum(["FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT","STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB","SALIK","INTERNET","LICENSE"]),
-  amount: z.number().int().min(0),
-});
-
 const submitSchema = z.object({
   date: z.string().optional(),
-  expenseLines: z.array(expenseLineSchema).default([]),
 });
 
 // Driver submits (or re-submits) their day-end cash closing.
@@ -36,8 +30,11 @@ router.post(
  const totalDeliveryCharge = orders.reduce((s, o) => s + o.deliveryCharge, 0);
 const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
 const onlinePayments = orders.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0);
-const totalExpenses = data.expenseLines.reduce((s, e) => s + e.amount, 0);
-const balanceCash = cashPayments - totalExpenses;
+const adminExpenses = await prisma.expenseEntry.findMany({
+      where: { date: start, employeeId: req.user!.sub, source: "ADMIN" },
+    });
+    const totalExpenses = adminExpenses.reduce((s, e) => s + e.amount, 0);
+    const balanceCash = cashPayments - totalExpenses;
 
     const closing = await prisma.cashClosing.upsert({
       where: { employeeId_date: { employeeId: req.user!.sub, date: start } },
@@ -69,21 +66,7 @@ const balanceCash = cashPayments - totalExpenses;
       entity: "CashClosing",
       entityId: closing.id,
     });
-    // Create individual expense entries so they flow into the admin ledger.
-if (data.expenseLines.length > 0) {
-  await prisma.expenseEntry.deleteMany({
-    where: { date: start, employeeId: req.user!.sub, source: "DRIVER" },
-  });
-  await prisma.expenseEntry.createMany({
-    data: data.expenseLines.map((line) => ({
-      date: start,
-      category: line.category,
-      amount: line.amount,
-      source: "DRIVER",
-      employeeId: req.user!.sub,
-    })),
-  });
-}
+  
     emitGlobal("cashClosing:submitted", { closing });
 
     res.status(201).json(closing);
@@ -117,14 +100,23 @@ router.get(
     const orders = await prisma.order.findMany({
       where: { employeeId: req.user!.sub, date: start, status: "DELIVERED" },
     });
-    const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
+   const cashPayments = orders.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0);
     const onlinePayments = orders.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0);
+
+    const expenses = await prisma.expenseEntry.findMany({
+      where: { date: start, employeeId: req.user!.sub, source: "ADMIN" },
+      orderBy: { createdAt: "asc" },
+    });
+    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+
     res.json({
       date: start.toISOString().slice(0, 10),
       totalDelivered: orders.length,
       totalDeliveryCharge: orders.reduce((s, o) => s + o.deliveryCharge, 0),
       cashPayments,
       onlinePayments,
+      expenses,
+      totalExpenses,
     });
   })
 );
