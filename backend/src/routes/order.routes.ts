@@ -305,6 +305,19 @@ router.post(
 );
 
 router.get(
+  "/pending-carryover",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange();
+    const orders = await prisma.order.findMany({
+      where: { status: "PENDING", date: { lt: start } },
+      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      orderBy: { date: "asc" },
+    });
+    res.json({ orders });
+  })
+);
+
+router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const order = await prisma.order.findUnique({
