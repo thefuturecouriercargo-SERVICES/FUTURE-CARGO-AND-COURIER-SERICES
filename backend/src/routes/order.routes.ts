@@ -95,10 +95,13 @@ router.post(
     const vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
     if (!vendor) throw new ApiError(404, "Vendor not found");
 
-    const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
-    if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
+   const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
+if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
 
-    const order = await prisma.$transaction(async (tx) => {
+const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo, date } });
+if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists for this date`);
+
+const order = await prisma.$transaction(async (tx) => {
       const lastSl = await tx.order.aggregate({
         where: { date },
         _max: { slNo: true },
@@ -155,10 +158,15 @@ router.put(
     if (data.vendorId) {
       const vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
       if (!vendor) throw new ApiError(404, "Vendor not found");
-      vendorFields = { vendorId: vendor.id, brandName: vendor.name, deliveryCharge: vendor.deliveryCharge };
-    }
+     vendorFields = { vendorId: vendor.id, brandName: vendor.name, deliveryCharge: vendor.deliveryCharge };
+}
 
-    const order = await prisma.order.update({
+if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
+  const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo, date: existing.date, id: { not: existing.id } } });
+  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists for this date`);
+}
+
+const order = await prisma.order.update({
       where: { id: req.params.id },
       data: {
         ...(data.cnNo !== undefined ? { cnNo: data.cnNo } : {}),
