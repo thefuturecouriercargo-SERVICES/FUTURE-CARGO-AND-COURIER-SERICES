@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -28,7 +28,10 @@ export default function OrdersPage() {
 const [saving, setSaving] = useState(false);
   const [lockFields, setLockFields] = useState(false);
   const [search, setSearch] = useState("");
-  const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
+const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
+const cnNoRef = useRef<HTMLInputElement>(null);
+const vendorRef = useRef<HTMLSelectElement>(null);
+const totalRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,8 +108,9 @@ const filteredOrders = useMemo(() => {
       } else {
         await apiFetch("/orders", { method: "POST", body: payload });
       }
-      resetForm();
-      await load();
+     resetForm();
+cnNoRef.current?.focus();
+await load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to save consignment");
     } finally {
@@ -161,20 +165,24 @@ const filteredOrders = useMemo(() => {
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">CN No.</label>
             <input
-              value={form.cnNo}
-              onChange={(e) => setForm({ ...form, cnNo: e.target.value })}
-              className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              type="number"
-              required
+             ref={cnNoRef}
+value={form.cnNo}
+onChange={(e) => setForm({ ...form, cnNo: e.target.value })}
+onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); vendorRef.current?.focus(); } }}
+className="w-full rounded border border-line px-2.5 py-2 text-sm"
+type="number"
+required
             />
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Vendor</label>
             <select
-              value={form.vendorId}
-              onChange={(e) => setForm({ ...form, vendorId: e.target.value })}
-              className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              required
+             ref={vendorRef}
+value={form.vendorId}
+onChange={(e) => setForm({ ...form, vendorId: e.target.value })}
+onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); totalRef.current?.focus(); } }}
+className="w-full rounded border border-line px-2.5 py-2 text-sm"
+required
             >
               <option value="">Select…</option>
               {vendors.map((v) => (
@@ -190,13 +198,14 @@ const filteredOrders = useMemo(() => {
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Total (AED)</label>
-            <input
-              value={form.total}
-              onChange={(e) => setForm({ ...form, total: e.target.value })}
-              className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              type="number"
-              required
-            />
+           <input
+  ref={totalRef}
+  value={form.total}
+  onChange={(e) => setForm({ ...form, total: e.target.value })}
+  className="w-full rounded border border-line px-2.5 py-2 text-sm"
+  type="number"
+  required
+/>
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Payment</label>
