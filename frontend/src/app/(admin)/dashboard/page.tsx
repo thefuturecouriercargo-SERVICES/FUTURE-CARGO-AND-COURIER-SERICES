@@ -13,7 +13,7 @@ import { Order, OrderStatus, Summary } from "@/types";
 interface DailyResponse {
   date: string;
   summary: Summary;
-  employeeBreakdown: ({ employee: { id: string; name: string } } & Summary)[];
+  employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; cashBalance: number })[];
   vendorBreakdown: ({ vendor: { id: string; name: string } } & Summary)[];
   emirateBreakdown: ({ emirate: string } & Summary)[];
   paymentBreakdown: ({ method: string } & Summary)[];
