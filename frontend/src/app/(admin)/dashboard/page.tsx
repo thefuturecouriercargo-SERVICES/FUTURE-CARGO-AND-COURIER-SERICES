@@ -112,7 +112,7 @@ return (
         <p className="text-sm text-ink-soft">Loading…</p>
       ) : data ? (
         <>
-          <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
+         <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-3 lg:grid-cols-7">
             <div className="bg-white">
               <KpiCard label="Total Sales" value={fmtNumber(data.summary.totalSales)} unit="AED" />
             </div>
@@ -125,11 +125,23 @@ return (
             <div className="bg-white">
             <KpiCard label="Pending" value={data.summary.pending + pendingCarryover.length} />
             </div>
-            <div className="bg-white">
+           <div className="bg-white">
               <KpiCard label="Transfer" value={data.summary.transferred} />
             </div>
             <div className="bg-white">
               <KpiCard label="Cancelled" value={data.summary.cancelled} />
+            </div>
+            <div className="bg-white">
+              <KpiCard
+                label="Total Consignments"
+                value={
+                  data.summary.delivered +
+                  data.summary.pending +
+                  pendingCarryover.length +
+                  data.summary.transferred +
+                  data.summary.cancelled
+                }
+              />
             </div>
           </div>
 
@@ -160,6 +172,14 @@ return (
                       <td className="text-right font-mono">{r.cancelled}</td>
                     </tr>
                   ))}
+                  <tr className="font-semibold border-t-2 border-line">
+                  <td>TOTAL</td>
+                  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.delivered, 0)}</td>
+                  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</td>
+                  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</td>
+                  <td className="text-right font-mono">{data.summary.pending + pendingCarryover.length}</td>
+                  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</td>
+                </tr>
                 </tbody>
               </table>
             </div>
@@ -256,9 +276,12 @@ return (
 
        
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
-                Consignment Ledger — {data.date}
-              </h2>
+           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy flex items-center justify-between">
+                <span>Consignment Ledger — {data.date}</span>
+                <span className="font-mono text-sm text-ink-soft">
+                  {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
+                </span>
+              </h2> 
             <div className="mb-3 flex flex-wrap gap-2.5">
               <input
                 placeholder="Search CN No. or brand…"
