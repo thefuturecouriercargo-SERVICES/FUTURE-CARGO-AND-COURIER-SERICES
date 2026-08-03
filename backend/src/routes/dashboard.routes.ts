@@ -48,9 +48,15 @@ const expenses = await prisma.expenseEntry.findMany({
       where: { ...where, source: "ADMIN" },
     });
 
-    function expensesFor(employeeId: string) {
+   function expensesFor(employeeId: string) {
       return expenses
-        .filter((e) => e.employeeId === employeeId)
+        .filter((e) => e.employeeId === employeeId && e.category !== "OTHER")
+        .reduce((s, e) => s + e.amount, 0);
+    }
+
+    function otherDeductionFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
         .reduce((s, e) => s + e.amount, 0);
     }
     const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
@@ -58,11 +64,13 @@ const expenses = await prisma.expenseEntry.findMany({
       const own = orders.filter((o) => o.employeeId === e.id);
       const ownSummary = summarize(own);
       const totalExpenses = expensesFor(e.id);
+      const otherDeduction = otherDeductionFor(e.id);
       return {
         employee: { id: e.id, name: e.name },
         ...ownSummary,
         totalExpenses,
-        cashBalance: ownSummary.cashCollected - totalExpenses,
+        otherDeduction,
+        cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
       };
     });
 
@@ -90,7 +98,8 @@ const expenses = await prisma.expenseEntry.findMany({
       { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
     ];
 
-  const totalExpensesAll = expenses.reduce((s, e) => s + e.amount, 0);
+ const totalExpensesAll = expenses.filter((e) => e.category !== "OTHER").reduce((s, e) => s + e.amount, 0);
+    const totalOtherDeductionAll = expenses.filter((e) => e.category === "OTHER").reduce((s, e) => s + e.amount, 0);
     const overallSummary = summarize(orders);
 
     res.json({
@@ -98,7 +107,8 @@ const expenses = await prisma.expenseEntry.findMany({
       summary: {
         ...overallSummary,
         totalExpenses: totalExpensesAll,
-        cashBalance: overallSummary.cashCollected - totalExpensesAll,
+        otherDeduction: totalOtherDeductionAll,
+        cashBalance: overallSummary.cashCollected - totalExpensesAll - totalOtherDeductionAll,
       },
       employeeBreakdown,
       vendorBreakdown,
