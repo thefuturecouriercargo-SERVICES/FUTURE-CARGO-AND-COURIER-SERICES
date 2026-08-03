@@ -59,20 +59,27 @@ const expenses = await prisma.expenseEntry.findMany({
         .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
         .reduce((s, e) => s + e.amount, 0);
     }
+    function otherDeductionEntriesFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
+        .map((e) => ({ id: e.id, amount: e.amount }));
+    }
     const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
-   const employeeBreakdown = employees.map((e) => {
+ const employeeBreakdown = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
       const ownSummary = summarize(own);
       const totalExpenses = expensesFor(e.id);
       const otherDeduction = otherDeductionFor(e.id);
+      const otherDeductionEntries = otherDeductionEntriesFor(e.id);
       return {
         employee: { id: e.id, name: e.name },
         ...ownSummary,
         totalExpenses,
         otherDeduction,
+        otherDeductionEntries,
         cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
       };
-    });
+    }); 
 
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
     const vendorBreakdown = vendors
