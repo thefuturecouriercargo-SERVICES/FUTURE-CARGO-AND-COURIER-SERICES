@@ -13,7 +13,7 @@ import { Order, OrderStatus, Summary } from "@/types";
 interface DailyResponse {
   date: string;
   summary: Summary;
- employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; cashBalance: number })[];
+employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number })[];
   vendorBreakdown: ({ vendor: { id: string; name: string } } & Summary)[];
   emirateBreakdown: ({ emirate: string } & Summary)[];
   paymentBreakdown: ({ method: string } & Summary)[];
@@ -52,6 +52,10 @@ const [maxAmount, setMaxAmount] = useState("");
     } finally {
       setSavingDeduction(null);
     }
+  }
+  async function removeDeduction(entryId: string) {
+    await apiFetch(`/expenses/${entryId}`, { method: "DELETE" });
+    await load();
   }
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,26 +233,42 @@ return (
                         <td>{r.employee.name}</td>
                         <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
                         <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
-                        <td className="text-right font-mono">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span>{fmtNumber(r.otherDeduction)}</span>
-                            <input
-                              type="number"
-                              placeholder="+ add"
-                              value={deductionInput[r.employee.id] ?? ""}
-                              onChange={(e) =>
-                                setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
-                              }
-                              onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
-                              className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
-                            />
-                            <button
-                              onClick={() => addDeduction(r.employee.id)}
-                              disabled={savingDeduction === r.employee.id}
-                              className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
-                            >
-                              +
-                            </button>
+                     <td className="text-right font-mono">
+                          <div className="flex flex-col items-end gap-1">
+                            {r.otherDeductionEntries.map((entry) => (
+                              <span
+                                key={entry.id}
+                                className="flex items-center gap-1 rounded bg-paper px-1.5 py-0.5 text-xs"
+                              >
+                                {fmtNumber(entry.amount)}
+                                <button
+                                  onClick={() => removeDeduction(entry.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Remove"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                placeholder="+ add"
+                                value={deductionInput[r.employee.id] ?? ""}
+                                onChange={(e) =>
+                                  setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                                }
+                                onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
+                                className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
+                              />
+                              <button
+                                onClick={() => addDeduction(r.employee.id)}
+                                disabled={savingDeduction === r.employee.id}
+                                className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
                         </td>
                         <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
