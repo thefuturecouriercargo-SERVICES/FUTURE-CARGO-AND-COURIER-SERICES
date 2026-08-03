@@ -35,6 +35,7 @@ const [emirateFilter, setEmirateFilter] = useState("");
 const [employeeFilter, setEmployeeFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
+  const [manualDeductions, setManualDeductions] = useState<Record<string, string>>({});
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -190,6 +191,74 @@ return (
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
+            <div className="mb-5 border border-line bg-white p-5">
+            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              Cash Closing Summary — {data.date}
+            </h2>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th className="text-right">Cash Collected</th>
+                    <th className="text-right">Expenses</th>
+                    <th className="text-right">Other Deduction</th>
+                    <th className="text-right">Final Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeRows.map((r) => {
+                    const manual = Number(manualDeductions[r.employee.id] || 0);
+                    const finalBalance = r.cashCollected - (r.totalExpenses ?? 0) - manual;
+                    return (
+                      <tr key={r.employee.id}>
+                        <td>{r.employee.name}</td>
+                        <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
+                        <td className="text-right font-mono">{fmtNumber(r.totalExpenses ?? 0)}</td>
+                        <td className="text-right">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={manualDeductions[r.employee.id] ?? ""}
+                            onChange={(e) =>
+                              setManualDeductions((prev) => ({
+                                ...prev,
+                                [r.employee.id]: e.target.value,
+                              }))
+                            }
+                            className="w-24 rounded border border-line px-2 py-1 text-right text-sm"
+                          />
+                        </td>
+                        <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="font-semibold border-t-2 border-line">
+                    <td>TOTAL</td>
+                    <td className="text-right font-mono">
+                      {fmtNumber(employeeRows.reduce((s, r) => s + r.cashCollected, 0))}
+                    </td>
+                    <td className="text-right font-mono">
+                      {fmtNumber(employeeRows.reduce((s, r) => s + (r.totalExpenses ?? 0), 0))}
+                    </td>
+                    <td className="text-right font-mono">
+                      {fmtNumber(
+                        employeeRows.reduce((s, r) => s + Number(manualDeductions[r.employee.id] || 0), 0)
+                      )}
+                    </td>
+                    <td className="text-right font-mono">
+                      {fmtNumber(
+                        employeeRows.reduce((s, r) => {
+                          const manual = Number(manualDeductions[r.employee.id] || 0);
+                          return s + (r.cashCollected - (r.totalExpenses ?? 0) - manual);
+                        }, 0)
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
                 Vendor-wise Performance
