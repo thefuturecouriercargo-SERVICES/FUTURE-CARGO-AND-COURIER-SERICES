@@ -206,9 +206,7 @@ return (
               <StatusDoughnut summary={data.summary} />
             </div>
           </div>
-
-          <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
-            <div className="mb-5 border border-line bg-white p-5">
+<div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
               Cash Closing Summary — {data.date}
             </h2>
@@ -224,56 +222,37 @@ return (
                   </tr>
                 </thead>
                 <tbody>
-                 {employeeRows.map((r) => {
-                const finalBalance = r.cashCollected - r.totalExpenses - r.otherDeduction;
-                return (
-                  <tr key={r.employee.id}>
-                    <td>{r.employee.name}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
-                    <td className="text-right font-mono">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span>{fmtNumber(r.otherDeduction)}</span>
-                        <input
-                          type="number"
-                          placeholder="+ add"
-                          value={deductionInput[r.employee.id] ?? ""}
-                          onChange={(e) =>
-                            setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
-                          }
-                          onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
-                          className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
-                        />
-                        <button
-                          onClick={() => addDeduction(r.employee.id)}
-                          disabled={savingDeduction === r.employee.id}
-                          className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </td>
-                    <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
-                  </tr>
-                );
-              })}
-              <tr className="font-semibold border-t-2 border-line">
-                <td>TOTAL</td>
-                <td className="text-right font-mono">
-                  {fmtNumber(employeeRows.reduce((s, r) => s + r.cashCollected, 0))}
-                </td>
-                <td className="text-right font-mono">
-                  {fmtNumber(employeeRows.reduce((s, r) => s + r.totalExpenses, 0))}
-                </td>
-                <td className="text-right font-mono">
-                  {fmtNumber(employeeRows.reduce((s, r) => s + r.otherDeduction, 0))}
-                </td>
-                <td className="text-right font-mono">
-                  {fmtNumber(
-                    employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - r.otherDeduction), 0)
-                  )}
-                </td>
-              </tr>
+                  {employeeRows.map((r) => {
+                    const finalBalance = r.cashCollected - r.totalExpenses - r.otherDeduction;
+                    return (
+                      <tr key={r.employee.id}>
+                        <td>{r.employee.name}</td>
+                        <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
+                        <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
+                        <td className="text-right font-mono">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span>{fmtNumber(r.otherDeduction)}</span>
+                            <input
+                              type="number"
+                              placeholder="+ add"
+                              value={deductionInput[r.employee.id] ?? ""}
+                              onChange={(e) =>
+                                setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                              }
+                              onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
+                              className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
+                            />
+                            <button
+                              onClick={() => addDeduction(r.employee.id)}
+                              disabled={savingDeduction === r.employee.id}
+                              className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
+                      </tr>
                     );
                   })}
                   <tr className="font-semibold border-t-2 border-line">
@@ -282,19 +261,14 @@ return (
                       {fmtNumber(employeeRows.reduce((s, r) => s + r.cashCollected, 0))}
                     </td>
                     <td className="text-right font-mono">
-                      {fmtNumber(employeeRows.reduce((s, r) => s + (r.totalExpenses ?? 0), 0))}
+                      {fmtNumber(employeeRows.reduce((s, r) => s + r.totalExpenses, 0))}
+                    </td>
+                    <td className="text-right font-mono">
+                      {fmtNumber(employeeRows.reduce((s, r) => s + r.otherDeduction, 0))}
                     </td>
                     <td className="text-right font-mono">
                       {fmtNumber(
-                        employeeRows.reduce((s, r) => s + Number(manualDeductions[r.employee.id] || 0), 0)
-                      )}
-                    </td>
-                    <td className="text-right font-mono">
-                      {fmtNumber(
-                        employeeRows.reduce((s, r) => {
-                          const manual = Number(manualDeductions[r.employee.id] || 0);
-                          return s + (r.cashCollected - (r.totalExpenses ?? 0) - manual);
-                        }, 0)
+                        employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - r.otherDeduction), 0)
                       )}
                     </td>
                   </tr>
@@ -302,8 +276,11 @@ return (
               </table>
             </div>
           </div>
+
+          <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+         
                 Vendor-wise Performance
               </h2>
               <div className="table-scroll">
