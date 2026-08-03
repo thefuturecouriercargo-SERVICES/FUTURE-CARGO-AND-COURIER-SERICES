@@ -44,11 +44,26 @@ function summarize(orders: Order[]) {
       where,
       include: { vendor: true, employee: { select: { id: true, name: true } } },
     });
+const expenses = await prisma.expenseEntry.findMany({
+      where: { ...where, source: "ADMIN" },
+    });
 
+    function expensesFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId)
+        .reduce((s, e) => s + e.amount, 0);
+    }
     const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
-    const employeeBreakdown = employees.map((e) => {
+   const employeeBreakdown = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
-      return { employee: { id: e.id, name: e.name }, ...summarize(own) };
+      const ownSummary = summarize(own);
+      const totalExpenses = expensesFor(e.id);
+      return {
+        employee: { id: e.id, name: e.name },
+        ...ownSummary,
+        totalExpenses,
+        cashBalance: ownSummary.cashCollected - totalExpenses,
+      };
     });
 
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
@@ -75,9 +90,16 @@ function summarize(orders: Order[]) {
       { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
     ];
 
+  const totalExpensesAll = expenses.reduce((s, e) => s + e.amount, 0);
+    const overallSummary = summarize(orders);
+
     res.json({
       date: label,
-      summary: summarize(orders),
+      summary: {
+        ...overallSummary,
+        totalExpenses: totalExpensesAll,
+        cashBalance: overallSummary.cashCollected - totalExpensesAll,
+      },
       employeeBreakdown,
       vendorBreakdown,
       emirateBreakdown,
