@@ -13,7 +13,7 @@ import { Order, OrderStatus, Summary } from "@/types";
 interface DailyResponse {
   date: string;
   summary: Summary;
-  employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; cashBalance: number })[];
+ employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; cashBalance: number })[];
   vendorBreakdown: ({ vendor: { id: string; name: string } } & Summary)[];
   emirateBreakdown: ({ emirate: string } & Summary)[];
   paymentBreakdown: ({ method: string } & Summary)[];
@@ -35,7 +35,24 @@ const [emirateFilter, setEmirateFilter] = useState("");
 const [employeeFilter, setEmployeeFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
-  const [manualDeductions, setManualDeductions] = useState<Record<string, string>>({});
+ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
+  const [savingDeduction, setSavingDeduction] = useState<string | null>(null);
+
+  async function addDeduction(employeeId: string) {
+    const amount = Number(deductionInput[employeeId]);
+    if (!amount || amount <= 0) return;
+    setSavingDeduction(employeeId);
+    try {
+      await apiFetch("/expenses", {
+        method: "POST",
+        body: { date, category: "OTHER", amount, employeeId },
+      });
+      setDeductionInput((prev) => ({ ...prev, [employeeId]: "" }));
+      await load();
+    } finally {
+      setSavingDeduction(null);
+    }
+  }
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -207,30 +224,56 @@ return (
                   </tr>
                 </thead>
                 <tbody>
-                  {employeeRows.map((r) => {
-                    const manual = Number(manualDeductions[r.employee.id] || 0);
-                    const finalBalance = r.cashCollected - (r.totalExpenses ?? 0) - manual;
-                    return (
-                      <tr key={r.employee.id}>
-                        <td>{r.employee.name}</td>
-                        <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
-                        <td className="text-right font-mono">{fmtNumber(r.totalExpenses ?? 0)}</td>
-                        <td className="text-right">
-                          <input
-                            type="number"
-                            placeholder="0"
-                            value={manualDeductions[r.employee.id] ?? ""}
-                            onChange={(e) =>
-                              setManualDeductions((prev) => ({
-                                ...prev,
-                                [r.employee.id]: e.target.value,
-                              }))
-                            }
-                            className="w-24 rounded border border-line px-2 py-1 text-right text-sm"
-                          />
-                        </td>
-                        <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
-                      </tr>
+                 {employeeRows.map((r) => {
+                const finalBalance = r.cashCollected - r.totalExpenses - r.otherDeduction;
+                return (
+                  <tr key={r.employee.id}>
+                    <td>{r.employee.name}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
+                    <td className="text-right font-mono">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span>{fmtNumber(r.otherDeduction)}</span>
+                        <input
+                          type="number"
+                          placeholder="+ add"
+                          value={deductionInput[r.employee.id] ?? ""}
+                          onChange={(e) =>
+                            setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                          }
+                          onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
+                          className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
+                        />
+                        <button
+                          onClick={() => addDeduction(r.employee.id)}
+                          disabled={savingDeduction === r.employee.id}
+                          className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </td>
+                    <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="font-semibold border-t-2 border-line">
+                <td>TOTAL</td>
+                <td className="text-right font-mono">
+                  {fmtNumber(employeeRows.reduce((s, r) => s + r.cashCollected, 0))}
+                </td>
+                <td className="text-right font-mono">
+                  {fmtNumber(employeeRows.reduce((s, r) => s + r.totalExpenses, 0))}
+                </td>
+                <td className="text-right font-mono">
+                  {fmtNumber(employeeRows.reduce((s, r) => s + r.otherDeduction, 0))}
+                </td>
+                <td className="text-right font-mono">
+                  {fmtNumber(
+                    employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - r.otherDeduction), 0)
+                  )}
+                </td>
+              </tr>
                     );
                   })}
                   <tr className="font-semibold border-t-2 border-line">
