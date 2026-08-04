@@ -98,8 +98,16 @@ router.post(
    const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
 if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
 
-const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo, date } });
-if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists for this date`);
+const existingCn = await prisma.order.findFirst({
+  where: {
+    cnNo: data.cnNo,
+    OR: [
+      { date },
+      { status: "PENDING" },
+    ],
+  },
+});
+if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active or same-day)`);
 
 const order = await prisma.$transaction(async (tx) => {
       const lastSl = await tx.order.aggregate({
@@ -162,8 +170,17 @@ router.put(
 }
 
 if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
-  const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo, date: existing.date, id: { not: existing.id } } });
-  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists for this date`);
+  const existingCn = await prisma.order.findFirst({
+    where: {
+      cnNo: data.cnNo,
+      id: { not: existing.id },
+      OR: [
+        { date: existing.date },
+        { status: "PENDING" },
+      ],
+    },
+  });
+  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active or same-day)`);
 }
 
 const order = await prisma.order.update({
