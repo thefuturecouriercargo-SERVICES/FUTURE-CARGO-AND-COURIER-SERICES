@@ -28,6 +28,12 @@ export default function OrdersPage() {
 const [saving, setSaving] = useState(false);
   const [lockFields, setLockFields] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
+const [paymentFilter, setPaymentFilter] = useState<"" | "CASH" | "BANK">("");
+const [emirateFilter, setEmirateFilter] = useState("");
+const [employeeFilter, setEmployeeFilter] = useState("");
+const [minAmount, setMinAmount] = useState("");
+const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const cnNoRef = useRef<HTMLInputElement>(null);
 const vendorRef = useRef<HTMLSelectElement>(null);
@@ -60,11 +66,21 @@ const totalRef = useRef<HTMLInputElement>(null);
  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 
 const filteredOrders = useMemo(() => {
-    const allOrders = [...orders, ...pendingCarryover];
-    if (!search.trim()) return allOrders;
-    const q = search.trim().toLowerCase();
-    return allOrders.filter((o) => String(o.cnNo).includes(q) || o.brandName?.toLowerCase().includes(q));
-  }, [orders, pendingCarryover, search]);
+  const allOrders = [...pendingCarryover, ...orders];
+  return allOrders.filter((o) => {
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      if (!String(o.cnNo).includes(q) && !o.brandName?.toLowerCase().includes(q)) return false;
+    }
+    if (statusFilter && o.status !== statusFilter) return false;
+    if (paymentFilter && o.payment !== paymentFilter) return false;
+    if (emirateFilter && o.emirate !== emirateFilter) return false;
+    if (employeeFilter && o.employee.id !== employeeFilter) return false;
+    if (minAmount && o.total < Number(minAmount)) return false;
+    if (maxAmount && o.total > Number(maxAmount)) return false;
+    return true;
+  });
+}, [orders, pendingCarryover, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, minAmount, maxAmount]);
 
  function resetForm() {
     setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
@@ -282,12 +298,32 @@ required
             Delivered total <b className="text-ink">{fmtNumber(totals.total)} AED</b> · DL charge <b className="text-ink">{fmtNumber(totals.dl)} AED</b>
           </div>
         </div>
-      <input
-              placeholder="Search CN No. or brand…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="mb-3 w-full max-w-xs rounded border border-line px-3 py-1.5 text-sm"
-            />
+     <div className="mb-3 flex flex-wrap gap-2.5">
+  <input
+    placeholder="Search CN No. or brand…"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="rounded border border-line px-3 py-1.5 text-sm"
+  />
+  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")} className="rounded border border-line px-3 py-1.5 text-sm">
+    <option value="">All statuses</option>
+    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+  </select>
+  <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as "" | "CASH" | "BANK")} className="rounded border border-line px-3 py-1.5 text-sm">
+    <option value="">All payments</option>
+    {PAYMENTS.map((p) => <option key={p} value={p}>{p}</option>)}
+  </select>
+  <select value={emirateFilter} onChange={(e) => setEmirateFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+    <option value="">All emirates</option>
+    {EMIRATES.map((em) => <option key={em} value={em}>{em}</option>)}
+  </select>
+  <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+    <option value="">All employees</option>
+    {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+  </select>
+  <input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
+  <input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
+</div>
             <div className="table-scroll">
           <table className="data-table">
             <thead>
