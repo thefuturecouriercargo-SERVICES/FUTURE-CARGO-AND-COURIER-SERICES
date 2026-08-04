@@ -35,6 +35,8 @@ const [emirateFilter, setEmirateFilter] = useState("");
 const [employeeFilter, setEmployeeFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
+  const [globalResults, setGlobalResults] = useState<Order[] | null>(null);
+const [globalSearching, setGlobalSearching] = useState(false);
  const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
   const [savingDeduction, setSavingDeduction] = useState<string | null>(null);
 
@@ -75,12 +77,33 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+  if (!search.trim()) {
+    setGlobalResults(null);
+    return;
+  }
+  const t = setTimeout(async () => {
+    setGlobalSearching(true);
+    try {
+      const res = await apiFetch<{ orders: Order[] }>("/orders", { query: { search } });
+      setGlobalResults(res.orders);
+    } finally {
+      setGlobalSearching(false);
+    }
+  }, 300);
+  return () => clearTimeout(t);
+}, [search]);
 
   useSocketEvent("order:changed", load);
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
- const filteredOrders = [...(data?.orders ?? []), ...pendingCarryover].filter((o) => {
+const sourceOrders =
+  search.trim() && globalResults
+    ? globalResults
+    : [...(data?.orders ?? []), ...pendingCarryover];
+
+const filteredOrders = sourceOrders.filter((o) => {
   if (statusFilter && o.status !== statusFilter) return false;
   if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
   if (paymentFilter && o.payment !== paymentFilter) return false;
@@ -386,7 +409,10 @@ return (
        
             <div className="border border-line bg-white p-5">
            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy flex items-center justify-between">
-                <span>Consignment Ledger — {data.date}</span>
+             <span>
+  Consignment Ledger — {search.trim() ? "All dates (search)" : data.date}
+  {globalSearching && <span className="ml-2 text-xs text-ink-soft">searching…</span>}
+</span>
                 <span className="font-mono text-sm text-ink-soft">
                   {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
                 </span>
