@@ -347,7 +347,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { start } = dayRange();
     const orders = await prisma.order.findMany({
-      where: { status: "PENDING", date: { lt: start } },
+     where: { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } },
       include: { vendor: true, employee: { select: { id: true, name: true } } },
       orderBy: { date: "asc" },
     });
