@@ -68,7 +68,21 @@ model User {
   cashClosings       CashClosing[]
   auditLogs          AuditLog[]
 expenseEntries ExpenseEntry[]
+  purchases      Purchase[]
   @@map("users")
+}
+model Purchase {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id])
+  amount     Int
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([date])
+  @@index([employeeId])
+  @@map("purchases")
 }
 
 model Vendor {
