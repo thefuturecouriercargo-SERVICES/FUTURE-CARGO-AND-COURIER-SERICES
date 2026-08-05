@@ -66,7 +66,7 @@ const totalRef = useRef<HTMLInputElement>(null);
  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 
 const filteredOrders = useMemo(() => {
-  const allOrders = [...pendingCarryover, ...orders];
+ const allOrders = date === todayStr() ? [...pendingCarryover, ...orders] : orders;
   return allOrders.filter((o) => {
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -80,7 +80,7 @@ const filteredOrders = useMemo(() => {
     if (maxAmount && o.total > Number(maxAmount)) return false;
     return true;
   });
-}, [orders, pendingCarryover, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, minAmount, maxAmount]);
+}, [orders, pendingCarryover, date, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, minAmount, maxAmount]);
 
  function resetForm() {
     setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
