@@ -47,7 +47,7 @@ const [globalSearching, setGlobalSearching] = useState(false);
     try {
       await apiFetch("/expenses", {
         method: "POST",
-        body: { date, category: "OTHER", amount, employeeId },
+     body: { date, category: "CASH_ADJUSTMENT", amount, employeeId },
       });
       setDeductionInput((prev) => ({ ...prev, [employeeId]: "" }));
       await load();
