@@ -198,33 +198,48 @@ return (
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Employee</th>
-                    <th className="text-right">Delivered</th>
-                    <th className="text-right">Sales</th>
-                    <th className="text-right">DL Charge</th>
-                    <th className="text-right">Pending</th>
-                    <th className="text-right">Cancelled</th>
+                   <th>Employee</th>
+    <th className="text-right">Delivered</th>
+    <th className="text-right">Sales</th>
+    <th className="text-right">DL Charge</th>
+    <th className="text-right">Pending</th>
+    <th className="text-right">Cancelled</th>
+    <th className="text-right">Transfer</th>
+    <th className="text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {employeeRows.map((r) => (
-                    <tr key={r.employee.id}>
-                      <td>{r.employee.name}</td>
-                      <td className="text-right font-mono">{r.delivered}</td>
-                      <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
-                      <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
-                     <td className="text-right font-mono">{r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length}</td>
-                      <td className="text-right font-mono">{r.cancelled}</td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold border-t-2 border-line">
-                  <td>TOTAL</td>
-                  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.delivered, 0)}</td>
-                  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</td>
-                  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</td>
-                  <td className="text-right font-mono">{data.summary.pending + pendingCarryover.length}</td>
-                  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</td>
-                </tr>
+                 {employeeRows.map((r) => {
+      const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
+      const empTotal = r.delivered + empPending + r.transferred + r.cancelled;
+      return (
+        <tr key={r.employee.id}>
+          <td>{r.employee.name}</td>
+          <td className="text-right font-mono">{r.delivered}</td>
+          <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
+          <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
+          <td className="text-right font-mono">{empPending}</td>
+          <td className="text-right font-mono">{r.cancelled}</td>
+          <td className="text-right font-mono">{r.transferred}</td>
+          <td className="text-right font-mono">{empTotal}</td>
+        </tr>
+      );
+    })}
+                 <tr className="font-semibold border-t-2 border-line">
+  <td>TOTAL</td>
+  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.delivered, 0)}</td>
+  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</td>
+  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</td>
+  <td className="text-right font-mono">{data.summary.pending + pendingCarryover.length}</td>
+  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</td>
+  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.transferred, 0)}</td>
+  <td className="text-right font-mono">
+    {employeeRows.reduce((s, r) => s + r.delivered, 0) +
+      data.summary.pending + pendingCarryover.length +
+      employeeRows.reduce((s, r) => s + r.transferred, 0) +
+      employeeRows.reduce((s, r) => s + r.cancelled, 0)}
+  </td>
+</tr>
                 </tbody>
               </table>
             </div>
