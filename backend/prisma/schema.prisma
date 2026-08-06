@@ -31,6 +31,11 @@ enum ClosingStatus {
   SUBMITTED
   REVIEWED
 }
+
+enum PayrollEntryType {
+  PAID
+  SHORT
+}
 enum ExpenseCategory {
   FUEL
   INSURANCE
@@ -58,7 +63,8 @@ model User {
   passwordHash  String
   role          Role     @default(DRIVER)
   active        Boolean  @default(true)
-  phone         String?
+phone         String?
+  baseSalary    Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -69,6 +75,8 @@ model User {
   auditLogs          AuditLog[]
 expenseEntries ExpenseEntry[]
   purchases      Purchase[]
+  payrolls       Payroll[]
+  payrollEntries PayrollEntry[]
   @@map("users")
 }
 model Purchase {
@@ -205,4 +213,33 @@ model ExpenseEntry {
   @@index([category])
   @@index([employeeId])
   @@map("expense_entries")
+}
+model Payroll {
+  id          String   @id @default(cuid())
+  month       String
+  employeeId  String
+  employee    User     @relation(fields: [employeeId], references: [id])
+  workingDays Int      @default(30)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([month, employeeId])
+  @@index([month])
+  @@map("payrolls")
+}
+
+model PayrollEntry {
+  id         String           @id @default(cuid())
+  month      String
+  date       DateTime         @db.Date
+  employeeId String
+  employee   User             @relation(fields: [employeeId], references: [id])
+  type       PayrollEntryType
+  amount     Int
+  note       String?
+  createdAt  DateTime         @default(now())
+
+  @@index([month])
+  @@index([employeeId])
+  @@map("payroll_entries")
 }
