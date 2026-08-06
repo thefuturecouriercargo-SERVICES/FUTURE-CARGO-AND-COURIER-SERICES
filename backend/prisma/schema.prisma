@@ -35,6 +35,7 @@ enum ClosingStatus {
 enum PayrollEntryType {
   PAID
   SHORT
+  BONUS
 }
 enum ExpenseCategory {
   FUEL
