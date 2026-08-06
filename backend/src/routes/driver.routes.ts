@@ -3,8 +3,7 @@ import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange } from "../utils/dates";
-
+import { dayRange, monthRange } from "../utils/dates";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -74,6 +73,82 @@ router.get(
       workingDays: payrollRow?.workingDays ?? 30,
       entries,
     });
+  })
+);
+router.get(
+  "/history",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange(req.query.date as string | undefined);
+
+    const orders = await prisma.order.findMany({
+      where: { employeeId: req.user!.sub, date: start },
+      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      orderBy: { slNo: "asc" },
+    });
+
+    const delivered = orders.filter((o) => o.status === "DELIVERED");
+    res.json({
+      date: start.toISOString().slice(0, 10),
+      orders,
+      summary: {
+        total: orders.length,
+        delivered: delivered.length,
+        pending: orders.filter((o) => o.status === "PENDING").length,
+        transferred: orders.filter((o) => o.status === "TRANSFER").length,
+        cancelled: orders.filter((o) => o.status === "CANCELLED").length,
+        totalSales: delivered.reduce((s, o) => s + o.total, 0),
+        totalDeliveryCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
+      },
+    });
+  })
+);
+
+router.get(
+  "/performance",
+  asyncHandler(async (req, res) => {
+    const month = req.query.month as string;
+    if (!month) return res.status(400).json({ error: "month is required" });
+    const { start, end } = monthRange(month);
+
+    const orders = await prisma.order.findMany({
+      where: { employeeId: req.user!.sub, date: { gte: start, lte: end } },
+      orderBy: { date: "asc" },
+    });
+
+    const byDate = new Map<
+      string,
+      { date: string; delivered: number; pending: number; transferred: number; cancelled: number; totalSales: number; totalDeliveryCharge: number }
+    >();
+
+    for (const o of orders) {
+      const key = o.date.toISOString().slice(0, 10);
+      if (!byDate.has(key)) {
+        byDate.set(key, {
+          date: key,
+          delivered: 0,
+          pending: 0,
+          transferred: 0,
+          cancelled: 0,
+          totalSales: 0,
+          totalDeliveryCharge: 0,
+        });
+      }
+      const row = byDate.get(key)!;
+      if (o.status === "DELIVERED") {
+        row.delivered += 1;
+        row.totalSales += o.total;
+        row.totalDeliveryCharge += o.deliveryCharge;
+      } else if (o.status === "PENDING") {
+        row.pending += 1;
+      } else if (o.status === "TRANSFER") {
+        row.transferred += 1;
+      } else if (o.status === "CANCELLED") {
+        row.cancelled += 1;
+      }
+    }
+
+    const days = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    res.json({ month, days });
   })
 );
 
