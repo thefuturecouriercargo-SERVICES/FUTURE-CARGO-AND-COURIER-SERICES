@@ -5,7 +5,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
-const emptyForm = { name: "", username: "", email: "", phone: "", password: "" };
+const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "" };
 
 interface PerformanceMap {
   [id: string]: { delivered: number; totalSales: number; totalDeliveryCharge: number };
@@ -46,7 +46,7 @@ export default function EmployeesPage() {
 
   function startEdit(e: Employee) {
     setEditingId(e.id);
-    setForm({ name: e.name, username: e.username, email: e.email ?? "", phone: e.phone ?? "", password: "" });
+   setForm({ name: e.name, username: e.username, email: e.email ?? "", phone: e.phone ?? "", password: "", baseSalary: String(e.baseSalary ?? "") });
   }
 
   async function onSubmit(ev: FormEvent) {
@@ -54,13 +54,19 @@ export default function EmployeesPage() {
     setError(null);
     setSaving(true);
     try {
-      if (editingId) {
+     if (editingId) {
         await apiFetch(`/employees/${editingId}`, {
           method: "PUT",
-          body: { name: form.name, email: form.email, phone: form.phone, ...(form.password ? { password: form.password } : {}) },
+          body: {
+            name: form.name,
+            email: form.email,
+            phone: form.phone,
+            baseSalary: Number(form.baseSalary) || 0,
+            ...(form.password ? { password: form.password } : {}),
+          },
         });
       } else {
-        await apiFetch("/employees", { method: "POST", body: form });
+        await apiFetch("/employees", { method: "POST", body: { ...form, baseSalary: Number(form.baseSalary) || 0 } });
       }
       resetForm();
       await load();
@@ -108,8 +114,13 @@ export default function EmployeesPage() {
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm" />
           </div>
           <div>
+           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Phone (optional)</label>
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Base Salary (AED)</label>
+            <input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm" />
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">{editingId ? "New password (optional)" : "Password"}</label>
@@ -142,9 +153,10 @@ export default function EmployeesPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Name</th>
+            <th>Name</th>
               <th>Username</th>
               <th>Contact</th>
+              <th className="text-right">Base Salary</th>
               <th className="text-right">Delivered (MTD)</th>
               <th className="text-right">Sales (MTD)</th>
               <th className="text-right">DL Charge (MTD)</th>
@@ -160,6 +172,7 @@ export default function EmployeesPage() {
                   <td>{e.name}</td>
                   <td className="font-mono">{e.username}</td>
                   <td className="text-ink-soft">{e.email || e.phone || "—"}</td>
+                  <td className="text-right font-mono">{fmtNumber(e.baseSalary ?? 0)}</td>
                   <td className="text-right font-mono">{p?.delivered ?? "—"}</td>
                   <td className="text-right font-mono">{p ? fmtNumber(p.totalSales) : "—"}</td>
                   <td className="text-right font-mono">{p ? fmtNumber(p.totalDeliveryCharge) : "—"}</td>
