@@ -113,7 +113,6 @@ export default function EmployeesPage() {
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Email (optional)</label>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm" />
           </div>
-          <div>
            <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Phone (optional)</label>
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm" />
