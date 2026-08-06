@@ -10,6 +10,7 @@ import reportsRoutes from "./reports.routes";
 import auditRoutes from "./audit.routes";
 import settingsRoutes from "./settings.routes";
 import expenseRoutes from "./expense.routes";
+import purchaseRoutes from "./purchase.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -25,4 +26,5 @@ router.use("/reports", reportsRoutes);
 router.use("/audit-logs", auditRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/expenses", expenseRoutes);
+router.use("/purchases", purchaseRoutes);
 export default router;
