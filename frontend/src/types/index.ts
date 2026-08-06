@@ -25,6 +25,7 @@ export interface Employee {
   email?: string | null;
   phone?: string | null;
   active: boolean;
+  baseSalary: number;
 }
 
 export interface Order {
