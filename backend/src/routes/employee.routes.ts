@@ -18,7 +18,7 @@ router.get(
     const employees = await prisma.user.findMany({
       where: { role: "DRIVER", ...(includeInactive ? {} : { active: true }) },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, username: true, email: true, phone: true, active: true, createdAt: true },
+     select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, createdAt: true },
     });
     res.json(employees);
   })
@@ -30,8 +30,8 @@ const createSchema = z.object({
   email: z.string().email().optional().or(z.literal("")).transform((v) => (v ? v : undefined)),
   phone: z.string().max(30).optional(),
   password: z.string().min(6).max(100),
+  baseSalary: z.number().int().min(0).optional(),
 });
-
 router.post(
   "/",
   requireRole("SUPER_ADMIN"),
@@ -43,11 +43,12 @@ router.post(
         name: data.name,
         username: data.username.trim(),
         email: data.email,
-        phone: data.phone,
+       phone: data.phone,
         role: "DRIVER",
         passwordHash,
+        baseSalary: data.baseSalary ?? 0,
       },
-      select: { id: true, name: true, username: true, email: true, phone: true, active: true },
+      select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "CREATE", entity: "Employee", entityId: employee.id });
     emitGlobal("employee:changed", { type: "created", employee });
@@ -61,6 +62,7 @@ const updateSchema = z.object({
   phone: z.string().max(30).optional(),
   active: z.boolean().optional(),
   password: z.string().min(6).max(100).optional(),
+  baseSalary: z.number().int().min(0).optional(),
 });
 
 router.put(
@@ -72,7 +74,7 @@ router.put(
     const employee = await prisma.user.update({
       where: { id: req.params.id },
       data: { ...rest, ...(password ? { passwordHash: await hashPassword(password) } : {}) },
-      select: { id: true, name: true, username: true, email: true, phone: true, active: true },
+     select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "Employee", entityId: employee.id });
     emitGlobal("employee:changed", { type: "updated", employee });
