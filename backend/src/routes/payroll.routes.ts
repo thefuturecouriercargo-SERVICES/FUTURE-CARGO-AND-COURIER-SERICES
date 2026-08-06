@@ -63,7 +63,7 @@ const createEntrySchema = z.object({
   month: z.string(),
   date: z.string(),
   employeeId: z.string(),
-  type: z.enum(["PAID", "SHORT"]),
+type: z.enum(["PAID", "SHORT", "BONUS"]),
   amount: z.number().int().min(0),
   note: z.string().max(500).optional(),
 });
