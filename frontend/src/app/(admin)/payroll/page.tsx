@@ -18,7 +18,7 @@ interface PayrollEntry {
   date: string;
   employeeId: string;
   employee: { id: string; name: string };
-  type: "PAID" | "SHORT";
+ type: "PAID" | "SHORT" | "BONUS";
   amount: number;
   note?: string | null;
 }
@@ -31,7 +31,7 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
 
   const [formEmployeeId, setFormEmployeeId] = useState("");
-  const [formType, setFormType] = useState<"PAID" | "SHORT">("PAID");
+ const [formType, setFormType] = useState<"PAID" | "SHORT" | "BONUS">("PAID");
   const [formAmount, setFormAmount] = useState("");
   const [formNote, setFormNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -104,28 +104,30 @@ export default function PayrollPage() {
     await load();
   }
 
-  function sumFor(employeeId: string, type: "PAID" | "SHORT") {
+function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
     return entries.filter((e) => e.employeeId === employeeId && e.type === type).reduce((s, e) => s + e.amount, 0);
   }
 
   const rows = employees.map((e) => {
     const workingDays = Number(workingDaysInput[e.id]) || 0;
     const proratedSalary = Math.round((e.baseSalary / 30) * workingDays);
-    const short = sumFor(e.id, "SHORT");
+   const short = sumFor(e.id, "SHORT");
     const paid = sumFor(e.id, "PAID");
-    const balance = proratedSalary - short - paid;
-    return { employee: e, workingDays, proratedSalary, short, paid, balance };
+    const bonus = sumFor(e.id, "BONUS");
+    const balance = proratedSalary + bonus - short - paid;
+    return { employee: e, workingDays, proratedSalary, short, paid, bonus, balance };
   });
 
   const totals = rows.reduce(
-    (acc, r) => ({
+   (acc, r) => ({
       baseSalary: acc.baseSalary + r.employee.baseSalary,
       proratedSalary: acc.proratedSalary + r.proratedSalary,
       short: acc.short + r.short,
       paid: acc.paid + r.paid,
+      bonus: acc.bonus + r.bonus,
       balance: acc.balance + r.balance,
     }),
-    { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, balance: 0 }
+    { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, bonus: 0, balance: 0 }
   );
 
   return (
@@ -165,13 +167,17 @@ export default function PayrollPage() {
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Type</label>
             <div className="flex items-center gap-3 rounded border border-line px-2.5 py-2 text-sm">
-              <label className="flex items-center gap-1.5">
+           <label className="flex items-center gap-1.5">
                 <input type="radio" checked={formType === "PAID"} onChange={() => setFormType("PAID")} />
                 Paid
               </label>
               <label className="flex items-center gap-1.5">
                 <input type="radio" checked={formType === "SHORT"} onChange={() => setFormType("SHORT")} />
                 Short
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" checked={formType === "BONUS"} onChange={() => setFormType("BONUS")} />
+                Bonus
               </label>
             </div>
           </div>
@@ -220,6 +226,7 @@ export default function PayrollPage() {
                 <th className="text-right">Working Days</th>
                 <th className="text-right">Prorated Salary</th>
                 <th className="text-right">Short</th>
+                <th className="text-right">Bonus</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
               </tr>
@@ -245,7 +252,8 @@ export default function PayrollPage() {
                     </div>
                   </td>
                   <td className="text-right font-mono">{fmtNumber(r.proratedSalary)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.short)}</td>
+                 <td className="text-right font-mono">{fmtNumber(r.short)}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.bonus)}</td>
                   <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
                   <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
                 </tr>
@@ -256,6 +264,7 @@ export default function PayrollPage() {
                 <td></td>
                 <td className="text-right font-mono">{fmtNumber(totals.proratedSalary)}</td>
                 <td className="text-right font-mono">{fmtNumber(totals.short)}</td>
+                <td className="text-right font-mono">{fmtNumber(totals.bonus)}</td>
                 <td className="text-right font-mono">{fmtNumber(totals.paid)}</td>
                 <td className="text-right font-mono">{fmtNumber(totals.balance)}</td>
               </tr>
@@ -292,7 +301,7 @@ export default function PayrollPage() {
                   <td className="font-mono">{e.date.slice(0, 10)}</td>
                   <td>{e.employee.name}</td>
                   <td>
-                    <span className={`stamp ${e.type === "PAID" ? "delivered" : "cancelled"}`}>{e.type}</span>
+                 <span className={`stamp ${e.type === "PAID" ? "delivered" : e.type === "BONUS" ? "pending" : "cancelled"}`}>{e.type}</span>
                   </td>
                   <td className="text-right font-mono">{fmtNumber(e.amount)}</td>
                   <td className="text-ink-soft">{e.note || "—"}</td>
