@@ -52,4 +52,29 @@ router.get(
   })
 );
 
+router.get(
+  "/payroll",
+  asyncHandler(async (req, res) => {
+    const month = req.query.month as string;
+    if (!month) return res.status(400).json({ error: "month is required" });
+
+    const employeeId = req.user!.sub;
+
+    const [employee, payrollRow, entries] = await Promise.all([
+      prisma.user.findUnique({ where: { id: employeeId }, select: { id: true, name: true, baseSalary: true } }),
+      prisma.payroll.findUnique({ where: { month_employeeId: { month, employeeId } } }),
+      prisma.payrollEntry.findMany({
+        where: { month, employeeId },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+
+    res.json({
+      employee,
+      workingDays: payrollRow?.workingDays ?? 30,
+      entries,
+    });
+  })
+);
+
 export default router;
