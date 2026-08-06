@@ -37,17 +37,22 @@ const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
   const [globalResults, setGlobalResults] = useState<Order[] | null>(null);
 const [globalSearching, setGlobalSearching] = useState(false);
- const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
+const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
   const [savingDeduction, setSavingDeduction] = useState<string | null>(null);
+  const [purchases, setPurchases] = useState<{ id: string; employeeId: string; amount: number }[]>([]);
+
+  function adjTotal(employeeId: string) {
+    return purchases.filter((p) => p.employeeId === employeeId).reduce((s, p) => s + p.amount, 0);
+  }
 
   async function addDeduction(employeeId: string) {
     const amount = Number(deductionInput[employeeId]);
     if (!amount || amount <= 0) return;
     setSavingDeduction(employeeId);
     try {
-      await apiFetch("/expenses", {
+      await apiFetch("/purchases", {
         method: "POST",
-     body: { date, category: "CASH_ADJUSTMENT", amount, employeeId },
+        body: { date, amount, employeeId },
       });
       setDeductionInput((prev) => ({ ...prev, [employeeId]: "" }));
       await load();
@@ -56,7 +61,7 @@ const [globalSearching, setGlobalSearching] = useState(false);
     }
   }
   async function removeDeduction(entryId: string) {
-    await apiFetch(`/expenses/${entryId}`, { method: "DELETE" });
+    await apiFetch(`/purchases/${entryId}`, { method: "DELETE" });
     await load();
   }
   const load = useCallback(async () => {
@@ -67,8 +72,10 @@ const [globalSearching, setGlobalSearching] = useState(false);
   : { date };
 const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
         setData(res);
-        const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
+      const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
         setPendingCarryover(carryoverRes.orders);
+        const purchasesRes = await apiFetch<{ id: string; employeeId: string; amount: number }[]>("/purchases", { query: { date } });
+        setPurchases(purchasesRes);
       } finally {
         setLoading(false);
       }
@@ -265,7 +272,7 @@ return (
                 </thead>
                 <tbody>
                   {employeeRows.map((r) => {
-                    const finalBalance = r.cashCollected - r.totalExpenses - r.otherDeduction;
+                  const finalBalance = r.cashCollected - r.totalExpenses - adjTotal(r.employee.id);
                     return (
                       <tr key={r.employee.id}>
                         <td>{r.employee.name}</td>
@@ -273,7 +280,7 @@ return (
                         <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
                      <td className="text-right font-mono">
                           <div className="flex flex-col items-end gap-1">
-                            {r.otherDeductionEntries.map((entry) => (
+                            {purchases.filter((p) => p.employeeId === r.employee.id).map((entry) => (
                               <span
                                 key={entry.id}
                                 className="flex items-center gap-1 rounded bg-paper px-1.5 py-0.5 text-xs"
@@ -322,11 +329,11 @@ return (
                       {fmtNumber(employeeRows.reduce((s, r) => s + r.totalExpenses, 0))}
                     </td>
                     <td className="text-right font-mono">
-                      {fmtNumber(employeeRows.reduce((s, r) => s + r.otherDeduction, 0))}
+                     {fmtNumber(employeeRows.reduce((s, r) => s + adjTotal(r.employee.id), 0))}
                     </td>
                     <td className="text-right font-mono">
                       {fmtNumber(
-                        employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - r.otherDeduction), 0)
+                       employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - adjTotal(r.employee.id)), 0)
                       )}
                     </td>
                   </tr>
