@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate } from "../middleware/auth";
 import { parseDateParam, formatDate } from "../utils/dates";
+import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
 
 const router = Router();
 router.use(authenticate);
@@ -69,19 +70,18 @@ router.get(
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", 'attachment; filename="consignment-report.pdf"');
 
-      const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
+    const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
       doc.pipe(res);
 
-      doc.fontSize(16).text("The Future Courier Service L.L.C — Consignment Report", { align: "center" });
-      doc.moveDown(0.5);
-      doc.fontSize(9).fillColor("#555").text(`Generated ${new Date().toISOString()} · ${rows.length} records`, {
+      let y = drawLetterheadHeader(doc, "Consignment Report");
+      doc.fontSize(9).fillColor("#555").text(`${rows.length} records`, doc.page.margins.left, y, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
         align: "center",
       });
-      doc.moveDown(1);
+      y = doc.y + 10;
 
       const colWidths = [55, 40, 55, 65, 60, 55, 55, 60, 65, 65];
       const startX = doc.page.margins.left;
-      let y = doc.y;
 
       function drawRow(values: (string | number)[], bold = false) {
         let x = startX;
@@ -90,8 +90,9 @@ router.get(
           doc.font(bold ? "Helvetica-Bold" : "Helvetica").text(String(v), x, y, { width: colWidths[i], ellipsis: true });
           x += colWidths[i];
         });
-        y += 16;
-        if (y > doc.page.height - doc.page.margins.bottom) {
+      y += 16;
+        if (y > doc.page.height - doc.page.margins.bottom - 90) {
+          drawLetterheadFooter(doc);
           doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
           y = doc.page.margins.top;
         }
@@ -100,6 +101,7 @@ router.get(
       drawRow(columns.map((c) => c.header), true);
       rows.forEach((r) => drawRow(columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number)));
 
+      drawLetterheadFooter(doc);
       doc.end();
       return;
     }
