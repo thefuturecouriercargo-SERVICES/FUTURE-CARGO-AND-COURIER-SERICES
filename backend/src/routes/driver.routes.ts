@@ -18,7 +18,7 @@ router.get(
   employeeId: req.user!.sub,
   OR: [
     { date: start },
-    { status: "PENDING", date: { lt: start } },
+  { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } },
   ],
   ...(status ? { status: status as OrderStatus } : {}),
 },
@@ -34,7 +34,7 @@ router.get(
   "/summary",
   asyncHandler(async (req, res) => {
     const { start } = dayRange(req.query.date as string | undefined);
-  const orders = await prisma.order.findMany({ where: { employeeId: req.user!.sub, OR: [{ date: start }, { status: "PENDING", date: { lt: start } }] } });
+const orders = await prisma.order.findMany({ where: { employeeId: req.user!.sub, OR: [{ date: start }, { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } }] } });
 
     const delivered = orders.filter((o) => o.status === "DELIVERED");
     res.json({
