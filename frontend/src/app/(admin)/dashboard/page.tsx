@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
 import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import KpiCard from "@/components/KpiCard";
@@ -198,10 +198,20 @@ return (
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
-            <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
-                Employee-wise Performance
-              </h2>
+           <div className="border border-line bg-white p-5">
+              <div className="mb-3 flex items-center justify-between border-b border-line pb-2.5">
+                <h2 className="font-display text-[17px] font-semibold text-navy">
+                  Employee-wise Performance
+                </h2>
+                <a
+                  href={employeePerformancePdfUrl({ date })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+                >
+                  Download PDF
+                </a>
+              </div>
               <table className="data-table">
                 <thead>
                   <tr>
