@@ -162,4 +162,92 @@ router.get(
     });
   })
 );
+router.get(
+  "/employee-performance/pdf",
+  asyncHandler(async (req, res) => {
+    let where: { date: Date } | { date: { gte: Date; lte: Date } };
+    let label: string;
+
+    if (req.query.from || req.query.to) {
+      const fromStart = parseDateParam(req.query.from as string);
+      const toStart = parseDateParam(req.query.to as string);
+      where = { date: { gte: fromStart, lte: toStart } };
+      label = `${formatDate(fromStart)} to ${formatDate(toStart)}`;
+    } else {
+      const d = req.query.date ? parseDateParam(req.query.date as string) : new Date();
+      where = { date: d };
+      label = formatDate(d);
+    }
+
+    const orders = await prisma.order.findMany({ where });
+    const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
+
+    const rows = employees.map((e) => {
+      const own = orders.filter((o) => o.employeeId === e.id);
+      const delivered = own.filter((o) => o.status === "DELIVERED");
+      return {
+        name: e.name,
+        delivered: delivered.length,
+        sales: delivered.reduce((s, o) => s + o.total, 0),
+        dlCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
+        pending: own.filter((o) => o.status === "PENDING").length,
+        cancelled: own.filter((o) => o.status === "CANCELLED").length,
+        transferred: own.filter((o) => o.status === "TRANSFER").length,
+      };
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="employee-performance.pdf"');
+
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    doc.pipe(res);
+
+    let y = drawLetterheadHeader(doc, "Employee-wise Performance");
+    doc.fontSize(9).fillColor("#555").text(`Period: ${label}`, doc.page.margins.left, y, {
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      align: "center",
+    });
+    y = doc.y + 14;
+
+    const headers = ["Employee", "Delivered", "Sales", "DL Charge", "Pending", "Cancelled", "Transfer"];
+    const colWidths = [110, 60, 65, 65, 60, 65, 65];
+    const startX = doc.page.margins.left;
+
+    function drawRow(values: (string | number)[], bold = false) {
+      let x = startX;
+      values.forEach((v, i) => {
+        doc
+          .font(bold ? "Helvetica-Bold" : "Helvetica")
+          .fontSize(9)
+          .fillColor("#000")
+          .text(String(v), x, y, { width: colWidths[i], align: i === 0 ? "left" : "right" });
+        x += colWidths[i];
+      });
+      y += 18;
+    }
+
+    drawRow(headers, true);
+    rows.forEach((r) => drawRow([r.name, r.delivered, r.sales, r.dlCharge, r.pending, r.cancelled, r.transferred]));
+
+    const totals = rows.reduce(
+      (acc, r) => ({
+        delivered: acc.delivered + r.delivered,
+        sales: acc.sales + r.sales,
+        dlCharge: acc.dlCharge + r.dlCharge,
+        pending: acc.pending + r.pending,
+        cancelled: acc.cancelled + r.cancelled,
+        transferred: acc.transferred + r.transferred,
+      }),
+      { delivered: 0, sales: 0, dlCharge: 0, pending: 0, cancelled: 0, transferred: 0 }
+    );
+    drawRow(
+      ["TOTAL", totals.delivered, totals.sales, totals.dlCharge, totals.pending, totals.cancelled, totals.transferred],
+      true
+    );
+
+    drawLetterheadFooter(doc);
+    doc.end();
+  })
+);
+
 export default router;
