@@ -59,14 +59,12 @@ export function reportExportUrl(query: Record<string, string | undefined>) {
   });
   return url.toString();
 }
-
 export function employeePerformancePdfUrl(query: Record<string, string | undefined>) {
   const url = new URL(`${API_URL}/api/reports/employee-performance/pdf`);
   Object.entries(query).forEach(([k, v]) => {
     if (v) url.searchParams.set(k, v);
   });
   return url.toString();
-}
 }
 
 export { API_URL };
