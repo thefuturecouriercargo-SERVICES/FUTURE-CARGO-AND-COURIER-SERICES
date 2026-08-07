@@ -6,7 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-   "build": "tsc -p tsconfig.json && mkdir -p dist/assets && cp src/assets/*.png dist/assets/",
+   "build": "tsc -p tsconfig.json && mkdir -p dist/assets && cp src/assets/*.jpeg dist/assets/",
   "start": "prisma db push --accept-data-loss && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
