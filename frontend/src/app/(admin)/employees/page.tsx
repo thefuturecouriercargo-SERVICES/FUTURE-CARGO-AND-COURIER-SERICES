@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
@@ -87,7 +88,8 @@ export default function EmployeesPage() {
     await load();
   }
 
-  return (
+ return (
+    <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
       <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Employee Management</h1>
@@ -191,7 +193,8 @@ export default function EmployeesPage() {
             })}
           </tbody>
         </table>
-      </div>
+     </div>
     </div>
+    </AuthGate>
   );
 }
