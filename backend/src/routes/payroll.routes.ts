@@ -10,7 +10,9 @@ const router = Router();
 router.use(authenticate);
 
 // GET /payroll?month=2026-08  -> working days per employee for that month
-{ href: "/payroll", label: "Payroll", short: "Payroll", roles: ["SUPER_ADMIN", "MANAGER"] },
+router.get(
+  "/",
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const month = req.query.month as string;
     if (!month) throw new ApiError(400, "month is required");
