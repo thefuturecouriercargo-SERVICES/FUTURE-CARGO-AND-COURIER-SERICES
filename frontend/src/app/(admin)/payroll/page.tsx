@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
+import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
@@ -132,7 +133,7 @@ function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
   );
 
 return (
-    <AuthGate allow={["SUPER_ADMIN"]}>
+    <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
