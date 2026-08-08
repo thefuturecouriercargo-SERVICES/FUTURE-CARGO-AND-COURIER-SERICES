@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -154,7 +155,8 @@ await load();
     { total: 0, dl: 0 }
   );
 
-  return (
+return (
+    <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -391,7 +393,8 @@ required
             </tbody>
           </table>
         </div>
-      </div>
     </div>
+    </div>
+    </AuthGate>
   );
 }
