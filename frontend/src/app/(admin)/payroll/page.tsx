@@ -222,29 +222,25 @@ export default function PayrollPage() {
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
           Payroll Statement — {month}
         </h2>
-        {loading ? (
+       {loading ? (
           <p className="py-8 text-center text-sm text-ink-soft">Loading…</p>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th className="text-right">Base Salary</th>
-                <th className="text-right">Working Days</th>
-                <th className="text-right">Prorated Salary</th>
-                <th className="text-right">Short</th>
-                <th className="text-right">Bonus</th>
-                <th className="text-right">Paid</th>
-                <th className="text-right">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="space-y-3 md:hidden">
               {rows.map((r) => (
-                <tr key={r.employee.id}>
-                  <td>{r.employee.name}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.employee.baseSalary)}</td>
-                  <td className="text-right font-mono">
-                    <div className="flex items-center justify-end gap-1.5">
+                <div key={r.employee.id} className="rounded border border-line p-3.5">
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
+                    <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(r.balance)} AED</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Base Salary</span>
+                      <span>{fmtNumber(r.employee.baseSalary)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-soft">Working Days</span>
                       <input
                         type="number"
                         min={0}
@@ -255,29 +251,113 @@ export default function PayrollPage() {
                           !isReadOnly && setWorkingDaysInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
                         }
                         onBlur={() => !isReadOnly && saveWorkingDays(r.employee.id)}
-                        className={`w-14 rounded border border-line px-1.5 py-0.5 text-right text-xs ${isReadOnly ? "bg-paper-2" : ""}`}
+                        className={`w-12 rounded border border-line px-1 py-0.5 text-right text-xs ${isReadOnly ? "bg-paper-2" : ""}`}
                       />
                     </div>
-                  </td>
-                  <td className="text-right font-mono">{fmtNumber(r.proratedSalary)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.short)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.bonus)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
-                  <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
-                </tr>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Prorated Salary</span>
+                      <span>{fmtNumber(r.proratedSalary)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Short</span>
+                      <span>{fmtNumber(r.short)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Bonus</span>
+                      <span>{fmtNumber(r.bonus)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Paid</span>
+                      <span>{fmtNumber(r.paid)}</span>
+                    </div>
+                  </div>
+                </div>
               ))}
-              <tr className="font-semibold border-t-2 border-line">
-                <td>TOTAL</td>
-                <td className="text-right font-mono">{fmtNumber(totals.baseSalary)}</td>
-                <td></td>
-                <td className="text-right font-mono">{fmtNumber(totals.proratedSalary)}</td>
-                <td className="text-right font-mono">{fmtNumber(totals.short)}</td>
-                <td className="text-right font-mono">{fmtNumber(totals.bonus)}</td>
-                <td className="text-right font-mono">{fmtNumber(totals.paid)}</td>
-                <td className="text-right font-mono">{fmtNumber(totals.balance)}</td>
-              </tr>
-            </tbody>
-          </table>
+              <div className="rounded border-2 border-navy p-3.5">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
+                  <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(totals.balance)} AED</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Base Salary</span>
+                    <span>{fmtNumber(totals.baseSalary)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Prorated Salary</span>
+                    <span>{fmtNumber(totals.proratedSalary)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Short</span>
+                    <span>{fmtNumber(totals.short)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Bonus</span>
+                    <span>{fmtNumber(totals.bonus)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Paid</span>
+                    <span>{fmtNumber(totals.paid)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop: full table */}
+            <table className="data-table hidden md:table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th className="text-right">Base Salary</th>
+                  <th className="text-right">Working Days</th>
+                  <th className="text-right">Prorated Salary</th>
+                  <th className="text-right">Short</th>
+                  <th className="text-right">Bonus</th>
+                  <th className="text-right">Paid</th>
+                  <th className="text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.employee.id}>
+                    <td>{r.employee.name}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.employee.baseSalary)}</td>
+                    <td className="text-right font-mono">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={31}
+                          readOnly={isReadOnly}
+                          value={workingDaysInput[r.employee.id] ?? ""}
+                          onChange={(e) =>
+                            !isReadOnly && setWorkingDaysInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                          }
+                          onBlur={() => !isReadOnly && saveWorkingDays(r.employee.id)}
+                          className={`w-14 rounded border border-line px-1.5 py-0.5 text-right text-xs ${isReadOnly ? "bg-paper-2" : ""}`}
+                        />
+                      </div>
+                    </td>
+                    <td className="text-right font-mono">{fmtNumber(r.proratedSalary)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.short)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.bonus)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
+                    <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold border-t-2 border-line">
+                  <td>TOTAL</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.baseSalary)}</td>
+                  <td></td>
+                  <td className="text-right font-mono">{fmtNumber(totals.proratedSalary)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.short)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.bonus)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.paid)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.balance)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 
