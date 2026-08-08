@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import AuthGate from "@/components/AuthGate";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
@@ -130,7 +131,8 @@ function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
     { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, bonus: 0, balance: 0 }
   );
 
-  return (
+return (
+    <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -315,7 +317,8 @@ function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
             )}
           </tbody>
         </table>
-      </div>
     </div>
+    </div>
+    </AuthGate>
   );
 }
