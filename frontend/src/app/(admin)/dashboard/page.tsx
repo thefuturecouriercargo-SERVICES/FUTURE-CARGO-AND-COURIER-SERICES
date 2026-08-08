@@ -212,7 +212,88 @@ return (
                   Download PDF
                 </a>
               </div>
-              <table className="data-table">
+             {/* Mobile: stacked cards */}
+              <div className="space-y-3 md:hidden">
+                {employeeRows.map((r) => {
+                  const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
+                  const empTotal = r.delivered + empPending + r.transferred + r.cancelled;
+                  return (
+                    <div key={r.employee.id} className="rounded border border-line p-3.5">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
+                        <span className="font-mono text-sm font-semibold text-navy">{empTotal} total</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">Delivered</span>
+                          <span>{r.delivered}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">Sales</span>
+                          <span>{fmtNumber(r.totalSales)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">DL Charge</span>
+                          <span>{fmtNumber(r.totalDeliveryCharge)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">Pending</span>
+                          <span>{empPending}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">Cancelled</span>
+                          <span>{r.cancelled}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-soft">Transfer</span>
+                          <span>{r.transferred}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="rounded border-2 border-navy p-3.5">
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
+                    <span className="font-mono text-sm font-semibold text-navy">
+                      {employeeRows.reduce((s, r) => s + r.delivered, 0) +
+                        data.summary.pending + pendingCarryover.length +
+                        employeeRows.reduce((s, r) => s + r.transferred, 0) +
+                        employeeRows.reduce((s, r) => s + r.cancelled, 0)}{" "}
+                      total
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Delivered</span>
+                      <span>{employeeRows.reduce((s, r) => s + r.delivered, 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Sales</span>
+                      <span>{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">DL Charge</span>
+                      <span>{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Pending</span>
+                      <span>{data.summary.pending + pendingCarryover.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Cancelled</span>
+                      <span>{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-ink-soft">Transfer</span>
+                      <span>{employeeRows.reduce((s, r) => s + r.transferred, 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop: full table */}
+              <table className="data-table hidden md:table">
                 <thead>
                   <tr>
                    <th>Employee</th>
