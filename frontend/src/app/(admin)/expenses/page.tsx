@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 
 const CATEGORIES = [
@@ -72,7 +73,8 @@ export default function ExpensesPage() {
 
   const total = entries.reduce((sum, e) => sum + e.amount, 0);
 
-  return (
+ return (
+    <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
       <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
@@ -147,7 +149,8 @@ export default function ExpensesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+     </div>
     </div>
+    </AuthGate>
   );
 }
