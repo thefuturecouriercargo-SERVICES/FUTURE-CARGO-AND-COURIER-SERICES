@@ -9,7 +9,7 @@ const NAV = [
   { href: "/dashboard/monthly", label: "Monthly", short: "Monthly", roles: ["SUPER_ADMIN", "MANAGER"] },
   { href: "/orders", label: "Daily Entry", short: "Orders", roles: ["SUPER_ADMIN"] },
   { href: "/employees", label: "Employees", short: "Staff", roles: ["SUPER_ADMIN"] },
-  { href: "/payroll", label: "Payroll", short: "Payroll", roles: ["SUPER_ADMIN"] },
+  { href: "/payroll", label: "Payroll", short: "Payroll", roles: ["SUPER_ADMIN", "MANAGER"] },
   { href: "/vendors", label: "Vendors", short: "Vendors", roles: ["SUPER_ADMIN"] },
   { href: "/expenses", label: "Expenses", short: "Expenses", roles: ["SUPER_ADMIN"] },
   { href: "/reports", label: "Reports", short: "Reports", roles: ["SUPER_ADMIN", "MANAGER"] },
