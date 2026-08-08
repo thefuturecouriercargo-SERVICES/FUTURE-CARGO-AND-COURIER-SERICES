@@ -10,6 +10,9 @@ const ADMIN_USERNAME = process.env.SEED_ADMIN_USERNAME ?? "admin";
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@futurecourier.local";
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "Admin@12345";
 const DRIVER_PASSWORD = process.env.SEED_DRIVER_PASSWORD ?? "Driver@12345";
+const MANAGER_NAME = process.env.SEED_MANAGER_NAME ?? "Manager";
+const MANAGER_USERNAME = process.env.SEED_MANAGER_USERNAME ?? "manager";
+const MANAGER_PASSWORD = process.env.SEED_MANAGER_PASSWORD ?? "Manager@12345";
 
 // Registered drivers. Every name that appears in the real order history below
 // must exist here so orders can be attached to a real employee record.
@@ -53,7 +56,7 @@ async function main() {
     vendorIdByName.set(name, vendor.id);
   }
 
-  console.log("Seeding admin + driver accounts...");
+  console.log("Seeding admin + manager + driver accounts...");
   await prisma.user.upsert({
     where: { username: ADMIN_USERNAME },
     update: {},
@@ -63,6 +66,17 @@ async function main() {
       email: ADMIN_EMAIL,
       role: "SUPER_ADMIN",
       passwordHash: await hash(ADMIN_PASSWORD),
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { username: MANAGER_USERNAME },
+    update: {},
+    create: {
+      name: MANAGER_NAME,
+      username: MANAGER_USERNAME,
+      role: "MANAGER",
+      passwordHash: await hash(MANAGER_PASSWORD),
     },
   });
 
@@ -147,6 +161,7 @@ async function main() {
   console.log("Seed complete.");
   console.log("---------------------------------------------");
   console.log(`Super Admin login  ->  username: ${ADMIN_USERNAME}   password: ${ADMIN_PASSWORD}`);
+  console.log(`Manager login      ->  username: ${MANAGER_USERNAME}   password: ${MANAGER_PASSWORD}`);
   console.log(`Driver login       ->  username: <driver first name, lowercase>   password: ${DRIVER_PASSWORD}`);
   console.log(`e.g. username: anas   password: ${DRIVER_PASSWORD}`);
   console.log("---------------------------------------------");
