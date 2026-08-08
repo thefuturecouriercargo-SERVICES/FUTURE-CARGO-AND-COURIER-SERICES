@@ -15,8 +15,8 @@ export default function AuthGate({ allow, children }: { allow: Role[]; children:
       router.replace("/login");
       return;
     }
-    if (!allow.includes(user.role)) {
-      router.replace(user.role === "SUPER_ADMIN" ? "/dashboard" : "/driver");
+  if (!allow.includes(user.role)) {
+      router.replace(user.role === "SUPER_ADMIN" || user.role === "MANAGER" ? "/dashboard" : "/driver");
     }
   }, [user, loading, allow, router]);
 
