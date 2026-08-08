@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
-import { authenticate } from "../middleware/auth";
+import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange, formatDate } from "../utils/dates";
 import { Order } from "@prisma/client";
 
 const router = Router();
-router.use(authenticate);
+router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
 function summarize(orders: Order[]) {
   const delivered = orders.filter((o) => o.status === "DELIVERED");
