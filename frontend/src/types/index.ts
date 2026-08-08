@@ -1,4 +1,4 @@
-export type Role = "SUPER_ADMIN" | "DRIVER";
+export type Role = "SUPER_ADMIN" | "DRIVER" | "MANAGER";
 export type OrderStatus = "PENDING" | "DELIVERED" | "TRANSFER" | "CANCELLED";
 export type PaymentMode = "CASH" | "BANK";
 
