@@ -20,12 +20,14 @@ interface PayrollEntry {
   date: string;
   employeeId: string;
   employee: { id: string; name: string };
- type: "PAID" | "SHORT" | "BONUS";
+  type: "PAID" | "SHORT" | "BONUS";
   amount: number;
   note?: string | null;
 }
 
 export default function PayrollPage() {
+  const { user } = useAuth();
+  const isReadOnly = user?.role === "MANAGER";
   const [month, setMonth] = useState(currentMonthStr());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
@@ -33,7 +35,7 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
 
   const [formEmployeeId, setFormEmployeeId] = useState("");
- const [formType, setFormType] = useState<"PAID" | "SHORT" | "BONUS">("PAID");
+  const [formType, setFormType] = useState<"PAID" | "SHORT" | "BONUS">("PAID");
   const [formAmount, setFormAmount] = useState("");
   const [formNote, setFormNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -106,14 +108,14 @@ export default function PayrollPage() {
     await load();
   }
 
-function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
+  function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
     return entries.filter((e) => e.employeeId === employeeId && e.type === type).reduce((s, e) => s + e.amount, 0);
   }
 
   const rows = employees.map((e) => {
     const workingDays = Number(workingDaysInput[e.id]) || 0;
     const proratedSalary = Math.round((e.baseSalary / 30) * workingDays);
-   const short = sumFor(e.id, "SHORT");
+    const short = sumFor(e.id, "SHORT");
     const paid = sumFor(e.id, "PAID");
     const bonus = sumFor(e.id, "BONUS");
     const balance = proratedSalary + bonus - short - paid;
@@ -121,7 +123,7 @@ function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
   });
 
   const totals = rows.reduce(
-   (acc, r) => ({
+    (acc, r) => ({
       baseSalary: acc.baseSalary + r.employee.baseSalary,
       proratedSalary: acc.proratedSalary + r.proratedSalary,
       short: acc.short + r.short,
@@ -132,7 +134,7 @@ function sumFor(employeeId: string, type: "PAID" | "SHORT" | "BONUS") {
     { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, bonus: 0, balance: 0 }
   );
 
-return (
+  return (
     <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -148,6 +150,7 @@ return (
         />
       </div>
 
+      {!isReadOnly && (
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">New Entry</h2>
         <form onSubmit={onSubmitEntry} className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -170,7 +173,7 @@ return (
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Type</label>
             <div className="flex items-center gap-3 rounded border border-line px-2.5 py-2 text-sm">
-           <label className="flex items-center gap-1.5">
+              <label className="flex items-center gap-1.5">
                 <input type="radio" checked={formType === "PAID"} onChange={() => setFormType("PAID")} />
                 Paid
               </label>
@@ -213,6 +216,7 @@ return (
           </div>
         </form>
       </div>
+      )}
 
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
@@ -245,17 +249,18 @@ return (
                         type="number"
                         min={0}
                         max={31}
+                        readOnly={isReadOnly}
                         value={workingDaysInput[r.employee.id] ?? ""}
                         onChange={(e) =>
-                          setWorkingDaysInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                          !isReadOnly && setWorkingDaysInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
                         }
-                        onBlur={() => saveWorkingDays(r.employee.id)}
-                        className="w-14 rounded border border-line px-1.5 py-0.5 text-right text-xs"
+                        onBlur={() => !isReadOnly && saveWorkingDays(r.employee.id)}
+                        className={`w-14 rounded border border-line px-1.5 py-0.5 text-right text-xs ${isReadOnly ? "bg-paper-2" : ""}`}
                       />
                     </div>
                   </td>
                   <td className="text-right font-mono">{fmtNumber(r.proratedSalary)}</td>
-                 <td className="text-right font-mono">{fmtNumber(r.short)}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.short)}</td>
                   <td className="text-right font-mono">{fmtNumber(r.bonus)}</td>
                   <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
                   <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
@@ -304,21 +309,23 @@ return (
                   <td className="font-mono">{e.date.slice(0, 10)}</td>
                   <td>{e.employee.name}</td>
                   <td>
-                 <span className={`stamp ${e.type === "PAID" ? "delivered" : e.type === "BONUS" ? "pending" : "cancelled"}`}>{e.type}</span>
+                    <span className={`stamp ${e.type === "PAID" ? "delivered" : e.type === "BONUS" ? "pending" : "cancelled"}`}>{e.type}</span>
                   </td>
                   <td className="text-right font-mono">{fmtNumber(e.amount)}</td>
                   <td className="text-ink-soft">{e.note || "—"}</td>
                   <td className="whitespace-nowrap">
-                    <button onClick={() => deleteEntry(e.id)} className="text-xs text-cancelled hover:underline">
-                      Delete
-                    </button>
+                    {!isReadOnly && (
+                      <button onClick={() => deleteEntry(e.id)} className="text-xs text-cancelled hover:underline">
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
-    </div>
+      </div>
     </div>
     </AuthGate>
   );
