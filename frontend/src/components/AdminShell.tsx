@@ -5,17 +5,17 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/monthly", label: "Monthly" },
-  { href: "/orders", label: "Daily Entry" },
- { href: "/employees", label: "Employees" },
-  { href: "/payroll", label: "Payroll" },
-  { href: "/vendors", label: "Vendors" },
-  { href: "/expenses", label: "Expenses" },
-  { href: "/reports", label: "Reports" },
-  { href: "/reports/pnl", label: "P&L Report" },
-  { href: "/audit-log", label: "Audit Log" },
-  { href: "/settings", label: "Settings" },
+  { href: "/dashboard", label: "Dashboard", roles: ["SUPER_ADMIN", "MANAGER"] },
+  { href: "/dashboard/monthly", label: "Monthly", roles: ["SUPER_ADMIN", "MANAGER"] },
+  { href: "/orders", label: "Daily Entry", roles: ["SUPER_ADMIN"] },
+  { href: "/employees", label: "Employees", roles: ["SUPER_ADMIN"] },
+  { href: "/payroll", label: "Payroll", roles: ["SUPER_ADMIN"] },
+  { href: "/vendors", label: "Vendors", roles: ["SUPER_ADMIN"] },
+  { href: "/expenses", label: "Expenses", roles: ["SUPER_ADMIN"] },
+  { href: "/reports", label: "Reports", roles: ["SUPER_ADMIN", "MANAGER"] },
+  { href: "/reports/pnl", label: "P&L Report", roles: ["SUPER_ADMIN", "MANAGER"] },
+  { href: "/audit-log", label: "Audit Log", roles: ["SUPER_ADMIN"] },
+  { href: "/settings", label: "Settings", roles: ["SUPER_ADMIN"] },
 ];
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
@@ -44,7 +44,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
       <div className="flex">
         <nav className="min-h-[calc(100vh-4rem)] w-52 shrink-0 border-r border-line bg-white p-3">
-          {NAV.map((item) => {
+        {NAV.filter((item) => item.roles.includes(user?.role ?? "")).map((item) => {
             const active = pathname === item.href;
             return (
               <Link
