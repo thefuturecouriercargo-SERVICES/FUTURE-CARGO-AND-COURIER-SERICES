@@ -80,7 +80,7 @@ const createSchema = z.object({
   payment: z.enum(PAYMENTS),
   emirate: z.string().min(1).max(30),
   employeeId: z.string(),
-  total: z.number().int().min(0),
+total: z.number().int(),
   status: z.enum(STATUSES).optional(),
   remarks: z.string().max(500).optional(),
 });
@@ -149,7 +149,7 @@ const updateSchema = z.object({
   payment: z.enum(PAYMENTS).optional(),
   emirate: z.string().min(1).max(30).optional(),
   employeeId: z.string().optional(),
-  total: z.number().int().min(0).optional(),
+  total: z.number().int().optional(),
   status: z.enum(STATUSES).optional(),
   remarks: z.string().max(500).optional(),
 });
