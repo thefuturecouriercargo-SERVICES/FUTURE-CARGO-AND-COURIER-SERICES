@@ -33,6 +33,7 @@ const [saving, setSaving] = useState(false);
 const [paymentFilter, setPaymentFilter] = useState<"" | "CASH" | "BANK">("");
 const [emirateFilter, setEmirateFilter] = useState("");
 const [employeeFilter, setEmployeeFilter] = useState("");
+const [vendorFilter, setVendorFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
@@ -77,11 +78,12 @@ const filteredOrders = useMemo(() => {
     if (paymentFilter && o.payment !== paymentFilter) return false;
     if (emirateFilter && o.emirate !== emirateFilter) return false;
     if (employeeFilter && o.employee.id !== employeeFilter) return false;
+    if (vendorFilter && o.vendorId !== vendorFilter) return false;
     if (minAmount && o.total < Number(minAmount)) return false;
     if (maxAmount && o.total > Number(maxAmount)) return false;
     return true;
   });
-}, [orders, pendingCarryover, date, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, minAmount, maxAmount]);
+}, [orders, pendingCarryover, date, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, vendorFilter, minAmount, maxAmount]);
 
  function resetForm() {
     setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
@@ -322,6 +324,10 @@ required
   <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
     <option value="">All employees</option>
     {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+  </select>
+  <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+    <option value="">All vendors</option>
+    {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
   </select>
   <input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
   <input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
