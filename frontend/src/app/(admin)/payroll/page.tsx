@@ -40,13 +40,18 @@ export default function PayrollPage() {
   const [formNote, setFormNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [staffForm, setStaffForm] = useState({ name: "", username: "", password: "", baseSalary: "" });
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+
   const [workingDaysInput, setWorkingDaysInput] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [empList, rows, entryList] = await Promise.all([
-        apiFetch<Employee[]>("/employees", { query: { includeInactive: false } }),
+        apiFetch<Employee[]>("/employees", { query: { includeInactive: false, role: "ALL" } }),
         apiFetch<PayrollRow[]>("/payroll", { query: { month } }),
         apiFetch<PayrollEntry[]>("/payroll/entries", { query: { month } }),
       ]);
@@ -67,6 +72,35 @@ export default function PayrollPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function onSubmitStaff(ev: FormEvent) {
+    ev.preventDefault();
+    setStaffError(null);
+    if (!staffForm.name || !staffForm.username || !staffForm.password) {
+      setStaffError("Please fill in name, username and password.");
+      return;
+    }
+    setStaffSaving(true);
+    try {
+      await apiFetch("/employees", {
+        method: "POST",
+        body: {
+          name: staffForm.name,
+          username: staffForm.username,
+          password: staffForm.password,
+          baseSalary: Number(staffForm.baseSalary) || 0,
+          role: "MANAGER",
+        },
+      });
+      setStaffForm({ name: "", username: "", password: "", baseSalary: "" });
+      setShowAddStaff(false);
+      await load();
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : "Failed to add staff member");
+    } finally {
+      setStaffSaving(false);
+    }
+  }
 
   async function saveWorkingDays(employeeId: string) {
     const workingDays = Number(workingDaysInput[employeeId]) || 0;
@@ -142,13 +176,83 @@ export default function PayrollPage() {
           <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
           <h1 className="font-display text-3xl font-semibold text-navy">Payroll Statement</h1>
         </div>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="rounded border border-line px-3 py-2 text-sm"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="rounded border border-line px-3 py-2 text-sm"
+          />
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => setShowAddStaff((v) => !v)}
+              className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass"
+            >
+              {showAddStaff ? "Cancel" : "+ Add Staff"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {!isReadOnly && showAddStaff && (
+        <div className="mb-6 border border-line bg-white p-5">
+          <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Staff (Payroll Only)</h2>
+          <p className="mb-4 text-xs text-ink-soft">
+            For non-driver staff (e.g. accountants) who only need to be tracked for payroll. They will not appear in
+            delivery performance reports and will not be given app login access.
+          </p>
+          <form onSubmit={onSubmitStaff} className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>
+              <input
+                required
+                value={staffForm.name}
+                onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Username</label>
+              <input
+                required
+                value={staffForm.username}
+                onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Password</label>
+              <input
+                required
+                type="password"
+                value={staffForm.password}
+                onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Base Salary (AED)</label>
+              <input
+                type="number"
+                value={staffForm.baseSalary}
+                onChange={(e) => setStaffForm({ ...staffForm, baseSalary: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div className="col-span-2 flex items-end gap-3 md:col-span-4">
+              <button
+                type="submit"
+                disabled={staffSaving}
+                className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+              >
+                {staffSaving ? "Saving…" : "Add staff member"}
+              </button>
+              {staffError && <span className="text-xs text-cancelled">{staffError}</span>}
+            </div>
+          </form>
+        </div>
+      )}
 
       {!isReadOnly && (
       <div className="mb-6 border border-line bg-white p-5">
@@ -244,7 +348,7 @@ export default function PayrollPage() {
                       <input
                         type="number"
                         min={0}
-                        max={31}
+                       max={31}
                         readOnly={isReadOnly}
                         value={workingDaysInput[r.employee.id] ?? ""}
                         onChange={(e) =>
