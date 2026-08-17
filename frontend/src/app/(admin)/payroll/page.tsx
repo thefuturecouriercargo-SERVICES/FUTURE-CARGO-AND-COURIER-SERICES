@@ -44,6 +44,7 @@ export default function PayrollPage() {
   const [staffForm, setStaffForm] = useState({ name: "", username: "", password: "", baseSalary: "" });
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
   const [workingDaysInput, setWorkingDaysInput] = useState<Record<string, string>>({});
 
@@ -73,9 +74,51 @@ export default function PayrollPage() {
     load();
   }, [load]);
 
+  function isStaffRecord(e: Employee) {
+    return e.role === "MANAGER" && e.username !== "manager";
+  }
+
+  function startEditStaff(e: Employee) {
+    setEditingStaffId(e.id);
+    setStaffForm({ name: e.name, username: e.username, password: "", baseSalary: String(e.baseSalary ?? "") });
+    setShowAddStaff(true);
+    setStaffError(null);
+  }
+
+  function resetStaffForm() {
+    setStaffForm({ name: "", username: "", password: "", baseSalary: "" });
+    setEditingStaffId(null);
+    setShowAddStaff(false);
+    setStaffError(null);
+  }
+
   async function onSubmitStaff(ev: FormEvent) {
     ev.preventDefault();
     setStaffError(null);
+    if (editingStaffId) {
+      if (!staffForm.name) {
+        setStaffError("Please fill in the name.");
+        return;
+      }
+      setStaffSaving(true);
+      try {
+        await apiFetch(`/employees/${editingStaffId}`, {
+          method: "PUT",
+          body: {
+            name: staffForm.name,
+            baseSalary: Number(staffForm.baseSalary) || 0,
+            ...(staffForm.password ? { password: staffForm.password } : {}),
+          },
+        });
+        resetStaffForm();
+        await load();
+      } catch (err) {
+        setStaffError(err instanceof Error ? err.message : "Failed to update staff member");
+      } finally {
+        setStaffSaving(false);
+      }
+      return;
+    }
     if (!staffForm.name || !staffForm.username || !staffForm.password) {
       setStaffError("Please fill in name, username and password.");
       return;
@@ -92,8 +135,7 @@ export default function PayrollPage() {
           role: "MANAGER",
         },
       });
-      setStaffForm({ name: "", username: "", password: "", baseSalary: "" });
-      setShowAddStaff(false);
+      resetStaffForm();
       await load();
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : "Failed to add staff member");
@@ -101,6 +143,12 @@ export default function PayrollPage() {
       setStaffSaving(false);
     }
   }
+
+  async function deactivateStaff(e: Employee) {
+    if (!confirm(`Remove ${e.name} from payroll? This can be reversed later if needed.`)) return;
+    await apiFetch(`/employees/${e.id}`, { method: "DELETE" });
+    await load();
+    }
 
   async function saveWorkingDays(employeeId: string) {
     const workingDays = Number(workingDaysInput[employeeId]) || 0;
@@ -160,94 +208,19 @@ export default function PayrollPage() {
     (acc, r) => ({
       baseSalary: acc.baseSalary + r.employee.baseSalary,
       proratedSalary: acc.proratedSalary + r.proratedSalary,
-      short: acc.short + r.short,
-      paid: acc.paid + r.paid,
-      bonus: acc.bonus + r.bonus,
-      balance: acc.balance + r.balance,
-    }),
-    { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, bonus: 0, balance: 0 }
-  );
-
-  return (
-    <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
-    <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">Payroll Statement</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="rounded border border-line px-3 py-2 text-sm"
-          />
-          {!isReadOnly && (
-            <button
-              type="button"
-              onClick={() => setShowAddStaff((v) => !v)}
-              className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass"
-            >
-              {showAddStaff ? "Cancel" : "+ Add Staff"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {!isReadOnly && showAddStaff && (
-        <div className="mb-6 border border-line bg-white p-5">
-          <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Staff (Payroll Only)</h2>
-          <p className="mb-4 text-xs text-ink-soft">
-            For non-driver staff (e.g. accountants) who only need to be tracked for payroll. They will not appear in
-            delivery performance reports and will not be given app login access.
-          </p>
-          <form onSubmit={onSubmitStaff} className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>
-              <input
-                required
-                value={staffForm.name}
-                onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
-                className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Username</label>
-              <input
-                required
-                value={staffForm.username}
-                onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })}
-                className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Password</label>
-              <input
-                required
-                type="password"
-                value={staffForm.password}
-                onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
-                className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Base Salary (AED)</label>
-              <input
-                type="number"
-                value={staffForm.baseSalary}
-                onChange={(e) => setStaffForm({ ...staffForm, baseSalary: e.target.value })}
-                className="w-full rounded border border-line px-2.5 py-2 text-sm"
-              />
-            </div>
-            <div className="col-span-2 flex items-end gap-3 md:col-span-4">
-              <button
-                type="submit"
-                disabled={staffSaving}
-                className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
-              >
-                {staffSaving ? "Saving…" : "Add staff member"}
+      short: acc.short + r
+      >
+                {staffSaving ? "Saving…" : editingStaffId ? "Save changes" : "Add staff member"}
               </button>
+              {editingStaffId && (
+                <button
+                  type="button"
+                  onClick={resetStaffForm}
+                  className="rounded border border-line px-4 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
+                >
+                  Cancel
+                </button>
+              )}
               {staffError && <span className="text-xs text-cancelled">{staffError}</span>}
             </div>
           </form>
@@ -338,6 +311,16 @@ export default function PayrollPage() {
                     <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
                     <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(r.balance)} AED</span>
                   </div>
+                  {!isReadOnly && isStaffRecord(r.employee) && (
+                    <div className="mb-2.5 flex gap-3 text-xs">
+                      <button type="button" onClick={() => startEditStaff(r.employee)} className="text-brass hover:underline">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => deactivateStaff(r.employee)} className="text-cancelled hover:underline">
+                        Remove
+                      </button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Base Salary</span>
@@ -348,7 +331,7 @@ export default function PayrollPage() {
                       <input
                         type="number"
                         min={0}
-                       max={31}
+                        max={31}
                         readOnly={isReadOnly}
                         value={workingDaysInput[r.employee.id] ?? ""}
                         onChange={(e) =>
@@ -376,7 +359,7 @@ export default function PayrollPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+            ))}
               <div className="rounded border-2 border-navy p-3.5">
                 <div className="mb-2.5 flex items-center justify-between">
                   <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
@@ -419,6 +402,7 @@ export default function PayrollPage() {
                   <th className="text-right">Bonus</th>
                   <th className="text-right">Paid</th>
                   <th className="text-right">Balance</th>
+                  {!isReadOnly && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -447,6 +431,20 @@ export default function PayrollPage() {
                     <td className="text-right font-mono">{fmtNumber(r.bonus)}</td>
                     <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
                     <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
+                    {!isReadOnly && (
+                      <td className="whitespace-nowrap">
+                        {isStaffRecord(r.employee) && (
+                          <>
+                            <button onClick={() => startEditStaff(r.employee)} className="mr-2 text-xs text-brass hover:underline">
+                              Edit
+                            </button>
+                            <button onClick={() => deactivateStaff(r.employee)} className="text-xs text-cancelled hover:underline">
+                              Remove
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
                 <tr className="font-semibold border-t-2 border-line">
@@ -458,6 +456,7 @@ export default function PayrollPage() {
                   <td className="text-right font-mono">{fmtNumber(totals.bonus)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.paid)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.balance)}</td>
+                  {!isReadOnly && <td></td>}
                 </tr>
               </tbody>
             </table>
