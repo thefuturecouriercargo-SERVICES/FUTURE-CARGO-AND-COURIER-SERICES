@@ -15,10 +15,12 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const includeInactive = req.query.includeInactive === "true";
+    const roleParam = req.query.role as string | undefined;
+    const roleFilter = roleParam === "ALL" ? {} : { role: (roleParam as "DRIVER" | "MANAGER") ?? "DRIVER" };
     const employees = await prisma.user.findMany({
-      where: { role: "DRIVER", ...(includeInactive ? {} : { active: true }) },
+      where: { ...roleFilter, ...(includeInactive ? {} : { active: true }) },
       orderBy: { name: "asc" },
-     select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, createdAt: true },
+     select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, role: true, createdAt: true },
     });
     res.json(employees);
   })
@@ -31,6 +33,7 @@ const createSchema = z.object({
   phone: z.string().max(30).optional(),
   password: z.string().min(6).max(100),
   baseSalary: z.number().int().min(0).optional(),
+  role: z.enum(["DRIVER", "MANAGER"]).optional(),
 });
 router.post(
   "/",
@@ -44,11 +47,11 @@ router.post(
         username: data.username.trim(),
         email: data.email,
        phone: data.phone,
-        role: "DRIVER",
+        role: data.role ?? "DRIVER",
         passwordHash,
         baseSalary: data.baseSalary ?? 0,
       },
-      select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true },
+      select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, role: true },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "CREATE", entity: "Employee", entityId: employee.id });
     emitGlobal("employee:changed", { type: "created", employee });
