@@ -225,7 +225,7 @@ router.patch(
       if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
     }
 
-    const updateData: Prisma.OrderUpdateManyMutationInput = {};
+    const updateData: Prisma.OrderUncheckedUpdateManyInput = {};
     if (data.emirate) updateData.emirate = data.emirate.toUpperCase();
     if (data.employeeId) updateData.employeeId = data.employeeId;
 
