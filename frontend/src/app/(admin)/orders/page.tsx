@@ -37,6 +37,10 @@ const [vendorFilter, setVendorFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
+const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+const [bulkEmirate, setBulkEmirate] = useState("");
+const [bulkEmployeeId, setBulkEmployeeId] = useState("");
+const [bulkSaving, setBulkSaving] = useState(false);
 const cnNoRef = useRef<HTMLInputElement>(null);
 const vendorRef = useRef<HTMLSelectElement>(null);
 const totalRef = useRef<HTMLInputElement>(null);
@@ -84,6 +88,53 @@ const filteredOrders = useMemo(() => {
     return true;
   });
 }, [orders, pendingCarryover, date, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, vendorFilter, minAmount, maxAmount]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [date]);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) =>
+      prev.size === filteredOrders.length ? new Set() : new Set(filteredOrders.map((o) => o.id))
+    );
+  }
+
+  async function applyBulkUpdate() {
+    if (selectedIds.size === 0) return;
+    if (!bulkEmirate && !bulkEmployeeId) {
+      setError("Choose an emirate and/or employee to apply to the selected consignments.");
+      return;
+    }
+    setError(null);
+    setBulkSaving(true);
+    try {
+      await apiFetch("/orders/bulk", {
+        method: "PATCH",
+        body: {
+          ids: Array.from(selectedIds),
+          ...(bulkEmirate ? { emirate: bulkEmirate } : {}),
+          ...(bulkEmployeeId ? { employeeId: bulkEmployeeId } : {}),
+        },
+      });
+      setSelectedIds(new Set());
+      setBulkEmirate("");
+      setBulkEmployeeId("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Failed to update selected consignments");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
 
  function resetForm() {
     setForm(lockFields ? { ...emptyForm, emirate: form.emirate, employeeId: form.employeeId } : emptyForm);
@@ -332,10 +383,54 @@ required
   <input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
   <input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
 </div>
+
+{selectedIds.size > 0 && (
+  <div className="mb-3 flex flex-wrap items-center gap-2.5 border border-brass bg-brass/10 px-3 py-2.5">
+    <span className="font-mono text-xs uppercase text-ink">{selectedIds.size} selected</span>
+    <select value={bulkEmirate} onChange={(e) => setBulkEmirate(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+      <option value="">Set emirate…</option>
+      {EMIRATES.map((em) => (
+        <option key={em} value={em}>
+          {em}
+        </option>
+      ))}
+    </select>
+    <select value={bulkEmployeeId} onChange={(e) => setBulkEmployeeId(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+      <option value="">Set employee…</option>
+      {employees.map((emp) => (
+        <option key={emp.id} value={emp.id}>
+          {emp.name}
+        </option>
+      ))}
+    </select>
+    <button
+      onClick={applyBulkUpdate}
+      disabled={bulkSaving || (!bulkEmirate && !bulkEmployeeId)}
+      className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+    >
+      {bulkSaving ? "Applying…" : "Apply to selected"}
+    </button>
+    <button
+      type="button"
+      onClick={() => setSelectedIds(new Set())}
+      className="rounded border border-line px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
+    >
+      Clear selection
+    </button>
+  </div>
+)}
+
             <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={filteredOrders.length > 0 && selectedIds.size === filteredOrders.length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
                 <th>SL</th>
                 <th>CN No.</th>
                 <th>Vendor</th>
@@ -351,19 +446,22 @@ required
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-ink-soft">
+                  <td colSpan={11} className="py-8 text-center text-ink-soft">
                     Loading…
                   </td>
                 </tr>
              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-ink-soft">
+                  <td colSpan={11} className="py-8 text-center text-ink-soft">
                     No consignments entered for this date yet.
                   </td>
                 </tr>
               ) : (
             filteredOrders.map((o, i) => (
                 <tr key={o.id}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
+                  </td>
                   <td className="font-mono">{i + 1}</td>
                     <td className="font-mono">{o.cnNo}</td>
                     <td>{o.brandName}</td>
@@ -378,29 +476,3 @@ required
                         onChange={(e) => quickStatus(o.id, e.target.value as OrderStatus)}
                         className="rounded border border-line bg-transparent px-1.5 py-1 text-xs"
                       >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="whitespace-nowrap">
-                      <button onClick={() => startEdit(o)} className="mr-2 text-xs text-brass hover:underline">
-                        Edit
-                      </button>
-                      <button onClick={() => deleteOrder(o.id)} className="text-xs text-cancelled hover:underline">
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-    </div>
-    </div>
-    </AuthGate>
-  );
-}
