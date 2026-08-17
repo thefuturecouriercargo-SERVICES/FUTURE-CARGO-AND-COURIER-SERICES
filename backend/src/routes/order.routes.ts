@@ -204,6 +204,50 @@ const order = await prisma.order.update({
   })
 );
 
+const bulkUpdateSchema = z
+  .object({
+    ids: z.array(z.string()).min(1, "Select at least one consignment"),
+    emirate: z.string().min(1).max(30).optional(),
+    employeeId: z.string().optional(),
+  })
+  .refine((data) => data.emirate || data.employeeId, {
+    message: "Provide an emirate and/or an employee to apply",
+  });
+
+router.patch(
+  "/bulk",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const data = bulkUpdateSchema.parse(req.body);
+
+    if (data.employeeId) {
+      const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
+      if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
+    }
+
+    const updateData: Prisma.OrderUpdateManyMutationInput = {};
+    if (data.emirate) updateData.emirate = data.emirate.toUpperCase();
+    if (data.employeeId) updateData.employeeId = data.employeeId;
+
+    const result = await prisma.order.updateMany({
+      where: { id: { in: data.ids } },
+      data: updateData,
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "BULK_UPDATE",
+      entity: "Order",
+      entityId: data.ids.join(","),
+      meta: { ids: data.ids, emirate: data.emirate, employeeId: data.employeeId, count: result.count },
+    });
+
+    emitGlobal("order:changed", { type: "bulk-updated", ids: data.ids });
+
+    res.json({ updated: result.count });
+  })
+);
+
 router.delete(
   "/:id",
   requireRole("SUPER_ADMIN"),
