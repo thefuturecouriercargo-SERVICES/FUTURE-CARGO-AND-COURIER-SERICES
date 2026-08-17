@@ -476,3 +476,29 @@ required
                         onChange={(e) => quickStatus(o.id, e.target.value as OrderStatus)}
                         className="rounded border border-line bg-transparent px-1.5 py-1 text-xs"
                       >
+                        {STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <button onClick={() => startEdit(o)} className="mr-2 text-xs text-brass hover:underline">
+                        Edit
+                      </button>
+                      <button onClick={() => deleteOrder(o.id)} className="text-xs text-cancelled hover:underline">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+    </div>
+    </div>
+    </AuthGate>
+  );
+}
