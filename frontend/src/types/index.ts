@@ -26,6 +26,7 @@ export interface Employee {
   phone?: string | null;
   active: boolean;
   baseSalary: number;
+  role?: "DRIVER" | "MANAGER" | "SUPER_ADMIN";
 }
 
 export interface Order {
