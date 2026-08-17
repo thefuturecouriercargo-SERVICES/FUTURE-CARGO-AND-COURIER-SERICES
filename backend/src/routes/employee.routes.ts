@@ -18,7 +18,7 @@ router.get(
     const roleParam = req.query.role as string | undefined;
     const roleFilter =
       roleParam === "ALL"
-        ? { role: { in: ["DRIVER", "MANAGER"] as Array<"DRIVER" | "MANAGER"> } }
+        ? { role: { in: ["DRIVER", "MANAGER"] as Array<"DRIVER" | "MANAGER"> }, username: { not: "manager" } }
         : { role: (roleParam as "DRIVER" | "MANAGER") ?? "DRIVER" };
     const employees = await prisma.user.findMany({
       where: { ...roleFilter, ...(includeInactive ? {} : { active: true }) },
