@@ -208,9 +208,97 @@ export default function PayrollPage() {
     (acc, r) => ({
       baseSalary: acc.baseSalary + r.employee.baseSalary,
       proratedSalary: acc.proratedSalary + r.proratedSalary,
-      short: acc.short + r
-      >
-                {staffSaving ? "Saving…" : editingStaffId ? "Save changes" : "Add staff member"}
+    short: acc.short + r.short,
+      paid: acc.paid + r.paid,
+      bonus: acc.bonus + r.bonus,
+      balance: acc.balance + r.balance,
+    }),
+    { baseSalary: 0, proratedSalary: 0, short: 0, paid: 0, bonus: 0, balance: 0 }
+  );
+
+  return (
+    <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
+    <div>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
+          <h1 className="font-display text-3xl font-semibold text-navy">Payroll Statement</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="rounded border border-line px-3 py-2 text-sm"
+          />
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={() => (showAddStaff ? resetStaffForm() : setShowAddStaff(true))}
+              className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass"
+            >
+              {showAddStaff ? "Cancel" : "+ Add Staff"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!isReadOnly && showAddStaff && (
+        <div className="mb-6 border border-line bg-white p-5">
+          <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">
+            {editingStaffId ? "Edit Staff" : "Add Staff (Payroll Only)"}
+          </h2>
+          <p className="mb-4 text-xs text-ink-soft">
+            For non-driver staff (e.g. accountants) who only need to be tracked for payroll. They will not appear in
+            delivery performance reports and will not be given app login access.
+          </p>
+          <form onSubmit={onSubmitStaff} className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>
+              <input
+                required
+                value={staffForm.name}
+                onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Username</label>
+              <input
+                required
+                disabled={!!editingStaffId}
+                value={staffForm.username}
+                onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm disabled:bg-paper-2"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">
+                {editingStaffId ? "New password (optional)" : "Password"}
+              </label>
+              <input
+                required={!editingStaffId}
+                type="password"
+                value={staffForm.password}
+                onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Base Salary (AED)</label>
+              <input
+                type="number"
+                value={staffForm.baseSalary}
+                onChange={(e) => setStaffForm({ ...staffForm, baseSalary: e.target.value })}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+            <div className="col-span-2 flex items-end gap-3 md:col-span-4">
+              <button
+                type="submit"
+                disabled={staffSaving}
+                className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+              >     {staffSaving ? "Saving…" : editingStaffId ? "Save changes" : "Add staff member"}
               </button>
               {editingStaffId && (
                 <button
