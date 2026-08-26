@@ -60,7 +60,16 @@ router.get(
       by: ["vendorId"],
       _sum: { amount: true },
     });
+    const driverPaymentTotals = await prisma.purchase.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null } },
+      _sum: { amount: true },
+    });
     const paymentMap = new Map(paymentTotals.map((p) => [p.vendorId, p._sum.amount ?? 0]));
+    for (const p of driverPaymentTotals) {
+      if (!p.vendorId) continue;
+      paymentMap.set(p.vendorId, (paymentMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+    }
 
     const rows = vendors.map((v) => {
       const totalAmount = totalMap.get(v.id) ?? 0;
@@ -85,11 +94,38 @@ router.get(
 router.get(
   "/:vendorId/payments",
   asyncHandler(async (req, res) => {
-    const payments = await prisma.vendorPayment.findMany({
-      where: { vendorId: req.params.vendorId },
-      orderBy: { date: "desc" },
-    });
-    res.json(payments);
+    const [manual, driverPayments] = await Promise.all([
+      prisma.vendorPayment.findMany({
+        where: { vendorId: req.params.vendorId },
+        orderBy: { date: "desc" },
+      }),
+      prisma.purchase.findMany({
+        where: { vendorId: req.params.vendorId },
+        include: { employee: { select: { name: true } } },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+
+    const combined = [
+      ...manual.map((p) => ({
+        id: p.id,
+        date: p.date,
+        amount: p.amount,
+        note: p.note,
+        source: "MANUAL" as const,
+        employeeName: null as string | null,
+      })),
+      ...driverPayments.map((p) => ({
+        id: p.id,
+        date: p.date,
+        amount: p.amount,
+        note: p.note,
+        source: "DRIVER" as const,
+        employeeName: p.employee.name,
+      })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    res.json(combined);
   })
 );
 
