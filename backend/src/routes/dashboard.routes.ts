@@ -8,6 +8,8 @@ import { Order } from "@prisma/client";
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
+type OrderWithAgentFlag = Order & { employee?: { isAgent?: boolean } };
+
 function summarize(orders: Order[]) {
   const delivered = orders.filter((o) => o.status === "DELIVERED");
   return {
@@ -21,6 +23,14 @@ function summarize(orders: Order[]) {
     cashCollected: delivered.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0),
     bankCollected: delivered.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0),
   };
+}
+
+// Agent employees' delivery charges are recorded (needed for vendor credit
+// calculations) but must never count toward company revenue/profit.
+function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
+  return orders
+    .filter((o) => o.status === "DELIVERED" && !o.employee?.isAgent)
+    .reduce((s, o) => s + o.deliveryCharge, 0);
 }
 
  router.get(
@@ -42,7 +52,7 @@ function summarize(orders: Order[]) {
 
     const orders = await prisma.order.findMany({
       where,
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
     });
 const expenses = await prisma.expenseEntry.findMany({
       where: { ...where, source: "ADMIN" },
@@ -108,13 +118,18 @@ const expenses = await prisma.expenseEntry.findMany({
  const totalExpensesAll = expenses.filter((e) => e.category !== "OTHER").reduce((s, e) => s + e.amount, 0);
     const totalOtherDeductionAll = expenses.filter((e) => e.category === "OTHER").reduce((s, e) => s + e.amount, 0);
     const overallSummary = summarize(orders);
+    // Company revenue excludes delivery charge from agent employees (no delivery
+    // charge is actually received on their orders — recorded only for vendor credit calc).
+    const revenueDlCharge = revenueDeliveryCharge(orders);
 
     res.json({
       date: label,
       summary: {
         ...overallSummary,
+        totalDeliveryCharge: revenueDlCharge,
         totalExpenses: totalExpensesAll,
         otherDeduction: totalOtherDeductionAll,
+        netProfit: revenueDlCharge - totalExpensesAll - totalOtherDeductionAll,
         cashBalance: overallSummary.cashCollected - totalExpensesAll - totalOtherDeductionAll,
       },
       employeeBreakdown,
@@ -132,7 +147,7 @@ router.get(
     const { start, end, year, month } = monthRange(req.query.month as string | undefined);
     const orders = await prisma.order.findMany({
       where: { date: { gte: start, lte: end } },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
     });
 
     const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
@@ -178,7 +193,7 @@ router.get(
 
     res.json({
       month: `${year}-${String(month).padStart(2, "0")}`,
-      summary: summarize(orders),
+      summary: { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) },
       employeeBreakdown,
       vendorBreakdown,
       emirateBreakdown,
