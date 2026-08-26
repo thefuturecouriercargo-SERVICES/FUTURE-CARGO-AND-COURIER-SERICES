@@ -27,6 +27,7 @@ export interface Employee {
   active: boolean;
   baseSalary: number;
   role?: "DRIVER" | "MANAGER" | "SUPER_ADMIN";
+  isAgent?: boolean;
 }
 
 export interface Order {
