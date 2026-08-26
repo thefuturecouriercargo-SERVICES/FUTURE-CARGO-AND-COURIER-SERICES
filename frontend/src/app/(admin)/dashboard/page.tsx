@@ -8,7 +8,7 @@ import KpiCard from "@/components/KpiCard";
 import StatusStamp from "@/components/StatusStamp";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import BarChart from "@/components/charts/BarChart";
-import { Order, OrderStatus, Summary } from "@/types";
+import { Order, OrderStatus, Summary, Vendor } from "@/types";
 
 interface DailyResponse {
   date: string;
@@ -38,8 +38,10 @@ const [maxAmount, setMaxAmount] = useState("");
   const [globalResults, setGlobalResults] = useState<Order[] | null>(null);
 const [globalSearching, setGlobalSearching] = useState(false);
 const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
+  const [deductionVendor, setDeductionVendor] = useState<Record<string, string>>({});
   const [savingDeduction, setSavingDeduction] = useState<string | null>(null);
-  const [purchases, setPurchases] = useState<{ id: string; employeeId: string; amount: number }[]>([]);
+  const [purchases, setPurchases] = useState<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
 
   function adjTotal(employeeId: string) {
     return purchases.filter((p) => p.employeeId === employeeId).reduce((s, p) => s + p.amount, 0);
@@ -52,9 +54,10 @@ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({})
     try {
       await apiFetch("/purchases", {
         method: "POST",
-        body: { date, amount, employeeId },
+        body: { date, amount, employeeId, vendorId: deductionVendor[employeeId] || undefined },
       });
       setDeductionInput((prev) => ({ ...prev, [employeeId]: "" }));
+      setDeductionVendor((prev) => ({ ...prev, [employeeId]: "" }));
       await load();
     } finally {
       setSavingDeduction(null);
@@ -74,7 +77,7 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
         setData(res);
       const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
         setPendingCarryover(carryoverRes.orders);
-        const purchasesRes = await apiFetch<{ id: string; employeeId: string; amount: number }[]>("/purchases", { query: { date } });
+        const purchasesRes = await apiFetch<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>("/purchases", { query: { date } });
         setPurchases(purchasesRes);
       } finally {
         setLoading(false);
@@ -84,6 +87,9 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    apiFetch<Vendor[]>("/vendors").then(setVendors);
+  }, []);
   useEffect(() => {
   if (!search.trim()) {
     setGlobalResults(null);
@@ -203,7 +209,7 @@ return (
                 <h2 className="font-display text-[17px] font-semibold text-navy">
                   Employee-wise Performance
                 </h2>
-                <a
+                
                   href={employeePerformancePdfUrl({ date })}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -375,8 +381,14 @@ return (
                               <span
                                 key={entry.id}
                                 className="flex items-center gap-1 rounded bg-paper px-1.5 py-0.5 text-xs"
+                                title={entry.vendor ? `Paid to ${entry.vendor.name}` : "General deduction"}
                               >
                                 {fmtNumber(entry.amount)}
+                                {entry.vendor && (
+                                  <span className="rounded bg-brass/20 px-1 text-[9px] uppercase text-brass">
+                                    {entry.vendor.name}
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => removeDeduction(entry.id)}
                                   className="text-red-600 hover:text-red-800"
@@ -387,6 +399,21 @@ return (
                               </span>
                             ))}
                             <div className="flex items-center gap-1.5">
+                              <select
+                                value={deductionVendor[r.employee.id] ?? ""}
+                                onChange={(e) =>
+                                  setDeductionVendor((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
+                                }
+                                className="rounded border border-line px-1 py-0.5 text-[10px]"
+                                title="Vendor (optional) — leave blank for a general deduction"
+                              >
+                                <option value="">No vendor</option>
+                                {vendors.map((v) => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.name}
+                                  </option>
+                                ))}
+                              </select>
                               <input
                                 type="number"
                                 placeholder="+ add"
