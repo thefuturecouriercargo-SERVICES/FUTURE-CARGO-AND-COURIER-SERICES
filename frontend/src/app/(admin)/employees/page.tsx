@@ -6,7 +6,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
-const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "" };
+const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "", isAgent: false };
 
 interface PerformanceMap {
   [id: string]: { delivered: number; totalSales: number; totalDeliveryCharge: number };
@@ -47,7 +47,7 @@ export default function EmployeesPage() {
 
   function startEdit(e: Employee) {
     setEditingId(e.id);
-   setForm({ name: e.name, username: e.username, email: e.email ?? "", phone: e.phone ?? "", password: "", baseSalary: String(e.baseSalary ?? "") });
+   setForm({ name: e.name, username: e.username, email: e.email ?? "", phone: e.phone ?? "", password: "", baseSalary: String(e.baseSalary ?? ""), isAgent: e.isAgent ?? false });
   }
 
   async function onSubmit(ev: FormEvent) {
@@ -63,6 +63,7 @@ export default function EmployeesPage() {
             email: form.email,
             phone: form.phone,
             baseSalary: Number(form.baseSalary) || 0,
+            isAgent: form.isAgent,
             ...(form.password ? { password: form.password } : {}),
           },
         });
@@ -133,6 +134,18 @@ export default function EmployeesPage() {
               className="w-full rounded border border-line px-2.5 py-2 text-sm"
             />
           </div>
+          <div className="col-span-2 flex items-center gap-2 md:col-span-5">
+            <input
+              id="isAgent"
+              type="checkbox"
+              checked={form.isAgent}
+              onChange={(e) => setForm({ ...form, isAgent: e.target.checked })}
+              className="h-4 w-4"
+            />
+            <label htmlFor="isAgent" className="font-mono text-[11px] uppercase tracking-wide text-ink-soft">
+              Agent (no delivery charge revenue — excluded from profit calculation)
+            </label>
+          </div>
           <div className="col-span-2 flex items-end gap-3 md:col-span-5">
             <button type="submit" disabled={saving} className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
               {saving ? "Saving…" : editingId ? "Save changes" : "Add employee"}
@@ -170,7 +183,14 @@ export default function EmployeesPage() {
               const p = performance[e.id];
               return (
                 <tr key={e.id} className={e.active ? "" : "opacity-50"}>
-                  <td>{e.name}</td>
+                  <td>
+                    {e.name}
+                    {e.isAgent && (
+                      <span className="ml-2 rounded border border-brass px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-brass">
+                        Agent
+                      </span>
+                    )}
+                  </td>
                   <td className="font-mono">{e.username}</td>
                   <td className="text-ink-soft">{e.email || e.phone || "—"}</td>
                   <td className="text-right font-mono">{fmtNumber(e.baseSalary ?? 0)}</td>
