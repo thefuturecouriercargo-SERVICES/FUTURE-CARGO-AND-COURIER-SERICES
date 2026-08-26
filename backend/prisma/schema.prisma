@@ -67,6 +67,7 @@ model User {
   active        Boolean  @default(true)
 phone         String?
   baseSalary    Int      @default(0)
+  isAgent       Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
