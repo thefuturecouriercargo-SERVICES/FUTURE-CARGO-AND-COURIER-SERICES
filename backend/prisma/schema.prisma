@@ -104,9 +104,26 @@ model Vendor {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  orders Order[]
+  orders   Order[]
+  payments VendorPayment[]
 
   @@map("vendors")
+}
+
+// Manual record of what we've paid a vendor against their credit balance
+// (credit balance = total collected on their delivered orders minus our delivery charge).
+model VendorPayment {
+  id        String   @id @default(cuid())
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  date      DateTime @db.Date
+  amount    Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@index([date])
+  @@map("vendor_payments")
 }
 
 model Order {
