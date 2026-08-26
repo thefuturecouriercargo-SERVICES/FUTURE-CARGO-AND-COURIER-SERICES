@@ -129,9 +129,11 @@ router.get(
 
     const delivered = await prisma.order.findMany({
       where: { ...where, status: "DELIVERED" },
-      select: { deliveryCharge: true },
+      select: { deliveryCharge: true, employee: { select: { isAgent: true } } },
     });
-    const revenue = delivered.reduce((s, o) => s + o.deliveryCharge, 0);
+    // Agent orders keep their real delivery charge (for vendor credit calcs)
+    // but are excluded from company revenue since we don't collect a fee on them.
+    const revenue = delivered.filter((o) => !o.employee.isAgent).reduce((s, o) => s + o.deliveryCharge, 0);
 
     const expenseWhere: Record<string, unknown> = {};
     if (req.query.from || req.query.to) {
