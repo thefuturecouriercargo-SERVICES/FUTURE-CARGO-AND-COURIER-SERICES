@@ -82,17 +82,23 @@ expenseEntries ExpenseEntry[]
   payrollEntries PayrollEntry[]
   @@map("users")
 }
+// A deduction from a driver's collected cash. Optionally tagged with the vendor
+// that money was actually paid out to — when tagged, it also counts toward that
+// vendor's Vendor Credit "Paid" balance, and reduces the driver's real cash closing balance.
 model Purchase {
   id         String   @id @default(cuid())
   date       DateTime @db.Date
   employeeId String
   employee   User     @relation(fields: [employeeId], references: [id])
+  vendorId   String?
+  vendor     Vendor?  @relation(fields: [vendorId], references: [id])
   amount     Int
   note       String?
   createdAt  DateTime @default(now())
 
   @@index([date])
   @@index([employeeId])
+  @@index([vendorId])
   @@map("purchases")
 }
 
@@ -104,8 +110,9 @@ model Vendor {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  orders   Order[]
-  payments VendorPayment[]
+  orders           Order[]
+  payments         VendorPayment[]
+  driverPayments   Purchase[]
 
   @@map("vendors")
 }
