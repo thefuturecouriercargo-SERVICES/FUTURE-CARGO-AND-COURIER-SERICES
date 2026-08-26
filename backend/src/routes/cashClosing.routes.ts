@@ -34,7 +34,11 @@ const adminExpenses = await prisma.expenseEntry.findMany({
       where: { date: start, employeeId: req.user!.sub, source: "ADMIN" },
     });
     const totalExpenses = adminExpenses.reduce((s, e) => s + e.amount, 0);
-    const balanceCash = cashPayments - totalExpenses;
+    const purchases = await prisma.purchase.findMany({
+      where: { date: start, employeeId: req.user!.sub },
+    });
+    const totalPurchases = purchases.reduce((s, p) => s + p.amount, 0);
+    const balanceCash = cashPayments - totalExpenses - totalPurchases;
 
     const closing = await prisma.cashClosing.upsert({
       where: { employeeId_date: { employeeId: req.user!.sub, date: start } },
@@ -109,6 +113,13 @@ router.get(
     });
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
+    const purchases = await prisma.purchase.findMany({
+      where: { date: start, employeeId: req.user!.sub },
+      include: { vendor: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    const totalPurchases = purchases.reduce((s, p) => s + p.amount, 0);
+
     res.json({
       date: start.toISOString().slice(0, 10),
       totalDelivered: orders.length,
@@ -117,6 +128,8 @@ router.get(
       onlinePayments,
       expenses,
       totalExpenses,
+      purchases,
+      totalPurchases,
     });
   })
 );
