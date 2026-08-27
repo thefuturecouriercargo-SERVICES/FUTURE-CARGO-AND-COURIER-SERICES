@@ -208,7 +208,7 @@ return (
               <div className="mb-3 flex items-center justify-between border-b border-line pb-2.5">
                 <h2 className="font-display text-[17px] font-semibold text-navy">
                   Employee-wise Performance
-                </h2>
+                               </h2>
                 
                   href={employeePerformancePdfUrl({ date })}
                   target="_blank"
