@@ -71,8 +71,17 @@ router.get(
       paymentMap.set(p.vendorId, (paymentMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
     }
 
+    // Manual adjustments (positive or negative) that correct a vendor's Total Amount.
+    const adjustmentTotals = await prisma.vendorAdjustment.groupBy({
+      by: ["vendorId"],
+      _sum: { amount: true },
+    });
+    const adjustmentMap = new Map(adjustmentTotals.map((a) => [a.vendorId, a._sum.amount ?? 0]));
+
     const rows = vendors.map((v) => {
-      const totalAmount = totalMap.get(v.id) ?? 0;
+      const rawTotalAmount = totalMap.get(v.id) ?? 0;
+      const adjustmentTotal = adjustmentMap.get(v.id) ?? 0;
+      const totalAmount = rawTotalAmount + adjustmentTotal;
       const cancelledTotal = cancelledMap.get(v.id) ?? 0;
       const totalDeliveryCharge = chargeMap.get(v.id) ?? 0;
       const totalPaid = paymentMap.get(v.id) ?? 0;
@@ -80,6 +89,7 @@ router.get(
       return {
         vendor: { id: v.id, name: v.name, active: v.active },
         totalAmount,
+        adjustmentTotal,
         cancelledTotal,
         totalDeliveryCharge,
         totalPaid,
@@ -134,6 +144,68 @@ const paymentSchema = z.object({
   amount: z.number().int().positive(),
   note: z.string().max(300).optional(),
 });
+
+const adjustmentSchema = z.object({
+  date: z.string(),
+  amount: z.number().int().refine((v) => v !== 0, "Amount can't be zero"),
+  note: z.string().max(300).optional(),
+});
+
+// Adjustment amount can be positive (adds to Total Amount) or negative (subtracts).
+router.post(
+  "/:vendorId/adjustments",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const vendor = await prisma.vendor.findUnique({ where: { id: req.params.vendorId } });
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+
+    const data = adjustmentSchema.parse(req.body);
+    const { start } = dayRange(data.date);
+    const adjustment = await prisma.vendorAdjustment.create({
+      data: { vendorId: req.params.vendorId, date: start, amount: data.amount, note: data.note },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "VENDOR_ADJUSTMENT_CREATE",
+      entity: "VendorAdjustment",
+      entityId: adjustment.id,
+      meta: { vendorId: req.params.vendorId, amount: data.amount },
+    });
+    emitGlobal("vendorPayment:changed", { type: "created" });
+    res.status(201).json(adjustment);
+  })
+);
+
+router.get(
+  "/:vendorId/adjustments",
+  asyncHandler(async (req, res) => {
+    const adjustments = await prisma.vendorAdjustment.findMany({
+      where: { vendorId: req.params.vendorId },
+      orderBy: { date: "desc" },
+    });
+    res.json(adjustments);
+  })
+);
+
+router.delete(
+  "/adjustments/:id",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.vendorAdjustment.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Adjustment entry not found");
+
+    await prisma.vendorAdjustment.delete({ where: { id: req.params.id } });
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "VENDOR_ADJUSTMENT_DELETE",
+      entity: "VendorAdjustment",
+      entityId: req.params.id,
+    });
+    emitGlobal("vendorPayment:changed", { type: "deleted" });
+    res.json({ deleted: true });
+  })
+);
 
 router.post(
   "/:vendorId/payments",
