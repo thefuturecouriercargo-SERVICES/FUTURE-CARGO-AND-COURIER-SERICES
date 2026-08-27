@@ -13,6 +13,7 @@ import expenseRoutes from "./expense.routes";
 import purchaseRoutes from "./purchase.routes";
 import payrollRoutes from "./payroll.routes";
 import vendorCreditRoutes from "./vendorCredit.routes";
+import agentCreditRoutes from "./agentCredit.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -31,4 +32,5 @@ router.use("/expenses", expenseRoutes);
 router.use("/purchases", purchaseRoutes);
 router.use("/payroll", payrollRoutes);
 router.use("/vendor-credit", vendorCreditRoutes);
+router.use("/agent-credit", agentCreditRoutes);
 export default router;
