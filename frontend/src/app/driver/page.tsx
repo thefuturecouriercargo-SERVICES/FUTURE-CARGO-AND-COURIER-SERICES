@@ -24,6 +24,7 @@ export default function DriverPortalPage() {
   const [tab, setTab] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
+  const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -48,8 +49,8 @@ export default function DriverPortalPage() {
     setTimeout(() => setToast(null), 2200);
   }
 
-  async function updateStatus(order: Order, status: OrderStatus) {
-    await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status } });
+  async function updateStatus(order: Order, status: OrderStatus, reason?: string) {
+    await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status, reason } });
     showToast(`CN ${order.cnNo} marked ${status}`);
     await load();
   }
@@ -123,17 +124,15 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {STATUSES.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => updateStatus(o, s)}
-                    className={`rounded px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide border ${
-                      o.status === s ? statusSelectedClass(s) : "border-line text-ink-soft hover:-translate-y-px"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
+                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
+                  {o.status}
+                </span>
+                <button
+                  onClick={() => setStatusOrder(o)}
+                  className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
+                >
+                  Update Status
+                </button>
                 <button onClick={() => setTransferOrder(o)} className="rounded border border-transferred px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-transferred hover:bg-transferred-bg">
                   Transfer
                 </button>
@@ -146,6 +145,17 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
       <CashClosingPanel date={date} onSubmitted={() => showToast("Cash closing submitted")} />
 
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
+
+      {statusOrder && (
+        <StatusModal
+          order={statusOrder}
+          onClose={() => setStatusOrder(null)}
+          onConfirm={async (status, reason) => {
+            await updateStatus(statusOrder, status, reason);
+            setStatusOrder(null);
+          }}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-6 right-6 border-l-2 border-brass bg-navy px-5 py-3 font-mono text-xs text-paper shadow-lg">{toast}</div>
@@ -235,6 +245,89 @@ function TransferModal({ order, onClose, onDone }: { order: Order; onClose: () =
         <div className="flex gap-2">
           <button onClick={submit} disabled={busy} className="flex-1 rounded bg-navy py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
             {busy ? "Transferring…" : "Confirm transfer"}
+          </button>
+          <button onClick={onClose} className="rounded border border-line px-4 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusModal({
+  order,
+  onClose,
+  onConfirm,
+}: {
+  order: Order;
+  onClose: () => void;
+  onConfirm: (status: OrderStatus, reason?: string) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState<OrderStatus | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function confirm() {
+    if (!selected) {
+      setError("Choose a status.");
+      return;
+    }
+    if (selected === "CANCELLED" && !reason.trim()) {
+      setError("Enter a reason for cancelling.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm(selected, selected === "CANCELLED" ? reason.trim() : undefined);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Failed to update status");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded border border-line bg-white p-6">
+        <h3 className="mb-1 font-display text-lg font-semibold text-navy">Update CN {order.cnNo}</h3>
+        <p className="mb-4 text-xs text-ink-soft">
+          Currently <b>{order.status}</b>. Pick the new status below.
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {STATUSES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSelected(s)}
+              className={`rounded border px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide ${
+                selected === s ? statusSelectedClass(s) : "border-line text-ink-soft hover:border-brass"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        {selected === "CANCELLED" && (
+          <div className="mb-3">
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Reason for cancelling</label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              className="w-full rounded border border-line px-3 py-2 text-sm"
+              placeholder="e.g. customer refused, wrong address…"
+            />
+          </div>
+        )}
+        {error && <p className="mb-3 text-xs text-cancelled">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={confirm}
+            disabled={busy || !selected}
+            className="flex-1 rounded bg-navy py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+          >
+            {busy ? "Saving…" : "Confirm"}
           </button>
           <button onClick={onClose} className="rounded border border-line px-4 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
             Cancel
