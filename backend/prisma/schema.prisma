@@ -80,6 +80,7 @@ expenseEntries ExpenseEntry[]
   purchases      Purchase[]
   payrolls       Payroll[]
   payrollEntries PayrollEntry[]
+  agentPayments  AgentPayment[] @relation("AgentPayments")
   @@map("users")
 }
 // A deduction from a driver's collected cash. Optionally tagged with the vendor
@@ -113,8 +114,40 @@ model Vendor {
   orders           Order[]
   payments         VendorPayment[]
   driverPayments   Purchase[]
+  adjustments      VendorAdjustment[]
 
   @@map("vendors")
+}
+
+// Manual correction to a vendor's Total Amount (e.g. fixing a data-entry mistake).
+// Positive amounts add to the total; negative amounts subtract from it.
+model VendorAdjustment {
+  id        String   @id @default(cuid())
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id])
+  date      DateTime @db.Date
+  amount    Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@map("vendor_adjustments")
+}
+
+// Manual record of what an Agent has paid back to us against what they owe
+// (agent credit = total they collected minus cancelled orders minus the delivery
+// charge they keep as their own fee).
+model AgentPayment {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   User     @relation("AgentPayments", fields: [employeeId], references: [id])
+  date       DateTime @db.Date
+  amount     Int
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("agent_payments")
 }
 
 // Manual record of what we've paid a vendor against their credit balance
