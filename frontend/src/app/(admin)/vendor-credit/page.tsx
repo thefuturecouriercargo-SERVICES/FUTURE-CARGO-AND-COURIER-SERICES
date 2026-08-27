@@ -8,6 +8,7 @@ import { fmtNumber } from "@/lib/format";
 interface VendorCreditRow {
   vendor: { id: string; name: string; active: boolean };
   totalAmount: number;
+  adjustmentTotal: number;
   cancelledTotal: number;
   totalDeliveryCharge: number;
   totalPaid: number;
@@ -38,6 +39,8 @@ export default function VendorCreditPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [adjustInput, setAdjustInput] = useState<Record<string, string>>({});
+  const [savingAdjust, setSavingAdjust] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setRows(await apiFetch<VendorCreditRow[]>("/vendor-credit"));
@@ -46,6 +49,22 @@ export default function VendorCreditPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function addAdjustment(vendorId: string) {
+    const amount = Number(adjustInput[vendorId]);
+    if (!amount || amount === 0) return;
+    setSavingAdjust(vendorId);
+    try {
+      await apiFetch(`/vendor-credit/${vendorId}/adjustments`, {
+        method: "POST",
+        body: { date: dubaiToday(), amount },
+      });
+      setAdjustInput((prev) => ({ ...prev, [vendorId]: "" }));
+      await load();
+    } finally {
+      setSavingAdjust(null);
+    }
+  }
 
   async function toggleExpand(vendorId: string) {
     if (expandedVendorId === vendorId) {
@@ -92,12 +111,13 @@ export default function VendorCreditPage() {
   const totals = rows.reduce(
     (acc, r) => ({
       totalAmount: acc.totalAmount + r.totalAmount,
+      adjustmentTotal: acc.adjustmentTotal + r.adjustmentTotal,
       cancelledTotal: acc.cancelledTotal + r.cancelledTotal,
       totalDeliveryCharge: acc.totalDeliveryCharge + r.totalDeliveryCharge,
       totalPaid: acc.totalPaid + r.totalPaid,
       balance: acc.balance + r.balance,
     }),
-    { totalAmount: 0, cancelledTotal: 0, totalDeliveryCharge: 0, totalPaid: 0, balance: 0 }
+    { totalAmount: 0, adjustmentTotal: 0, cancelledTotal: 0, totalDeliveryCharge: 0, totalPaid: 0, balance: 0 }
   );
 
   return (
@@ -118,6 +138,7 @@ export default function VendorCreditPage() {
               <tr>
                 <th>Vendor</th>
                 <th className="text-right">Total Amount</th>
+                <th className="text-right">Adjustment</th>
                 <th className="text-right">Cancelled</th>
                 <th className="text-right">Delivery Charge</th>
                 <th className="text-right">Paid</th>
@@ -131,6 +152,31 @@ export default function VendorCreditPage() {
                   <tr className={r.vendor.active ? "" : "opacity-50"}>
                     <td>{r.vendor.name}</td>
                     <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                    <td className="text-right font-mono">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={r.adjustmentTotal !== 0 ? (r.adjustmentTotal > 0 ? "text-delivered" : "text-cancelled") : "text-ink-soft"}>
+                          {r.adjustmentTotal > 0 ? "+" : ""}
+                          {fmtNumber(r.adjustmentTotal)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            placeholder="+/-"
+                            value={adjustInput[r.vendor.id] ?? ""}
+                            onChange={(e) => setAdjustInput((prev) => ({ ...prev, [r.vendor.id]: e.target.value }))}
+                            onKeyDown={(e) => e.key === "Enter" && addAdjustment(r.vendor.id)}
+                            className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
+                          />
+                          <button
+                            onClick={() => addAdjustment(r.vendor.id)}
+                            disabled={savingAdjust === r.vendor.id}
+                            className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </td>
                     <td className="text-right font-mono">{fmtNumber(r.cancelledTotal)}</td>
                     <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
                     <td className="text-right font-mono">{fmtNumber(r.totalPaid)}</td>
@@ -148,7 +194,7 @@ export default function VendorCreditPage() {
                   </tr>
                   {expandedVendorId === r.vendor.id && (
                     <tr>
-                      <td colSpan={7} className="bg-paper-2 p-4">
+                      <td colSpan={8} className="bg-paper-2 p-4">
                         <form
                           onSubmit={(e) => addPayment(r.vendor.id, e)}
                           className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4"
@@ -245,6 +291,7 @@ export default function VendorCreditPage() {
                 <tr className="font-semibold">
                   <td>TOTAL</td>
                   <td className="text-right font-mono">{fmtNumber(totals.totalAmount)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.adjustmentTotal)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.cancelledTotal)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.totalDeliveryCharge)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.totalPaid)}</td>
