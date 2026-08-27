@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Vendor } from "@/types";
 
-const emptyForm = { name: "", deliveryCharge: "" };
+const emptyForm = { name: "", deliveryCharge: "", username: "", password: "" };
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -28,7 +28,7 @@ export default function VendorsPage() {
 
   function startEdit(v: Vendor) {
     setEditingId(v.id);
-    setForm({ name: v.name, deliveryCharge: String(v.deliveryCharge) });
+    setForm({ name: v.name, deliveryCharge: String(v.deliveryCharge), username: v.username ?? "", password: "" });
   }
 
   async function onSubmit(e: FormEvent) {
@@ -36,7 +36,12 @@ export default function VendorsPage() {
     setError(null);
     setSaving(true);
     try {
-      const payload = { name: form.name, deliveryCharge: Number(form.deliveryCharge) };
+      const payload = {
+        name: form.name,
+        deliveryCharge: Number(form.deliveryCharge),
+        username: form.username || undefined,
+        ...(form.password ? { password: form.password } : {}),
+      };
       if (editingId) {
         await apiFetch(`/vendors/${editingId}`, { method: "PUT", body: payload });
       } else {
@@ -63,7 +68,8 @@ export default function VendorsPage() {
       <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Vendor Management</h1>
       <p className="mb-6 max-w-2xl text-sm text-ink-soft">
         Each vendor has a fixed delivery charge. Whenever a vendor is selected while creating a consignment, its
-        delivery charge is populated automatically.
+        delivery charge is populated automatically. Set a portal username and password to give a vendor their
+        own login — they can then view their own consignments and credit balance at <b>/vendor-login</b>.
       </p>
 
       <div className="mb-6 border border-line bg-white p-5">
@@ -80,6 +86,27 @@ export default function VendorsPage() {
               type="number"
               value={form.deliveryCharge}
               onChange={(e) => setForm({ ...form, deliveryCharge: e.target.value })}
+              className="rounded border border-line px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Portal username (optional)</label>
+            <input
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              placeholder="For vendor portal login"
+              className="rounded border border-line px-2.5 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">
+              {editingId ? "New portal password (optional)" : "Portal password"}
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="Only needed with a username"
               className="rounded border border-line px-2.5 py-2 text-sm"
             />
           </div>
@@ -102,6 +129,7 @@ export default function VendorsPage() {
             <tr>
               <th>Vendor</th>
               <th className="text-right">Delivery Charge (AED)</th>
+              <th>Portal Login</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -111,6 +139,7 @@ export default function VendorsPage() {
               <tr key={v.id} className={v.active ? "" : "opacity-50"}>
                 <td>{v.name}</td>
                 <td className="text-right font-mono">{v.deliveryCharge}</td>
+                <td className="font-mono text-ink-soft">{v.username || "—"}</td>
                 <td>
                   <span className={`stamp ${v.active ? "delivered" : "cancelled"}`}>{v.active ? "Active" : "Inactive"}</span>
                 </td>
