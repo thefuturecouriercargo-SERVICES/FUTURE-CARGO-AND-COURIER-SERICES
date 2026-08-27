@@ -111,6 +111,37 @@ router.delete(
   })
 );
 
+// Permanently removes an employee — only allowed if they have no order/cash/expense
+// history attached, since deleting a record with history would break past reports.
+// If they do have history, they must stay deactivated instead (data is preserved).
+router.delete(
+  "/:id/permanent",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    const [orderCount, closingCount, expenseCount, purchaseCount, agentPaymentCount, payrollCount] = await Promise.all([
+      prisma.order.count({ where: { employeeId: id } }),
+      prisma.cashClosing.count({ where: { employeeId: id } }),
+      prisma.expenseEntry.count({ where: { employeeId: id } }),
+      prisma.purchase.count({ where: { employeeId: id } }),
+      prisma.agentPayment.count({ where: { employeeId: id } }),
+      prisma.payroll.count({ where: { employeeId: id } }),
+    ]);
+    const historyCount = orderCount + closingCount + expenseCount + purchaseCount + agentPaymentCount + payrollCount;
+    if (historyCount > 0) {
+      throw new ApiError(
+        409,
+        "This employee has order/cash history and can't be permanently removed — deactivate them instead to keep past records intact."
+      );
+    }
+
+    const employee = await prisma.user.delete({ where: { id }, select: { id: true, name: true } });
+    await writeAuditLog({ userId: req.user!.sub, action: "DELETE", entity: "Employee", entityId: employee.id });
+    emitGlobal("employee:changed", { type: "deleted", employee });
+    res.json({ deleted: true, employee });
+  })
+);
+
 router.get(
   "/:id/performance",
   asyncHandler(async (req, res) => {
