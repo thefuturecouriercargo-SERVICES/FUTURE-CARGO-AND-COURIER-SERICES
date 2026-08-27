@@ -74,7 +74,7 @@ const expenses = await prisma.expenseEntry.findMany({
         .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
         .map((e) => ({ id: e.id, amount: e.amount }));
     }
-    const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
+    const employees = await prisma.user.findMany({ where: { role: "DRIVER", isAgent: false }, orderBy: { name: "asc" } });
  const employeeBreakdown = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
       const ownSummary = summarize(own);
@@ -90,6 +90,25 @@ const expenses = await prisma.expenseEntry.findMany({
         cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
       };
     }); 
+
+    // Agents are tracked completely separately from drivers — their own performance,
+    // cash collection, and delivery-charge totals never mix into the driver breakdown above.
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const agentBreakdown = agents.map((a) => {
+      const own = orders.filter((o) => o.employeeId === a.id);
+      const ownSummary = summarize(own);
+      const totalExpenses = expensesFor(a.id);
+      const otherDeduction = otherDeductionFor(a.id);
+      const otherDeductionEntries = otherDeductionEntriesFor(a.id);
+      return {
+        employee: { id: a.id, name: a.name },
+        ...ownSummary,
+        totalExpenses,
+        otherDeduction,
+        otherDeductionEntries,
+        cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
+      };
+    });
 
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
     const vendorBreakdown = vendors
@@ -133,6 +152,7 @@ const expenses = await prisma.expenseEntry.findMany({
         cashBalance: overallSummary.cashCollected - totalExpensesAll - totalOtherDeductionAll,
       },
       employeeBreakdown,
+      agentBreakdown,
       vendorBreakdown,
       emirateBreakdown,
       paymentBreakdown,
