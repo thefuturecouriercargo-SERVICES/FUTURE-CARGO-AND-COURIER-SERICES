@@ -209,7 +209,7 @@ return (
                 <h2 className="font-display text-[17px] font-semibold text-navy">
                   Employee-wise Performance
                                </h2>
-                
+                <a
                   href={employeePerformancePdfUrl({ date })}
                   target="_blank"
                   rel="noopener noreferrer"
