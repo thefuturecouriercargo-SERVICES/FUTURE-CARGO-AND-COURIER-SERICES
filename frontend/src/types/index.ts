@@ -16,6 +16,7 @@ export interface Vendor {
   name: string;
   deliveryCharge: number;
   active: boolean;
+  username?: string | null;
 }
 
 export interface Employee {
@@ -78,6 +79,6 @@ export interface CashClosing {
   submittedAt: string;
 }
 
-export const EMIRATES = ["DUBAI", "SHARJAH", "ABUDHABI", "AJMAN", "RAS AL KHAIMAH", "FUJAIRAH", "AL AIN ", "UMM AL QUWAIN", "EXCHANGED", "OTHER"];
+export const EMIRATES = ["DUBAI", "SHARJAH", "ABUDHABI", "AJMAN", "RAS AL KHAIMAH", "FUJAIRAH", "UMM AL QUWAIN", "EXCHANGED", "OTHER"];
 export const STATUSES: OrderStatus[] = ["PENDING", "DELIVERED", "TRANSFER", "CANCELLED"];
 export const PAYMENTS: PaymentMode[] = ["CASH", "BANK"];
