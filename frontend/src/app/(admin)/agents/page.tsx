@@ -117,6 +117,16 @@ export default function AgentsPage() {
     await load();
   }
 
+  async function removeAgent(a: Employee) {
+    if (!confirm(`Permanently remove ${a.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`)) return;
+    try {
+      await apiFetch(`/employees/${a.id}/permanent`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      alert(err instanceof ApiClientError ? err.message : "Failed to remove agent");
+    }
+  }
+
   async function toggleExpand(agentId: string) {
     if (expandedAgentId === agentId) {
       setExpandedAgentId(null);
@@ -246,8 +256,11 @@ export default function AgentsPage() {
                     <button onClick={() => startEdit(a)} className="mr-2 text-xs text-brass hover:underline">
                       Edit
                     </button>
-                    <button onClick={() => toggleActive(a)} className="text-xs text-cancelled hover:underline">
+                    <button onClick={() => toggleActive(a)} className="mr-2 text-xs text-cancelled hover:underline">
                       {a.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                    <button onClick={() => removeAgent(a)} className="text-xs text-cancelled hover:underline">
+                      Remove
                     </button>
                   </td>
                 </tr>
