@@ -89,6 +89,16 @@ export default function EmployeesPage() {
     await load();
   }
 
+  async function removeEmployee(e: Employee) {
+    if (!confirm(`Permanently remove ${e.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`)) return;
+    try {
+      await apiFetch(`/employees/${e.id}/permanent`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      alert(err instanceof ApiClientError ? err.message : "Failed to remove employee");
+    }
+  }
+
  return (
     <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
@@ -204,8 +214,11 @@ export default function EmployeesPage() {
                     <button onClick={() => startEdit(e)} className="mr-2 text-xs text-brass hover:underline">
                       Edit
                     </button>
-                    <button onClick={() => toggleActive(e)} className="text-xs text-cancelled hover:underline">
+                    <button onClick={() => toggleActive(e)} className="mr-2 text-xs text-cancelled hover:underline">
                       {e.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                    <button onClick={() => removeEmployee(e)} className="text-xs text-cancelled hover:underline">
+                      Remove
                     </button>
                   </td>
                 </tr>
