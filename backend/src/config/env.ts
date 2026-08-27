@@ -18,5 +18,6 @@ export const env = {
   jwtSecret: required("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "12h",
   cookieName: process.env.COOKIE_NAME ?? "fc_token",
+  vendorCookieName: process.env.VENDOR_COOKIE_NAME ?? "fc_vendor_token",
   isProduction: process.env.NODE_ENV === "production",
 };
