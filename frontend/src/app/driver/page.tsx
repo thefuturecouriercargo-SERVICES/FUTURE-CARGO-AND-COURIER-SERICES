@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
-import { CashClosing, Employee, Order, OrderStatus, STATUSES } from "@/types";
+import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor } from "@/types";
 
 interface Summary {
   assigned: number;
@@ -246,8 +246,29 @@ function TransferModal({ order, onClose, onDone }: { order: Order; onClose: () =
 }
 
 function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: () => void }) {
-const [preview, setPreview] = useState<{ totalDelivered: number; totalDeliveryCharge: number; cashPayments: number; onlinePayments: number; expenses: { id: string; category: string; amount: number }[]; totalExpenses: number } | null>(null);
+  interface PurchaseEntry {
+    id: string;
+    amount: number;
+    note?: string | null;
+    vendor?: { id: string; name: string } | null;
+  }
+  const [preview, setPreview] = useState<{
+    totalDelivered: number;
+    totalDeliveryCharge: number;
+    cashPayments: number;
+    onlinePayments: number;
+    expenses: { id: string; category: string; amount: number }[];
+    totalExpenses: number;
+    purchases: PurchaseEntry[];
+    totalPurchases: number;
+  } | null>(null);
   const [existing, setExisting] = useState<CashClosing | null>(null);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [payVendorId, setPayVendorId] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [payError, setPayError] = useState<string | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
 
   const [busy, setBusy] = useState(false);
 
@@ -264,9 +285,14 @@ const [preview, setPreview] = useState<{ totalDelivered: number; totalDeliveryCh
     load();
   }, [load]);
 
-  useSocketEvent("order:changed", load);
+  useEffect(() => {
+    apiFetch<Vendor[]>("/vendors").then(setVendors);
+  }, []);
 
-const balance = preview ? preview.cashPayments - preview.totalExpenses : 0;
+  useSocketEvent("order:changed", load);
+  useSocketEvent("purchase:changed", load);
+
+  const balance = preview ? preview.cashPayments - preview.totalExpenses - preview.totalPurchases : 0;
 
   async function submit() {
     setBusy(true);
@@ -280,6 +306,40 @@ const balance = preview ? preview.cashPayments - preview.totalExpenses : 0;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function payVendor() {
+    const amount = Number(payAmount);
+    if (!payVendorId) {
+      setPayError("Select a vendor.");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setPayError("Enter an amount.");
+      return;
+    }
+    setPayError(null);
+    setPayBusy(true);
+    try {
+      await apiFetch("/purchases", {
+        method: "POST",
+        body: { date, amount, vendorId: payVendorId, note: payNote || undefined },
+      });
+      setPayVendorId("");
+      setPayAmount("");
+      setPayNote("");
+      await load();
+    } catch (err) {
+      setPayError(err instanceof ApiClientError ? err.message : "Failed to log payment");
+    } finally {
+      setPayBusy(false);
+    }
+  }
+
+  async function removePurchase(id: string) {
+    if (!confirm("Remove this deduction?")) return;
+    await apiFetch(`/purchases/${id}`, { method: "DELETE" });
+    await load();
   }
 
   if (!preview) return null;
@@ -312,6 +372,72 @@ const balance = preview ? preview.cashPayments - preview.totalExpenses : 0;
             ))
           )}
         </div>
+
+      <div className="mb-4">
+        <label className="mb-2 block font-mono text-[10px] uppercase text-ink-soft">
+          Cash Paid Out to Vendors
+        </label>
+        <p className="mb-2 text-xs text-ink-soft">
+          If you personally handed over collected cash to a vendor today, log it here. It reduces your
+          balance cash and counts toward that vendor&apos;s balance.
+        </p>
+        {preview.purchases.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {preview.purchases.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded border border-line px-3 py-2 text-sm">
+                <span>
+                  {entry.vendor ? entry.vendor.name : "General deduction"}
+                  {entry.note && <span className="text-ink-soft"> — {entry.note}</span>}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="font-mono">{fmtNumber(entry.amount)} AED</span>
+                  <button
+                    onClick={() => removePurchase(entry.id)}
+                    className="text-xs text-cancelled hover:underline"
+                  >
+                    Remove
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <select
+            value={payVendorId}
+            onChange={(e) => setPayVendorId(e.target.value)}
+            className="rounded border border-line px-2.5 py-2 text-sm"
+          >
+            <option value="">Select vendor…</option>
+            {vendors.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Amount"
+            value={payAmount}
+            onChange={(e) => setPayAmount(e.target.value)}
+            className="rounded border border-line px-2.5 py-2 text-sm"
+          />
+          <input
+            placeholder="Note (optional)"
+            value={payNote}
+            onChange={(e) => setPayNote(e.target.value)}
+            className="rounded border border-line px-2.5 py-2 text-sm"
+          />
+          <button
+            onClick={payVendor}
+            disabled={payBusy}
+            className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+          >
+            {payBusy ? "Saving…" : "Log Payment"}
+          </button>
+        </div>
+        {payError && <p className="mt-2 text-xs text-cancelled">{payError}</p>}
+      </div>
 
       <div className="mb-5 flex items-center justify-between rounded border border-brass/40 bg-paper-2 px-4 py-3">
         <span className="font-mono text-xs uppercase tracking-wide text-ink-soft">Balance Cash</span>
