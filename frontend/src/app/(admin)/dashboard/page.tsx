@@ -208,8 +208,8 @@ return (
               <div className="mb-3 flex items-center justify-between border-b border-line pb-2.5">
                 <h2 className="font-display text-[17px] font-semibold text-navy">
                   Employee-wise Performance
-                               </h2>
-                <a
+                </h2>
+                
                   href={employeePerformancePdfUrl({ date })}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -608,12 +608,13 @@ return (
                     <th>Emirate</th>
                     <th>Employee</th>
                     <th>Status</th>
+                    <th>Reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-10 text-center text-ink-soft">
+                      <td colSpan={10} className="py-10 text-center text-ink-soft">
                         No consignments match this filter.
                       </td>
                     </tr>
@@ -630,6 +631,9 @@ return (
                         <td>{o.employee.name}</td>
                         <td>
                           <StatusStamp status={o.status} />
+                        </td>
+                        <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
+                          {o.remarks || "—"}
                         </td>
                       </tr>
                     ))
