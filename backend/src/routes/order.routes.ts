@@ -103,11 +103,11 @@ const existingCn = await prisma.order.findFirst({
     cnNo: data.cnNo,
     OR: [
       { date },
-      { status: "PENDING" },
+      { status: { in: ["PENDING", "TRANSFER"] } },
     ],
   },
 });
-if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active or same-day)`);
+if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active/transferred or same-day)`);
 
 const order = await prisma.$transaction(async (tx) => {
       const lastSl = await tx.order.aggregate({
@@ -176,11 +176,11 @@ if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
       id: { not: existing.id },
       OR: [
         { date: existing.date },
-        { status: "PENDING" },
+        { status: { in: ["PENDING", "TRANSFER"] } },
       ],
     },
   });
-  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active or same-day)`);
+  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active/transferred or same-day)`);
 }
 
 const order = await prisma.order.update({
@@ -390,11 +390,28 @@ router.get(
   "/pending-carryover",
   asyncHandler(async (req, res) => {
     const { start } = dayRange();
-    const orders = await prisma.order.findMany({
-     where: { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } },
+
+    // Look at ALL past orders (any status), not just Pending/Transfer ones, so we can
+    // tell whether a consignment number was later re-resolved under a newer entry.
+    const pastOrders = await prisma.order.findMany({
+      where: { date: { lt: start } },
       include: { vendor: true, employee: { select: { id: true, name: true } } },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
+
+    // Dedupe by (vendor, CN No): keep only the most recent entry for each consignment.
+    // If that most recent entry is already Delivered/Cancelled, the consignment is
+    // resolved and must not show up as a stale carryover duplicate.
+    const seenKeys = new Set<string>();
+    const orders = pastOrders.filter((o) => {
+      const key = `${o.vendorId}::${o.cnNo}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return o.status === "PENDING" || o.status === "TRANSFER";
+    });
+
+    orders.sort((a, b) => a.date.getTime() - b.date.getTime());
+
     res.json({ orders });
   })
 );
