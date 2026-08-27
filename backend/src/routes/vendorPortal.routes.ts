@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticateVendor } from "../middleware/auth";
-import { parseDateParam } from "../utils/dates";
+import { parseDateParam, monthRange, formatDate } from "../utils/dates";
 
 const router = Router();
 router.use(authenticateVendor);
@@ -20,6 +20,10 @@ router.get(
       };
     }
     if (req.query.status) where.status = req.query.status as string;
+    if (req.query.cn) {
+      const cnNum = Number(req.query.cn);
+      if (!Number.isNaN(cnNum)) where.cnNo = cnNum;
+    }
 
     const orders = await prisma.order.findMany({
       where,
@@ -28,6 +32,50 @@ router.get(
     });
 
     res.json({ orders });
+  })
+);
+
+// Monthly summary + day-by-day breakdown, scoped to just this vendor.
+router.get(
+  "/monthly",
+  asyncHandler(async (req, res) => {
+    const vendorId = req.vendor!.sub;
+    const { start, end, year, month } = monthRange(req.query.month as string | undefined);
+
+    const orders = await prisma.order.findMany({
+      where: { vendorId, date: { gte: start, lte: end } },
+      orderBy: { date: "asc" },
+    });
+
+    function summarize(list: typeof orders) {
+      const delivered = list.filter((o) => o.status === "DELIVERED");
+      return {
+        totalOrders: list.length,
+        delivered: delivered.length,
+        pending: list.filter((o) => o.status === "PENDING").length,
+        transferred: list.filter((o) => o.status === "TRANSFER").length,
+        cancelled: list.filter((o) => o.status === "CANCELLED").length,
+        totalSales: delivered.reduce((s, o) => s + o.total, 0),
+        totalDeliveryCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
+      };
+    }
+
+    const dateMap = new Map<string, typeof orders>();
+    for (const o of orders) {
+      const key = formatDate(o.date);
+      const list = dateMap.get(key) ?? [];
+      list.push(o);
+      dateMap.set(key, list);
+    }
+    const dailyBreakdown = Array.from(dateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, list]) => ({ date, ...summarize(list) }));
+
+    res.json({
+      month: `${year}-${String(month).padStart(2, "0")}`,
+      summary: summarize(orders),
+      dailyBreakdown,
+    });
   })
 );
 
