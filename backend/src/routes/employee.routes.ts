@@ -20,8 +20,12 @@ router.get(
       roleParam === "ALL"
         ? { role: { in: ["DRIVER", "MANAGER"] as Array<"DRIVER" | "MANAGER"> }, username: { not: "manager" } }
         : { role: (roleParam as "DRIVER" | "MANAGER") ?? "DRIVER" };
+    // isAgent filter is optional and only applied when explicitly requested, so
+    // existing callers (e.g. order assignment) keep seeing both drivers and agents.
+    const isAgentParam = req.query.isAgent as string | undefined;
+    const isAgentFilter = isAgentParam === "true" ? { isAgent: true } : isAgentParam === "false" ? { isAgent: false } : {};
     const employees = await prisma.user.findMany({
-      where: { ...roleFilter, ...(includeInactive ? {} : { active: true }) },
+      where: { ...roleFilter, ...isAgentFilter, ...(includeInactive ? {} : { active: true }) },
       orderBy: { name: "asc" },
      select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, role: true, isAgent: true, createdAt: true },
     });
