@@ -122,6 +122,11 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
   {o.payment}
 </button> · {o.emirate}
                 </div>
+                {o.remarks && (
+                  <div className="mt-1 text-xs text-cancelled">
+                    Reason: {o.remarks}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
@@ -292,6 +297,9 @@ function StatusModal({
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-sm rounded border border-line bg-white p-6">
         <h3 className="mb-1 font-display text-lg font-semibold text-navy">Update CN {order.cnNo}</h3>
+        <p className="mb-1 text-xs text-ink-soft">
+          Total <b className="text-ink">{fmtNumber(order.total)} AED</b> · {order.brandName}
+        </p>
         <p className="mb-4 text-xs text-ink-soft">
           Currently <b>{order.status}</b>. Pick the new status below.
         </p>
