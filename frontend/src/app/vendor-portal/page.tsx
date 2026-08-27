@@ -15,6 +15,7 @@ interface VendorOrder {
   deliveryCharge: number;
   status: "PENDING" | "DELIVERED" | "TRANSFER" | "CANCELLED";
   emirate: string;
+  remarks?: string | null;
 }
 
 interface CreditSummary {
@@ -309,12 +310,13 @@ function VendorPortalContent() {
                       <th className="text-right">DL Charge</th>
                       <th>Emirate</th>
                       <th>Status</th>
+                      <th>Reason</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-ink-soft">
+                        <td colSpan={7} className="py-8 text-center text-ink-soft">
                           No consignments found.
                         </td>
                       </tr>
@@ -330,6 +332,9 @@ function VendorPortalContent() {
                             <span className={`rounded px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${statusClass(o.status)}`}>
                               {o.status}
                             </span>
+                          </td>
+                          <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
+                            {o.remarks || "—"}
                           </td>
                         </tr>
                       ))
