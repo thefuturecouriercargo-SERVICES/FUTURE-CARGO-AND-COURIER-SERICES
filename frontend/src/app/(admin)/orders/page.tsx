@@ -195,7 +195,12 @@ await load();
   }
 
   async function quickStatus(id: string, status: OrderStatus) {
-    await apiFetch(`/orders/${id}/status`, { method: "PATCH", body: { status } });
+    let reason: string | undefined;
+    if (status === "CANCELLED") {
+      reason = prompt("Reason for cancelling this consignment?") ?? undefined;
+      if (!reason || !reason.trim()) return; // aborted or empty — don't cancel
+    }
+    await apiFetch(`/orders/${id}/status`, { method: "PATCH", body: { status, reason } });
     await load();
   }
 
@@ -440,19 +445,20 @@ required
                 <th>Emirate</th>
                 <th>Employee</th>
                 <th>Status</th>
+                <th>Reason</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-ink-soft">
+                  <td colSpan={12} className="py-8 text-center text-ink-soft">
                     Loading…
                   </td>
                 </tr>
              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-ink-soft">
+                  <td colSpan={12} className="py-8 text-center text-ink-soft">
                     No consignments entered for this date yet.
                   </td>
                 </tr>
@@ -482,6 +488,9 @@ required
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
+                      {o.remarks || "—"}
                     </td>
                     <td className="whitespace-nowrap">
                       <button onClick={() => startEdit(o)} className="mr-2 text-xs text-brass hover:underline">
