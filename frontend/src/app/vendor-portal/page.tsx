@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
+import { EMIRATES } from "@/types";
 
 interface VendorOrder {
   id: string;
@@ -31,6 +32,27 @@ interface VendorPayment {
   note?: string | null;
 }
 
+interface MonthlySummary {
+  totalOrders: number;
+  delivered: number;
+  pending: number;
+  transferred: number;
+  cancelled: number;
+  totalSales: number;
+  totalDeliveryCharge: number;
+}
+
+interface MonthlyReport {
+  month: string;
+  summary: MonthlySummary;
+  dailyBreakdown: ({ date: string } & MonthlySummary)[];
+}
+
+function currentMonthStr(): string {
+  const d = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 7);
+}
+
 function statusClass(status: VendorOrder["status"]) {
   switch (status) {
     case "DELIVERED":
@@ -51,17 +73,35 @@ function VendorPortalContent() {
   const [credit, setCredit] = useState<CreditSummary | null>(null);
   const [payments, setPayments] = useState<VendorPayment[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [emirateFilter, setEmirateFilter] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [tab, setTab] = useState<"orders" | "monthly">("orders");
+  const [month, setMonth] = useState(currentMonthStr());
+  const [monthly, setMonthly] = useState<MonthlyReport | null>(null);
 
   const load = useCallback(async () => {
     const [ordersRes, creditRes, paymentsRes] = await Promise.all([
-      apiFetch<{ orders: VendorOrder[] }>("/vendor-portal/orders"),
+      apiFetch<{ orders: VendorOrder[] }>("/vendor-portal/orders", {
+        query: {
+          ...(fromDate ? { from: fromDate } : {}),
+          ...(toDate ? { to: toDate } : {}),
+        },
+      }),
       apiFetch<CreditSummary>("/vendor-portal/credit"),
       apiFetch<VendorPayment[]>("/vendor-portal/credit/payments"),
     ]);
     setOrders(ordersRes.orders);
     setCredit(creditRes);
     setPayments(paymentsRes);
-  }, []);
+  }, [fromDate, toDate]);
+
+  const loadMonthly = useCallback(async () => {
+    setMonthly(await apiFetch<MonthlyReport>("/vendor-portal/monthly", { query: { month } }));
+  }, [month]);
 
   useEffect(() => {
     if (!loading && !vendor) {
@@ -73,11 +113,22 @@ function VendorPortalContent() {
     if (vendor) load();
   }, [vendor, load]);
 
+  useEffect(() => {
+    if (vendor && tab === "monthly") loadMonthly();
+  }, [vendor, tab, loadMonthly]);
+
   if (loading || !vendor) {
     return <div className="flex min-h-screen items-center justify-center text-ink-soft">Loading…</div>;
   }
 
-  const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;
+  const filtered = orders.filter((o) => {
+    if (statusFilter && o.status !== statusFilter) return false;
+    if (search.trim() && !String(o.cnNo).includes(search.trim())) return false;
+    if (emirateFilter && o.emirate !== emirateFilter) return false;
+    if (minAmount && o.total < Number(minAmount)) return false;
+    if (maxAmount && o.total > Number(maxAmount)) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-paper">
@@ -156,58 +207,209 @@ function VendorPortalContent() {
         </div>
 
         <div className="border border-line bg-white p-5">
-          <div className="mb-3 flex items-center justify-between border-b border-line pb-2.5">
-            <h2 className="font-display text-[17px] font-semibold text-navy">Your Consignments</h2>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded border border-line px-2.5 py-1.5 text-xs"
-            >
-              <option value="">All statuses</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="PENDING">Pending</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTab("orders")}
+                className={`rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide ${
+                  tab === "orders" ? "bg-navy text-paper" : "border border-line text-ink-soft hover:border-brass"
+                }`}
+              >
+                Consignments
+              </button>
+              <button
+                onClick={() => setTab("monthly")}
+                className={`rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide ${
+                  tab === "monthly" ? "bg-navy text-paper" : "border border-line text-ink-soft hover:border-brass"
+                }`}
+              >
+                Monthly Report
+              </button>
+            </div>
           </div>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>CN No.</th>
-                  <th className="text-right">Total</th>
-                  <th className="text-right">DL Charge</th>
-                  <th>Emirate</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-ink-soft">
-                      No consignments found.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((o) => (
-                    <tr key={o.id}>
-                      <td>{o.date.slice(0, 10)}</td>
-                      <td className="font-mono">{o.cnNo}</td>
-                      <td className="text-right font-mono">{fmtNumber(o.total)}</td>
-                      <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
-                      <td>{o.emirate}</td>
-                      <td>
-                        <span className={`rounded px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${statusClass(o.status)}`}>
-                          {o.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+
+          {tab === "orders" ? (
+            <>
+              <div className="mb-3 flex flex-wrap gap-2.5">
+                <input
+                  placeholder="Search CN No…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                >
+                  <option value="">All statuses</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="TRANSFER">Transfer</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+                <span className="self-center text-xs text-ink-soft">to</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+                {(fromDate || toDate) && (
+                  <button
+                    onClick={() => {
+                      setFromDate("");
+                      setToDate("");
+                    }}
+                    className="rounded border border-line px-2.5 py-1.5 text-xs text-ink-soft hover:border-brass"
+                  >
+                    Clear dates
+                  </button>
                 )}
-              </tbody>
-            </table>
-          </div>
+                <select
+                  value={emirateFilter}
+                  onChange={(e) => setEmirateFilter(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                >
+                  <option value="">All emirates</option>
+                  {EMIRATES.map((em) => (
+                    <option key={em} value={em}>
+                      {em}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  placeholder="Min AED"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                  className="w-24 rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+                <input
+                  type="number"
+                  placeholder="Max AED"
+                  value={maxAmount}
+                  onChange={(e) => setMaxAmount(e.target.value)}
+                  className="w-24 rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+              </div>
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>CN No.</th>
+                      <th className="text-right">Total</th>
+                      <th className="text-right">DL Charge</th>
+                      <th>Emirate</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-ink-soft">
+                          No consignments found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filtered.map((o) => (
+                        <tr key={o.id}>
+                          <td>{o.date.slice(0, 10)}</td>
+                          <td className="font-mono">{o.cnNo}</td>
+                          <td className="text-right font-mono">{fmtNumber(o.total)}</td>
+                          <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
+                          <td>{o.emirate}</td>
+                          <td>
+                            <span className={`rounded px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${statusClass(o.status)}`}>
+                              {o.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-4 flex items-center gap-2">
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  className="rounded border border-line px-2.5 py-1.5 text-sm"
+                />
+              </div>
+              {!monthly ? (
+                <p className="text-sm text-ink-soft">Loading…</p>
+              ) : (
+                <>
+                  <div className="mb-5 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+                    <div className="bg-white p-4">
+                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Delivered</div>
+                      <div className="font-display text-xl font-semibold text-navy">{monthly.summary.delivered}</div>
+                    </div>
+                    <div className="bg-white p-4">
+                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Sales</div>
+                      <div className="font-display text-xl font-semibold text-navy">{fmtNumber(monthly.summary.totalSales)}</div>
+                    </div>
+                    <div className="bg-white p-4">
+                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">DL Charge</div>
+                      <div className="font-display text-xl font-semibold text-navy">{fmtNumber(monthly.summary.totalDeliveryCharge)}</div>
+                    </div>
+                    <div className="bg-white p-4">
+                      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Cancelled</div>
+                      <div className="font-display text-xl font-semibold text-navy">{monthly.summary.cancelled}</div>
+                    </div>
+                  </div>
+                  <div className="table-scroll">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th className="text-right">Delivered</th>
+                          <th className="text-right">Pending</th>
+                          <th className="text-right">Transfer</th>
+                          <th className="text-right">Cancelled</th>
+                          <th className="text-right">Sales</th>
+                          <th className="text-right">DL Charge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthly.dailyBreakdown.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-ink-soft">
+                              No activity this month.
+                            </td>
+                          </tr>
+                        ) : (
+                          monthly.dailyBreakdown.map((d) => (
+                            <tr key={d.date}>
+                              <td>{d.date}</td>
+                              <td className="text-right font-mono">{d.delivered}</td>
+                              <td className="text-right font-mono">{d.pending}</td>
+                              <td className="text-right font-mono">{d.transferred}</td>
+                              <td className="text-right font-mono">{d.cancelled}</td>
+                              <td className="text-right font-mono">{fmtNumber(d.totalSales)}</td>
+                              <td className="text-right font-mono">{fmtNumber(d.totalDeliveryCharge)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
