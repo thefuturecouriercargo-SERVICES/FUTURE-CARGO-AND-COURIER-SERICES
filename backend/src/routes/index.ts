@@ -14,6 +14,8 @@ import purchaseRoutes from "./purchase.routes";
 import payrollRoutes from "./payroll.routes";
 import vendorCreditRoutes from "./vendorCredit.routes";
 import agentCreditRoutes from "./agentCredit.routes";
+import vendorAuthRoutes from "./vendorAuth.routes";
+import vendorPortalRoutes from "./vendorPortal.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -33,4 +35,6 @@ router.use("/purchases", purchaseRoutes);
 router.use("/payroll", payrollRoutes);
 router.use("/vendor-credit", vendorCreditRoutes);
 router.use("/agent-credit", agentCreditRoutes);
+router.use("/vendor-auth", vendorAuthRoutes);
+router.use("/vendor-portal", vendorPortalRoutes);
 export default router;
