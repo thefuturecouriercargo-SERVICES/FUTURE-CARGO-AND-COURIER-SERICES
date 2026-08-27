@@ -21,7 +21,7 @@ export default function EmployeesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const list = await apiFetch<Employee[]>("/employees", { query: { includeInactive: true } });
+    const list = await apiFetch<Employee[]>("/employees", { query: { includeInactive: true, isAgent: "false" } });
     setEmployees(list);
     const month = currentMonthStr();
     const perfEntries = await Promise.all(
