@@ -21,7 +21,7 @@ export default function DriverPortalPage() {
   const date = todayStr();
   const [orders, setOrders] = useState<Order[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [tab, setTab] = useState<OrderStatus | "ALL">("ALL");
+  const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
@@ -49,23 +49,21 @@ export default function DriverPortalPage() {
     setTimeout(() => setToast(null), 2200);
   }
 
-  async function updateStatus(order: Order, status: OrderStatus, reason?: string) {
+  async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string) {
+    if (payment !== order.payment) {
+      await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment } });
+    }
     await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status, reason } });
     showToast(`CN ${order.cnNo} marked ${status}`);
     await load();
   }
-async function updatePayment(order: Order, payment: "CASH" | "BANK") {
-  await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment } });
-  showToast(`CN ${order.cnNo} payment set to ${payment}`);
-  await load();
-}
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      if (tab !== "ALL" && o.status !== tab) return false;
+      if (statusTab !== "ALL" && o.status !== statusTab) return false;
       if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
       return true;
     });
-  }, [orders, tab, search]);
+  }, [orders, statusTab, search]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -73,11 +71,12 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
 
       {summary && (
-        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-5">
           <Kpi label="Assigned" value={summary.assigned} />
           <Kpi label="Delivered" value={summary.delivered} />
           <Kpi label="Pending" value={summary.pending} />
           <Kpi label="DL Charge (AED)" value={fmtNumber(summary.deliveryChargeEarned)} />
+          <Kpi label="Bank Deliveries" value={orders.filter((o) => o.payment === "BANK").length} />
         </div>
       )}
 
@@ -85,9 +84,9 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setTab(s)}
+            onClick={() => setStatusTab(s)}
             className={`rounded-full border px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide ${
-              tab === s ? "border-navy bg-navy text-paper" : "border-line bg-white text-ink-soft hover:border-brass"
+              statusTab === s ? "border-navy bg-navy text-paper" : "border-line bg-white text-ink-soft hover:border-brass"
             }`}
           >
             {s === "ALL" ? "All" : s}
@@ -115,12 +114,7 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
                 <div className="mt-1 text-xs text-ink-soft">
-                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> ·<button
-  onClick={() => updatePayment(o, o.payment === "CASH" ? "BANK" : "CASH")}
-  className="underline decoration-dotted font-semibold text-ink hover:text-brass"
->
-  {o.payment}
-</button> · {o.emirate}
+                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
                 </div>
                 {o.remarks && (
                   <div className="mt-1 text-xs text-cancelled">
@@ -155,8 +149,8 @@ async function updatePayment(order: Order, payment: "CASH" | "BANK") {
         <StatusModal
           order={statusOrder}
           onClose={() => setStatusOrder(null)}
-          onConfirm={async (status, reason) => {
-            await updateStatus(statusOrder, status, reason);
+          onConfirm={async (status, payment, reason) => {
+            await updateStatus(statusOrder, status, payment, reason);
             setStatusOrder(null);
           }}
         />
@@ -267,9 +261,10 @@ function StatusModal({
 }: {
   order: Order;
   onClose: () => void;
-  onConfirm: (status: OrderStatus, reason?: string) => Promise<void>;
+  onConfirm: (status: OrderStatus, payment: "CASH" | "BANK", reason?: string) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<OrderStatus | null>(null);
+  const [payment, setPayment] = useState<"CASH" | "BANK">(order.payment);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -286,7 +281,7 @@ function StatusModal({
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(selected, selected === "CANCELLED" ? reason.trim() : undefined);
+      await onConfirm(selected, payment, selected === "CANCELLED" ? reason.trim() : undefined);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to update status");
       setBusy(false);
@@ -301,10 +296,11 @@ function StatusModal({
           Total <b className="text-ink">{fmtNumber(order.total)} AED</b> · {order.brandName}
         </p>
         <p className="mb-4 text-xs text-ink-soft">
-          Currently <b>{order.status}</b>. Pick the new status below.
+          Currently <b>{order.status}</b>. Pick the new status below. To reassign this consignment to another
+          driver, use the Transfer button instead.
         </p>
         <div className="mb-3 grid grid-cols-2 gap-2">
-          {STATUSES.map((s) => (
+          {STATUSES.filter((s) => s !== "TRANSFER").map((s) => (
             <button
               key={s}
               onClick={() => setSelected(s)}
@@ -316,6 +312,24 @@ function StatusModal({
             </button>
           ))}
         </div>
+
+        <div className="mb-3">
+          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Payment</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["CASH", "BANK"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPayment(p)}
+                className={`rounded border px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide ${
+                  payment === p ? "border-navy bg-navy text-paper" : "border-line text-ink-soft hover:border-brass"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {selected === "CANCELLED" && (
           <div className="mb-3">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Reason for cancelling</label>
