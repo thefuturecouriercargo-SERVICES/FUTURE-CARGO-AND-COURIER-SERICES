@@ -174,7 +174,7 @@ router.get(
       { header: "Balance", key: "balance", width: 14 },
     ];
     sheet.getRow(1).font = { bold: true };
-    rows.forEach((r) => sheet.addRow({ vendor: r.vendor.name, ...r }));
+    rows.forEach((r) => sheet.addRow({ ...r, vendor: r.vendor.name }));
 
     const totals = rows.reduce(
       (acc, r) => ({
