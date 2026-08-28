@@ -630,7 +630,7 @@ return (
                         <td>{o.emirate}</td>
                         <td>{o.employee.name}</td>
                         <td>
-                          <StatusStamp status={o.status} />
+                          <StatusStamp status={o.status} date={o.date} />
                         </td>
                         <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                           {o.remarks || "—"}
