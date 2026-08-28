@@ -75,7 +75,11 @@ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({})
   : { date };
 const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
         setData(res);
-      const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
+      // Carryover backlog should reflect what was still unresolved as of the date being
+      // viewed — not always today's live backlog — so historical dates stay accurate.
+      const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover", {
+        query: { date: useRange ? toDate : date },
+      });
         setPendingCarryover(carryoverRes.orders);
         const purchasesRes = await apiFetch<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>("/purchases", { query: { date } });
         setPurchases(purchasesRes);
