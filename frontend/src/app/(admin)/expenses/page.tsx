@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
-import { apiFetch, ApiClientError } from "@/lib/api";
+import { apiFetch, ApiClientError, expenseReportUrl } from "@/lib/api";
+import { addDays } from "@/lib/format";
 
 const CATEGORIES = [
   "FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT",
@@ -35,9 +36,21 @@ export default function ExpensesPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [date, setDate] = useState(dubaiToday());
+  const [useRange, setUseRange] = useState(false);
+  const [fromDate, setFromDate] = useState(dubaiToday());
+  const [toDate, setToDate] = useState(dubaiToday());
+  const [categoryFilter, setCategoryFilter] = useState("");
+
  const load = useCallback(async () => {
-    setEntries(await apiFetch<ExpenseEntry[]>("/expenses"));
-  }, []);
+    setEntries(
+      await apiFetch<ExpenseEntry[]>("/expenses", {
+        query: useRange
+          ? { from: fromDate, to: toDate, category: categoryFilter || undefined }
+          : { date, category: categoryFilter || undefined },
+      })
+    );
+  }, [date, useRange, fromDate, toDate, categoryFilter]);
 
   useEffect(() => {
     apiFetch<Employee[]>("/employees", { query: { isAgent: "false" } }).then(setEmployees);
@@ -77,7 +90,69 @@ export default function ExpensesPage() {
     <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
+        <div className="flex gap-2">
+          <a
+            href={expenseReportUrl(
+              useRange
+                ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "pdf" }
+                : { from: date, to: date, category: categoryFilter || undefined, format: "pdf" }
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+          >
+            Download PDF
+          </a>
+          <a
+            href={expenseReportUrl(
+              useRange
+                ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "excel" }
+                : { from: date, to: date, category: categoryFilter || undefined, format: "excel" }
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+          >
+            Download Excel
+          </a>
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        {!useRange && (
+          <>
+            <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              ← Prev
+            </button>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+            <button onClick={() => setDate(addDays(date, 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              Next →
+            </button>
+            <button onClick={() => setDate(dubaiToday())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+              Today
+            </button>
+          </>
+        )}
+        <label className="ml-2 flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
+          <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
+          Use date range
+        </label>
+        {useRange && (
+          <>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+            <span className="text-xs text-ink-soft">to</span>
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+          </>
+        )}
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm">
+          <option value="">All categories</option>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Expense</h2>
@@ -117,7 +192,7 @@ export default function ExpensesPage() {
 
       <div className="border border-line bg-white p-5">
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
-          Entries ({entries.length}) · Total {total} AED
+          Entries for {useRange ? `${fromDate} to ${toDate}` : date} ({entries.length}) · Total {total} AED
         </h2>
         <table className="data-table">
           <thead>
