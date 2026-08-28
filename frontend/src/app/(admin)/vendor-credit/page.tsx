@@ -165,7 +165,7 @@ export default function VendorCreditPage() {
             <button onClick={() => setDate(dubaiToday())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
               Today
             </button>
-            
+            <a
               href={vendorCreditExportUrl({ date })}
               target="_blank"
               rel="noopener noreferrer"
