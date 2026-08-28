@@ -7,6 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate } from "../middleware/auth";
 import { parseDateParam, formatDate } from "../utils/dates";
 import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
+import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
 
 const router = Router();
 router.use(authenticate);
@@ -93,15 +94,18 @@ router.get(
 
       const colWidths = [55, 40, 55, 65, 60, 55, 55, 60, 65, 65];
       const startX = doc.page.margins.left;
+      const rowHeight = 18;
+      const statusColIndex = columns.findIndex((c) => c.key === "status");
 
-      function drawRow(values: (string | number)[], bold = false) {
-        let x = startX;
-        doc.fontSize(8).fillColor("#000");
-        values.forEach((v, i) => {
-          doc.font(bold ? "Helvetica-Bold" : "Helvetica").text(String(v), x, y, { width: colWidths[i], ellipsis: true });
-          x += colWidths[i];
+      function drawRow(values: (string | number)[], opts: { header?: boolean; zebra?: boolean; summary?: boolean } = {}) {
+        drawPdfRow(doc, startX, y, rowHeight, values, colWidths, {
+          bg: opts.header ? PDF_COLORS.navy : opts.summary ? PDF_COLORS.brassLight : opts.zebra ? PDF_COLORS.zebra : "#FFFFFF",
+          color: opts.header ? "#FFFFFF" : undefined,
+          bold: opts.header || opts.summary,
+          statusColIndex: opts.header || opts.summary ? undefined : statusColIndex,
+          align: columns.map((c) => (c.key === "total" || c.key === "dl" ? "right" : "left")),
         });
-      y += 16;
+        y += rowHeight;
         if (y > doc.page.height - doc.page.margins.bottom - 90) {
           drawLetterheadFooter(doc);
           doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
@@ -109,14 +113,19 @@ router.get(
         }
       }
 
-      drawRow(columns.map((c) => c.header), true);
-      rows.forEach((r) => drawRow(columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number)));
+      drawRow(columns.map((c) => c.header), { header: true });
+      rows.forEach((r, i) =>
+        drawRow(
+          columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number),
+          { zebra: i % 2 === 1 }
+        )
+      );
 
       // Totals summary at the end of the report.
       y += 6;
-      drawRow(["", "", "", "TOTAL", sumTotal, sumDl, "", "", "", ""], true);
-      drawRow(["", "", "", "CANCELLED", sumCancelled, "", "", "", "", ""], true);
-      drawRow(["", "", "", "BALANCE (Total - Cancelled - DL Charge)", balance, "", "", "", "", ""], true);
+      drawRow(["", "", "", "TOTAL", sumTotal, sumDl, "", "", "", ""], { summary: true });
+      drawRow(["", "", "", "CANCELLED", sumCancelled, "", "", "", "", ""], { summary: true });
+      drawRow(["", "", "", "BALANCE (Total - Cancelled - DL Charge)", balance, "", "", "", "", ""], { summary: true });
 
       drawLetterheadFooter(doc);
       doc.end();
@@ -203,24 +212,40 @@ router.get(
       y = doc.y + 16;
 
       const left = doc.page.margins.left;
-      function line(label: string, value: string, bold = false) {
-        doc
-          .font(bold ? "Helvetica-Bold" : "Helvetica")
-          .fontSize(11)
-          .fillColor("#000")
-          .text(label, left, y, { width: 300 })
-          .text(value, left + 300, y, { width: 150, align: "right" });
-        y += 20;
-      }
-      line("Revenue (Delivery Charge)", fmtAed(revenue));
-      line("Total Expenses", fmtAed(totalExpenses));
-      y += 6;
-      line("Net Profit", fmtAed(netProfit), true);
-      y += 20;
+      const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-      doc.font("Helvetica-Bold").fontSize(12).text("Expense Breakdown by Category", left, y);
-      y += 20;
-      categoryBreakdown.forEach((c) => line(c.category, fmtAed(c.amount)));
+      // Three summary boxes: Revenue, Expenses, Net Profit — color-coded.
+      const boxGap = 12;
+      const boxW = (boxWidth - boxGap * 2) / 3;
+      const boxH = 55;
+      function summaryBox(x: number, label: string, value: string, bg: string, fg: string) {
+        doc.rect(x, y, boxW, boxH).fill(bg);
+        doc.font("Helvetica").fontSize(9).fillColor(fg).text(label, x + 10, y + 10, { width: boxW - 20 });
+        doc.font("Helvetica-Bold").fontSize(16).fillColor(fg).text(`${value} AED`, x + 10, y + 26, { width: boxW - 20 });
+      }
+      summaryBox(left, "Revenue (Delivery Charge)", fmtAed(revenue), PDF_COLORS.deliveredBg, PDF_COLORS.delivered);
+      summaryBox(left + boxW + boxGap, "Total Expenses", fmtAed(totalExpenses), PDF_COLORS.cancelledBg, PDF_COLORS.cancelled);
+      summaryBox(
+        left + (boxW + boxGap) * 2,
+        "Net Profit",
+        fmtAed(netProfit),
+        netProfit >= 0 ? PDF_COLORS.deliveredBg : PDF_COLORS.cancelledBg,
+        netProfit >= 0 ? PDF_COLORS.delivered : PDF_COLORS.cancelled
+      );
+      y += boxH + 24;
+
+      doc.rect(left, y - 4, boxWidth, 22).fill(PDF_COLORS.navy);
+      doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF").text("Expense Breakdown by Category", left + 6, y);
+      y += 24;
+
+      const catColWidths = [boxWidth - 150, 150];
+      categoryBreakdown.forEach((c, i) => {
+        drawPdfRow(doc, left, y, 18, [c.category, fmtAed(c.amount)], catColWidths, {
+          bg: i % 2 === 1 ? PDF_COLORS.zebra : "#FFFFFF",
+          align: ["left", "right"],
+        });
+        y += 18;
+      });
 
       drawLetterheadFooter(doc);
       doc.end();
@@ -319,14 +344,16 @@ router.get(
 
       const colWidths = [70, 90, 70, 150, 90, 70];
       const startX = doc.page.margins.left;
-      function drawRow(values: (string | number)[], bold = false) {
-        let x = startX;
-        doc.fontSize(8).fillColor("#000");
-        values.forEach((v, i) => {
-          doc.font(bold ? "Helvetica-Bold" : "Helvetica").text(String(v), x, y, { width: colWidths[i], ellipsis: true });
-          x += colWidths[i];
+      const rowHeight = 18;
+
+      function drawRow(values: (string | number)[], opts: { header?: boolean; zebra?: boolean; summary?: boolean } = {}) {
+        drawPdfRow(doc, startX, y, rowHeight, values, colWidths, {
+          bg: opts.header ? PDF_COLORS.navy : opts.summary ? PDF_COLORS.brassLight : opts.zebra ? PDF_COLORS.zebra : "#FFFFFF",
+          color: opts.header ? "#FFFFFF" : undefined,
+          bold: opts.header || opts.summary,
+          align: ["left", "left", "right", "left", "left", "left"],
         });
-        y += 16;
+        y += rowHeight;
         if (y > doc.page.height - doc.page.margins.bottom - 90) {
           drawLetterheadFooter(doc);
           doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
@@ -334,14 +361,14 @@ router.get(
         }
       }
 
-      drawRow(["Date", "Category", "Amount", "Remarks", "Employee", "Source"], true);
-      rows.forEach((r) => drawRow([r.date, r.category, r.amount, r.remarks, r.employee, r.source]));
+      drawRow(["Date", "Category", "Amount", "Remarks", "Employee", "Source"], { header: true });
+      rows.forEach((r, i) => drawRow([r.date, r.category, r.amount, r.remarks, r.employee, r.source], { zebra: i % 2 === 1 }));
 
       y += 6;
-      doc.font("Helvetica-Bold").fontSize(10).text("Category Totals", startX, y);
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(PDF_COLORS.navy).text("Category Totals", startX, y);
       y += 16;
-      categoryTotals.forEach((c) => drawRow([c.category, "", c.amount, "", "", ""], true));
-      drawRow(["GRAND TOTAL", "", grandTotal, "", "", ""], true);
+      categoryTotals.forEach((c) => drawRow([c.category, "", c.amount, "", "", ""], { summary: true }));
+      drawRow(["GRAND TOTAL", "", grandTotal, "", "", ""], { summary: true });
 
       drawLetterheadFooter(doc);
       doc.end();
@@ -399,69 +426,3 @@ router.get(
     const rows = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
       const delivered = own.filter((o) => o.status === "DELIVERED");
-      return {
-        name: e.name,
-        delivered: delivered.length,
-        sales: delivered.reduce((s, o) => s + o.total, 0),
-        dlCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
-        pending: own.filter((o) => o.status === "PENDING").length,
-        cancelled: own.filter((o) => o.status === "CANCELLED").length,
-        transferred: own.filter((o) => o.status === "TRANSFER").length,
-      };
-    });
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", 'attachment; filename="employee-performance.pdf"');
-
-    const doc = new PDFDocument({ margin: 40, size: "A4" });
-    doc.pipe(res);
-
-    let y = drawLetterheadHeader(doc, "Employee-wise Performance");
-    doc.fontSize(9).fillColor("#555").text(`Period: ${label}`, doc.page.margins.left, y, {
-      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
-      align: "center",
-    });
-    y = doc.y + 14;
-
-    const headers = ["Employee", "Delivered", "Sales", "DL Charge", "Pending", "Cancelled", "Transfer"];
-    const colWidths = [110, 60, 65, 65, 60, 65, 65];
-    const startX = doc.page.margins.left;
-
-    function drawRow(values: (string | number)[], bold = false) {
-      let x = startX;
-      values.forEach((v, i) => {
-        doc
-          .font(bold ? "Helvetica-Bold" : "Helvetica")
-          .fontSize(9)
-          .fillColor("#000")
-          .text(String(v), x, y, { width: colWidths[i], align: i === 0 ? "left" : "right" });
-        x += colWidths[i];
-      });
-      y += 18;
-    }
-
-    drawRow(headers, true);
-    rows.forEach((r) => drawRow([r.name, r.delivered, r.sales, r.dlCharge, r.pending, r.cancelled, r.transferred]));
-
-    const totals = rows.reduce(
-      (acc, r) => ({
-        delivered: acc.delivered + r.delivered,
-        sales: acc.sales + r.sales,
-        dlCharge: acc.dlCharge + r.dlCharge,
-        pending: acc.pending + r.pending,
-        cancelled: acc.cancelled + r.cancelled,
-        transferred: acc.transferred + r.transferred,
-      }),
-      { delivered: 0, sales: 0, dlCharge: 0, pending: 0, cancelled: 0, transferred: 0 }
-    );
-    drawRow(
-      ["TOTAL", totals.delivered, totals.sales, totals.dlCharge, totals.pending, totals.cancelled, totals.transferred],
-      true
-    );
-
-    drawLetterheadFooter(doc);
-    doc.end();
-  })
-);
-
-export default router;
