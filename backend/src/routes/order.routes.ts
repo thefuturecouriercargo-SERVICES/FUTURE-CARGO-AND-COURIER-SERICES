@@ -259,12 +259,17 @@ router.delete(
   })
 );
 
-const statusSchema = z.object({ status: z.enum(STATUSES) });
+const statusSchema = z
+  .object({ status: z.enum(STATUSES), reason: z.string().max(300).optional() })
+  .refine((data) => data.status !== "CANCELLED" || (data.reason && data.reason.trim().length > 0), {
+    message: "A reason is required to cancel a consignment",
+    path: ["reason"],
+  });
 
 router.patch(
   "/:id/status",
   asyncHandler(async (req, res) => {
-    const { status } = statusSchema.parse(req.body);
+    const { status, reason } = statusSchema.parse(req.body);
     const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Order not found");
 
@@ -287,7 +292,11 @@ router.patch(
         }
         return tx.order.update({
           where: { id: req.params.id },
-          data: { status, ...carryFields },
+          data: {
+            status,
+            ...carryFields,
+            ...(status === "CANCELLED" ? { remarks: reason } : {}),
+          },
           include: { vendor: true, employee: { select: { id: true, name: true } } },
         });
       });
@@ -297,7 +306,7 @@ router.patch(
         action: "STATUS_UPDATE",
         entity: "Order",
         entityId: order.id,
-        meta: { from: existing.status, to: status, carriedOverToToday: isCarryover },
+        meta: { from: existing.status, to: status, reason, carriedOverToToday: isCarryover },
       });
     emitGlobal("order:changed", { type: "updated", order });
     res.json(order);
