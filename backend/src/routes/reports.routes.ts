@@ -426,3 +426,67 @@ router.get(
     const rows = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
       const delivered = own.filter((o) => o.status === "DELIVERED");
+      return {
+        name: e.name,
+        delivered: delivered.length,
+        sales: delivered.reduce((s, o) => s + o.total, 0),
+        dlCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
+        pending: own.filter((o) => o.status === "PENDING").length,
+        cancelled: own.filter((o) => o.status === "CANCELLED").length,
+        transferred: own.filter((o) => o.status === "TRANSFER").length,
+      };
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="employee-performance.pdf"');
+
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    doc.pipe(res);
+
+    let y = drawLetterheadHeader(doc, "Employee-wise Performance");
+    doc.fontSize(9).fillColor("#555").text(`Period: ${label}`, doc.page.margins.left, y, {
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      align: "center",
+    });
+    y = doc.y + 14;
+
+    const headers = ["Employee", "Delivered", "Sales", "DL Charge", "Pending", "Cancelled", "Transfer"];
+    const colWidths = [110, 60, 65, 65, 60, 65, 65];
+    const startX = doc.page.margins.left;
+    const rowHeight = 18;
+
+    function drawRow(values: (string | number)[], opts: { header?: boolean; zebra?: boolean; summary?: boolean } = {}) {
+      drawPdfRow(doc, startX, y, rowHeight, values, colWidths, {
+        bg: opts.header ? PDF_COLORS.navy : opts.summary ? PDF_COLORS.brassLight : opts.zebra ? PDF_COLORS.zebra : "#FFFFFF",
+        color: opts.header ? "#FFFFFF" : undefined,
+        bold: opts.header || opts.summary,
+        align: ["left", "right", "right", "right", "right", "right", "right"],
+      });
+      y += rowHeight;
+    }
+
+    drawRow(headers, { header: true });
+    rows.forEach((r, i) => drawRow([r.name, r.delivered, r.sales, r.dlCharge, r.pending, r.cancelled, r.transferred], { zebra: i % 2 === 1 }));
+
+    const totals = rows.reduce(
+      (acc, r) => ({
+        delivered: acc.delivered + r.delivered,
+        sales: acc.sales + r.sales,
+        dlCharge: acc.dlCharge + r.dlCharge,
+        pending: acc.pending + r.pending,
+        cancelled: acc.cancelled + r.cancelled,
+        transferred: acc.transferred + r.transferred,
+      }),
+      { delivered: 0, sales: 0, dlCharge: 0, pending: 0, cancelled: 0, transferred: 0 }
+    );
+    drawRow(
+      ["TOTAL", totals.delivered, totals.sales, totals.dlCharge, totals.pending, totals.cancelled, totals.transferred],
+      { summary: true }
+    );
+
+    drawLetterheadFooter(doc);
+    doc.end();
+  })
+);
+
+export default router;
