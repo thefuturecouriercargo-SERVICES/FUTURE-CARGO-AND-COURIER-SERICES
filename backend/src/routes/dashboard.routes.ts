@@ -50,10 +50,24 @@ function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
       label = formatDate(date);
     }
 
-    const orders = await prisma.order.findMany({
+    const rawOrders = await prisma.order.findMany({
       where,
       include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
     });
+
+    // Guard against duplicate CN No. entries (e.g. leftover double-entries from before
+    // the creation-time duplicate check existed) inflating same-day counts. Carryover
+    // already dedupes by CN, so the daily view must too — otherwise a duplicate that's
+    // counted twice today silently collapses to one the moment it becomes "carryover"
+    // tomorrow, making the pending count drop with no actual status change behind it.
+    const seenCn = new Set<number>();
+    const orders = [...rawOrders]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .filter((o) => {
+        if (seenCn.has(o.cnNo)) return false;
+        seenCn.add(o.cnNo);
+        return true;
+      });
 const expenses = await prisma.expenseEntry.findMany({
       where: { ...where, source: "ADMIN" },
     });
@@ -165,15 +179,33 @@ router.get(
   "/monthly",
   asyncHandler(async (req, res) => {
     const { start, end, year, month } = monthRange(req.query.month as string | undefined);
-    const orders = await prisma.order.findMany({
+    const rawOrders = await prisma.order.findMany({
       where: { date: { gte: start, lte: end } },
       include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
     });
 
-    const employees = await prisma.user.findMany({ where: { role: "DRIVER" }, orderBy: { name: "asc" } });
+    // Same duplicate-CN guard as /daily — keeps monthly totals consistent with
+    // day-by-day and carryover figures.
+    const seenCn = new Set<number>();
+    const orders = [...rawOrders]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .filter((o) => {
+        if (seenCn.has(o.cnNo)) return false;
+        seenCn.add(o.cnNo);
+        return true;
+      });
+
+    const employees = await prisma.user.findMany({ where: { role: "DRIVER", isAgent: false }, orderBy: { name: "asc" } });
     const employeeBreakdown = employees.map((e) => {
       const own = orders.filter((o) => o.employeeId === e.id);
       return { employee: { id: e.id, name: e.name }, ...summarize(own) };
+    });
+
+    // Agents get their own monthly breakdown, kept separate from the driver one above.
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const agentBreakdown = agents.map((a) => {
+      const own = orders.filter((o) => o.employeeId === a.id);
+      return { employee: { id: a.id, name: a.name }, ...summarize(own) };
     });
 
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
@@ -215,6 +247,7 @@ router.get(
       month: `${year}-${String(month).padStart(2, "0")}`,
       summary: { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) },
       employeeBreakdown,
+      agentBreakdown,
       vendorBreakdown,
       emirateBreakdown,
       dailyBreakdown,
