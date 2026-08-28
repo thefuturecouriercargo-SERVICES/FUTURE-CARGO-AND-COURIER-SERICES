@@ -66,6 +66,11 @@ router.get(
       status: o.status,
     }));
 
+    const sumTotal = rows.reduce((s, r) => s + r.total, 0);
+    const sumDl = rows.reduce((s, r) => s + r.dl, 0);
+    const sumCancelled = rows.filter((r) => r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
+    const balance = sumTotal - sumCancelled - sumDl;
+
     if (format === "pdf") {
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", 'attachment; filename="consignment-report.pdf"');
@@ -101,6 +106,12 @@ router.get(
       drawRow(columns.map((c) => c.header), true);
       rows.forEach((r) => drawRow(columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number)));
 
+      // Totals summary at the end of the report.
+      y += 6;
+      drawRow(["", "", "", "TOTAL", sumTotal, sumDl, "", "", "", ""], true);
+      drawRow(["", "", "", "CANCELLED", sumCancelled, "", "", "", "", ""], true);
+      drawRow(["", "", "", "BALANCE (Total - Cancelled - DL Charge)", balance, "", "", "", "", ""], true);
+
       drawLetterheadFooter(doc);
       doc.end();
       return;
@@ -114,6 +125,15 @@ router.get(
     sheet.columns = columns;
     sheet.getRow(1).font = { bold: true };
     rows.forEach((r) => sheet.addRow(r));
+
+    // Totals summary at the end of the report.
+    const totalRow = sheet.addRow({ brand: "TOTAL", total: sumTotal, dl: sumDl });
+    totalRow.font = { bold: true };
+    const cancelledRow = sheet.addRow({ brand: "CANCELLED", total: sumCancelled });
+    cancelledRow.font = { bold: true };
+    const balanceRow = sheet.addRow({ brand: "BALANCE (Total - Cancelled - DL Charge)", total: balance });
+    balanceRow.font = { bold: true };
+
     sheet.autoFilter = { from: "A1", to: `J${rows.length + 1}` };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
