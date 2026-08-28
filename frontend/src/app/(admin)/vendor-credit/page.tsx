@@ -2,7 +2,7 @@
 
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
-import { apiFetch, ApiClientError } from "@/lib/api";
+import { apiFetch, ApiClientError, vendorCreditExportUrl } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 
 interface VendorCreditRow {
@@ -165,6 +165,14 @@ export default function VendorCreditPage() {
             <button onClick={() => setDate(dubaiToday())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
               Today
             </button>
+            
+              href={vendorCreditExportUrl({ date })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+            >
+              Download Excel
+            </a>
           </div>
         </div>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">
