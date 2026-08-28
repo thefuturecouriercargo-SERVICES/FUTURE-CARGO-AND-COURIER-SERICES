@@ -7,6 +7,10 @@ import { fmtNumber } from "@/lib/format";
 
 interface VendorCreditRow {
   vendor: { id: string; name: string; active: boolean };
+  openingAmount: number;
+  openingCancelled: number;
+  todayAmount: number;
+  todayCancelled: number;
   totalAmount: number;
   adjustmentTotal: number;
   cancelledTotal: number;
@@ -29,9 +33,16 @@ function dubaiToday(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function addDaysStr(dateStr: string, delta: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 const emptyPaymentForm = { date: dubaiToday(), amount: "", note: "" };
 
 export default function VendorCreditPage() {
+  const [date, setDate] = useState(dubaiToday());
   const [rows, setRows] = useState<VendorCreditRow[]>([]);
   const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
   const [payments, setPayments] = useState<VendorPayment[]>([]);
@@ -43,8 +54,8 @@ export default function VendorCreditPage() {
   const [savingAdjust, setSavingAdjust] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setRows(await apiFetch<VendorCreditRow[]>("/vendor-credit"));
-  }, []);
+    setRows(await apiFetch<VendorCreditRow[]>("/vendor-credit", { query: { date } }));
+  }, [date]);
 
   useEffect(() => {
     load();
@@ -110,6 +121,10 @@ export default function VendorCreditPage() {
 
   const totals = rows.reduce(
     (acc, r) => ({
+      openingAmount: acc.openingAmount + r.openingAmount,
+      openingCancelled: acc.openingCancelled + r.openingCancelled,
+      todayAmount: acc.todayAmount + r.todayAmount,
+      todayCancelled: acc.todayCancelled + r.todayCancelled,
       totalAmount: acc.totalAmount + r.totalAmount,
       adjustmentTotal: acc.adjustmentTotal + r.adjustmentTotal,
       cancelledTotal: acc.cancelledTotal + r.cancelledTotal,
@@ -117,29 +132,60 @@ export default function VendorCreditPage() {
       totalPaid: acc.totalPaid + r.totalPaid,
       balance: acc.balance + r.balance,
     }),
-    { totalAmount: 0, adjustmentTotal: 0, cancelledTotal: 0, totalDeliveryCharge: 0, totalPaid: 0, balance: 0 }
+    {
+      openingAmount: 0,
+      openingCancelled: 0,
+      todayAmount: 0,
+      todayCancelled: 0,
+      totalAmount: 0,
+      adjustmentTotal: 0,
+      cancelledTotal: 0,
+      totalDeliveryCharge: 0,
+      totalPaid: 0,
+      balance: 0,
+    }
   );
 
   return (
     <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
       <div>
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Accounts</p>
-        <h1 className="mb-2 font-display text-3xl font-semibold text-navy">Vendor Credit</h1>
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Accounts</p>
+            <h1 className="font-display text-3xl font-semibold text-navy">Vendor Credit</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDate(addDaysStr(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              ← Prev
+            </button>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
+            <button onClick={() => setDate(addDaysStr(date, 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              Next →
+            </button>
+            <button onClick={() => setDate(dubaiToday())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+              Today
+            </button>
+          </div>
+        </div>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-          What's left to pay each vendor: total amount of every consignment taken from them, minus cancelled
-          orders, minus our delivery charge (only counted once an order is actually delivered), minus what
-          you&apos;ve already paid. Pending orders stay counted in the total — once delivered, their delivery
-          charge is deducted automatically.
+          Shown as a ledger for <b>{date}</b>: <b>Opening Amount</b> is everything up to the day before, <b>Today</b>{" "}
+          columns are just this date's activity, and <b>Total Amount</b> is the running total through this date.
+          Balance = Total Amount − Cancelled − Delivery Charge (on Delivered only) − Paid.
         </p>
 
         <div className="border border-line bg-white p-5">
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
                 <th>Vendor</th>
+                <th className="text-right">Opening Amount</th>
+                <th className="text-right">Opening Cancelled</th>
+                <th className="text-right">Today's Amount</th>
+                <th className="text-right">Today's Cancelled</th>
                 <th className="text-right">Total Amount</th>
                 <th className="text-right">Adjustment</th>
-                <th className="text-right">Cancelled</th>
+                <th className="text-right">Cancelled (Total)</th>
                 <th className="text-right">Delivery Charge</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
@@ -151,7 +197,11 @@ export default function VendorCreditPage() {
                 <Fragment key={r.vendor.id}>
                   <tr className={r.vendor.active ? "" : "opacity-50"}>
                     <td>{r.vendor.name}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.openingAmount)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.openingCancelled)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.todayAmount)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.todayCancelled)}</td>
+                    <td className="text-right font-mono font-semibold">{fmtNumber(r.totalAmount)}</td>
                     <td className="text-right font-mono">
                       <div className="flex flex-col items-end gap-1">
                         <span className={r.adjustmentTotal !== 0 ? (r.adjustmentTotal > 0 ? "text-delivered" : "text-cancelled") : "text-ink-soft"}>
@@ -194,7 +244,7 @@ export default function VendorCreditPage() {
                   </tr>
                   {expandedVendorId === r.vendor.id && (
                     <tr>
-                      <td colSpan={8} className="bg-paper-2 p-4">
+                      <td colSpan={12} className="bg-paper-2 p-4">
                         <form
                           onSubmit={(e) => addPayment(r.vendor.id, e)}
                           className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4"
@@ -290,6 +340,10 @@ export default function VendorCreditPage() {
               <tfoot>
                 <tr className="font-semibold">
                   <td>TOTAL</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.openingAmount)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.openingCancelled)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.todayAmount)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.todayCancelled)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.totalAmount)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.adjustmentTotal)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.cancelledTotal)}</td>
@@ -301,6 +355,7 @@ export default function VendorCreditPage() {
               </tfoot>
             )}
           </table>
+          </div>
         </div>
       </div>
     </AuthGate>
