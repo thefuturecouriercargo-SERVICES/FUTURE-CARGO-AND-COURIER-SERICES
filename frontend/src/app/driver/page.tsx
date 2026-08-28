@@ -71,12 +71,13 @@ export default function DriverPortalPage() {
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
 
       {summary && (
-        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-5">
+        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-6">
           <Kpi label="Assigned" value={summary.assigned} />
           <Kpi label="Delivered" value={summary.delivered} />
           <Kpi label="Pending" value={summary.pending} />
           <Kpi label="DL Charge (AED)" value={fmtNumber(summary.deliveryChargeEarned)} />
           <Kpi label="Bank Deliveries" value={orders.filter((o) => o.payment === "BANK").length} />
+          <Kpi label="Cash Deliveries" value={orders.filter((o) => o.payment === "CASH").length} />
         </div>
       )}
 
