@@ -52,7 +52,7 @@ export default function PayrollPage() {
     setLoading(true);
     try {
       const [empList, rows, entryList] = await Promise.all([
-        apiFetch<Employee[]>("/employees", { query: { includeInactive: false, role: "ALL" } }),
+        apiFetch<Employee[]>("/employees", { query: { includeInactive: false, role: "ALL", isAgent: "false" } }),
         apiFetch<PayrollRow[]>("/payroll", { query: { month } }),
         apiFetch<PayrollEntry[]>("/payroll/entries", { query: { month } }),
       ]);
