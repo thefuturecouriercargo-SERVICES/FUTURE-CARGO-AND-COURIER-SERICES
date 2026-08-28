@@ -19,6 +19,10 @@ interface VendorOrder {
 }
 
 interface CreditSummary {
+  openingAmount: number;
+  openingCancelled: number;
+  todayAmount: number;
+  todayCancelled: number;
   totalAmount: number;
   cancelledTotal: number;
   totalDeliveryCharge: number;
@@ -54,6 +58,17 @@ function currentMonthStr(): string {
   return d.toISOString().slice(0, 7);
 }
 
+function dubaiToday(): string {
+  const d = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+function addDaysStr(dateStr: string, delta: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 function statusClass(status: VendorOrder["status"]) {
   switch (status) {
     case "DELIVERED":
@@ -83,6 +98,7 @@ function VendorPortalContent() {
   const [tab, setTab] = useState<"orders" | "monthly">("orders");
   const [month, setMonth] = useState(currentMonthStr());
   const [monthly, setMonthly] = useState<MonthlyReport | null>(null);
+  const [creditDate, setCreditDate] = useState(dubaiToday());
 
   const load = useCallback(async () => {
     const [ordersRes, creditRes, paymentsRes] = await Promise.all([
@@ -92,13 +108,13 @@ function VendorPortalContent() {
           ...(toDate ? { to: toDate } : {}),
         },
       }),
-      apiFetch<CreditSummary>("/vendor-portal/credit"),
+      apiFetch<CreditSummary>("/vendor-portal/credit", { query: { date: creditDate } }),
       apiFetch<VendorPayment[]>("/vendor-portal/credit/payments"),
     ]);
     setOrders(ordersRes.orders);
     setCredit(creditRes);
     setPayments(paymentsRes);
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, creditDate]);
 
   const loadMonthly = useCallback(async () => {
     setMonthly(await apiFetch<MonthlyReport>("/vendor-portal/monthly", { query: { month } }));
@@ -150,17 +166,47 @@ function VendorPortalContent() {
 
       <div className="mx-auto max-w-5xl p-4 md:p-8">
         <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Overview</p>
-        <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Your Account</h1>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="font-display text-3xl font-semibold text-navy">Your Account</h1>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setCreditDate(addDaysStr(creditDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+              ← Prev
+            </button>
+            <input type="date" value={creditDate} onChange={(e) => setCreditDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+            <button onClick={() => setCreditDate(addDaysStr(creditDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+              Next →
+            </button>
+            <button onClick={() => setCreditDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+              Today
+            </button>
+          </div>
+        </div>
+        <p className="mb-6 max-w-2xl text-sm text-ink-soft">
+          Shown as a ledger for <b>{creditDate}</b>: Opening figures are everything up to the day before, Today
+          figures are just this date's activity, and Total Amount is the running total through this date.
+        </p>
 
         {credit && (
-          <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-5">
+          <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4 lg:grid-cols-8">
+            <div className="bg-white p-4">
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Opening Amount</div>
+              <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.openingAmount)}</div>
+            </div>
+            <div className="bg-white p-4">
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Opening Cancelled</div>
+              <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.openingCancelled)}</div>
+            </div>
+            <div className="bg-white p-4">
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Today's Amount</div>
+              <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.todayAmount)}</div>
+            </div>
+            <div className="bg-white p-4">
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Today's Cancelled</div>
+              <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.todayCancelled)}</div>
+            </div>
             <div className="bg-white p-4">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Total Amount</div>
               <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.totalAmount)}</div>
-            </div>
-            <div className="bg-white p-4">
-              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Cancelled</div>
-              <div className="font-display text-xl font-semibold text-navy">{fmtNumber(credit.cancelledTotal)}</div>
             </div>
             <div className="bg-white p-4">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Delivery Charge</div>
