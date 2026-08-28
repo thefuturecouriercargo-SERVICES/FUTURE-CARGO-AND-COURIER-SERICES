@@ -405,7 +405,7 @@ export default function AgentsPage() {
             <h2 className="font-display text-[17px] font-semibold text-navy">
               Agent Credit — What They Owe Back
             </h2>
-            
+            <a
               href={agentCreditExportUrl()}
               target="_blank"
               rel="noopener noreferrer"
