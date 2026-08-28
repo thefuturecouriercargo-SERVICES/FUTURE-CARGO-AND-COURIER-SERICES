@@ -74,10 +74,10 @@ export default function DriverPortalPage() {
         <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-6">
           <Kpi label="Assigned" value={summary.assigned} />
           <Kpi label="Delivered" value={summary.delivered} />
-          <Kpi label="Pending" value={summary.pending} />
+          <Kpi label="Pending" value={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length} />
           <Kpi label="DL Charge (AED)" value={fmtNumber(summary.deliveryChargeEarned)} />
-          <Kpi label="Bank Deliveries" value={orders.filter((o) => o.payment === "BANK").length} />
-          <Kpi label="Cash Deliveries" value={orders.filter((o) => o.payment === "CASH").length} />
+          <Kpi label="Bank Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "BANK").length} />
+          <Kpi label="Cash Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "CASH").length} />
         </div>
       )}
 
