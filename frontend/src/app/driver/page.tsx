@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { fmtNumber, todayStr } from "@/lib/format";
+import { fmtNumber, todayStr, isAgingPending } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor } from "@/types";
 
@@ -126,6 +126,14 @@ export default function DriverPortalPage() {
                 <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
                   {o.status}
                 </span>
+                {isAgingPending(o.status, o.date) && (
+                  <span
+                    className="rounded bg-cancelled px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-white"
+                    title="Pending more than 2 days"
+                  >
+                    Aging
+                  </span>
+                )}
                 <button
                   onClick={() => setStatusOrder(o)}
                   className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
