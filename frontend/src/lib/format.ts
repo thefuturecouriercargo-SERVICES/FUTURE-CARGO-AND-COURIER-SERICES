@@ -22,3 +22,13 @@ export function currentMonthStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
+
+// True if an order has sat PENDING for more than 2 days — used to flag aging
+// consignments wherever their status is shown.
+export function isAgingPending(status: string, dateStr: string): boolean {
+  if (status !== "PENDING") return false;
+  const orderDate = new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
+  const today = new Date(`${todayStr()}T00:00:00Z`);
+  const diffDays = (today.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays > 2;
+}
