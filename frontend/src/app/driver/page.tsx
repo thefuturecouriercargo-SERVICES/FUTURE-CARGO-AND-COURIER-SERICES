@@ -141,9 +141,6 @@ export default function DriverPortalPage() {
                 >
                   Update Status
                 </button>
-                <button onClick={() => setTransferOrder(o)} className="rounded border border-transferred px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-transferred hover:bg-transferred-bg">
-                  Transfer
-                </button>
               </div>
             </div>
           ))}
@@ -311,8 +308,7 @@ function StatusModal({
           Total <b className="text-ink">{fmtNumber(order.total)} AED</b> · {order.brandName}
         </p>
         <p className="mb-4 text-xs text-ink-soft">
-          Currently <b>{order.status}</b>. Pick the new status below, or transfer this consignment to another
-          driver instead.
+          Currently <b>{order.status}</b>. Pick the new status below.
         </p>
         <div className="mb-3 grid grid-cols-2 gap-2">
           {STATUSES.filter((s) => s !== "TRANSFER").map((s) => (
@@ -328,9 +324,9 @@ function StatusModal({
           ))}
           <button
             onClick={onTransfer}
-            className="col-span-2 rounded border border-transferred px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide text-transferred hover:bg-transferred-bg"
+            className="rounded border px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide border-transferred text-transferred hover:bg-transferred-bg"
           >
-            Transfer to another driver
+            TRANSFER
           </button>
         </div>
 
