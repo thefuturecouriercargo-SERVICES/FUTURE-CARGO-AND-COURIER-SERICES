@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
@@ -65,6 +66,71 @@ router.get(
     });
 
     res.json(rows);
+  })
+);
+
+// Excel statement of the agent credit ledger shown on screen.
+router.get(
+  "/export",
+  asyncHandler(async (_req, res) => {
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const allOrders = await prisma.order.findMany({
+      where: { employeeId: { in: agents.map((a) => a.id) } },
+      select: { employeeId: true, status: true, total: true, deliveryCharge: true },
+    });
+
+    const totalMap = new Map<string, number>();
+    const cancelledMap = new Map<string, number>();
+    const chargeMap = new Map<string, number>();
+    for (const o of allOrders) {
+      totalMap.set(o.employeeId, (totalMap.get(o.employeeId) ?? 0) + o.total);
+      if (o.status === "CANCELLED") cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
+      if (o.status === "DELIVERED") chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
+    }
+    const paymentTotals = await prisma.agentPayment.groupBy({ by: ["employeeId"], _sum: { amount: true } });
+    const paymentMap = new Map(paymentTotals.map((p) => [p.employeeId, p._sum.amount ?? 0]));
+
+    const rows = agents.map((a) => {
+      const totalAmount = totalMap.get(a.id) ?? 0;
+      const cancelledTotal = cancelledMap.get(a.id) ?? 0;
+      const totalDeliveryCharge = chargeMap.get(a.id) ?? 0;
+      const totalPaid = paymentMap.get(a.id) ?? 0;
+      const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
+      return { agent: a.name, totalAmount, cancelledTotal, totalDeliveryCharge, totalPaid, balance };
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Future Courier Operations";
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet("Agent Credit Statement");
+    sheet.columns = [
+      { header: "Agent", key: "agent", width: 20 },
+      { header: "Total Amount", key: "totalAmount", width: 15 },
+      { header: "Cancelled", key: "cancelledTotal", width: 14 },
+      { header: "DL Charge (Kept)", key: "totalDeliveryCharge", width: 16 },
+      { header: "Paid Back", key: "totalPaid", width: 14 },
+      { header: "Balance Owed", key: "balance", width: 14 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    rows.forEach((r) => sheet.addRow(r));
+
+    const totals = rows.reduce(
+      (acc, r) => ({
+        totalAmount: acc.totalAmount + r.totalAmount,
+        cancelledTotal: acc.cancelledTotal + r.cancelledTotal,
+        totalDeliveryCharge: acc.totalDeliveryCharge + r.totalDeliveryCharge,
+        totalPaid: acc.totalPaid + r.totalPaid,
+        balance: acc.balance + r.balance,
+      }),
+      { totalAmount: 0, cancelledTotal: 0, totalDeliveryCharge: 0, totalPaid: 0, balance: 0 }
+    );
+    const totalRow = sheet.addRow({ agent: "TOTAL", ...totals });
+    totalRow.font = { bold: true };
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="agent-credit-statement.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   })
 );
 
