@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { addDays, fmtNumber, todayStr } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, isAgingPending } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { Employee, Order, OrderStatus, PAYMENTS, EMIRATES, STATUSES, Vendor } from "@/types";
 
@@ -477,17 +477,27 @@ required
                     <td>{o.emirate}</td>
                     <td>{o.employee.name}</td>
                     <td>
-                      <select
-                        value={o.status}
-                        onChange={(e) => quickStatus(o.id, e.target.value as OrderStatus)}
-                        className="rounded border border-line bg-transparent px-1.5 py-1 text-xs"
-                      >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={o.status}
+                          onChange={(e) => quickStatus(o.id, e.target.value as OrderStatus)}
+                          className="rounded border border-line bg-transparent px-1.5 py-1 text-xs"
+                        >
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        {isAgingPending(o.status, o.date) && (
+                          <span
+                            className="rounded bg-cancelled px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-white"
+                            title="Pending more than 2 days"
+                          >
+                            Aging
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                       {o.remarks || "—"}
