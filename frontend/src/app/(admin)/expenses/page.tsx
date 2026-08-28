@@ -34,6 +34,7 @@ export default function ExpensesPage() {
  const [entries, setEntries] = useState<ExpenseEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [date, setDate] = useState(dubaiToday());
@@ -65,17 +66,46 @@ export default function ExpensesPage() {
     setError(null);
     setSaving(true);
     try {
-      await apiFetch("/expenses", {
-        method: "POST",
-       body: { date: form.date, category: form.category, amount: Number(form.amount), remarks: form.remarks || undefined, employeeId: form.employeeId || undefined },
-      });
-      setForm(emptyForm);
+      if (editingId) {
+        await apiFetch(`/expenses/${editingId}`, {
+          method: "PUT",
+          body: {
+            date: form.date,
+            category: form.category,
+            amount: Number(form.amount),
+            remarks: form.remarks || undefined,
+            employeeId: form.employeeId || null,
+          },
+        });
+      } else {
+        await apiFetch("/expenses", {
+          method: "POST",
+         body: { date: form.date, category: form.category, amount: Number(form.amount), remarks: form.remarks || undefined, employeeId: form.employeeId || undefined },
+        });
+      }
+      resetForm();
       await load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to save expense");
     } finally {
       setSaving(false);
     }
+  }
+
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+  }
+
+  function startEdit(entry: ExpenseEntry) {
+    setEditingId(entry.id);
+    setForm({
+      date: entry.date.slice(0, 10),
+      category: entry.category,
+      amount: String(entry.amount),
+      remarks: entry.remarks ?? "",
+      employeeId: entry.employee?.id ?? "",
+    });
   }
 
   async function removeEntry(entry: ExpenseEntry) {
@@ -93,7 +123,7 @@ export default function ExpensesPage() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
         <div className="flex gap-2">
-          <a
+          
             href={expenseReportUrl(
               useRange
                 ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "pdf" }
@@ -105,7 +135,7 @@ export default function ExpensesPage() {
           >
             Download PDF
           </a>
-          <a
+          
             href={expenseReportUrl(
               useRange
                 ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "excel" }
@@ -155,9 +185,12 @@ export default function ExpensesPage() {
       </div>
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">Add Expense</h2>
+        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Expense" : "Add Expense"}</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-      
+          <div>
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
+            <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm" />
+          </div>
         <div>
           <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Driver (optional)</label>
           <select value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm">
@@ -184,8 +217,13 @@ export default function ExpensesPage() {
             <input value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} className="rounded border border-line px-2.5 py-2 text-sm" />
           </div>
           <button type="submit" disabled={saving} className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
-            {saving ? "Saving…" : "Add expense"}
+            {saving ? "Saving…" : editingId ? "Save changes" : "Add expense"}
           </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} className="rounded border border-line px-4 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
+              Cancel
+            </button>
+          )}
           {error && <span className="text-xs text-cancelled">{error}</span>}
         </form>
       </div>
@@ -216,6 +254,9 @@ export default function ExpensesPage() {
                 <td>{e.employee?.name ?? "-"}</td>
                 <td>{e.remarks ?? "-"}</td>
                 <td className="whitespace-nowrap">
+                  <button onClick={() => startEdit(e)} className="mr-2 text-xs text-brass hover:underline">
+                    Edit
+                  </button>
                   <button onClick={() => removeEntry(e)} className="text-xs text-cancelled hover:underline">
                     Remove
                   </button>
