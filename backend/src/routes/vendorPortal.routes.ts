@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticateVendor } from "../middleware/auth";
-import { parseDateParam, monthRange, formatDate } from "../utils/dates";
+import { parseDateParam, monthRange, formatDate, dayRange } from "../utils/dates";
 
 const router = Router();
 router.use(authenticateVendor);
@@ -79,14 +79,19 @@ router.get(
   })
 );
 
-// Same formula as the admin Vendor Credit page, scoped to just this vendor.
+// Same date-wise ledger the admin Vendor Credit page uses, scoped to just this vendor.
+//   Opening Amount    = running Total Amount from everything BEFORE the selected date
+//   Opening Cancelled = running Cancelled Total from before the selected date
+//   Today Amount / Today Cancelled = just the selected date's own activity
+//   Total Amount (running through selected date) = Opening Amount + Today Amount
 router.get(
   "/credit",
   asyncHandler(async (req, res) => {
     const vendorId = req.vendor!.sub;
+    const { start: selectedDate } = dayRange(req.query.date as string | undefined);
 
     const allOrders = await prisma.order.findMany({
-      where: { vendorId },
+      where: { vendorId, date: { lte: selectedDate } },
       select: { cnNo: true, status: true, total: true, deliveryCharge: true, date: true, createdAt: true },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
@@ -98,24 +103,53 @@ router.get(
       return true;
     });
 
-    const totalAmount = deduped.reduce((s, o) => s + o.total, 0);
-    const cancelledTotal = deduped.filter((o) => o.status === "CANCELLED").reduce((s, o) => s + o.total, 0);
-    const totalDeliveryCharge = deduped
-      .filter((o) => o.status === "DELIVERED")
-      .reduce((s, o) => s + o.deliveryCharge, 0);
+    let openingAmount = 0;
+    let openingCancelled = 0;
+    let openingCharge = 0;
+    let todayAmount = 0;
+    let todayCancelled = 0;
+    let todayCharge = 0;
 
-    const [paymentTotal, adjustmentTotal] = await Promise.all([
-      prisma.vendorPayment.aggregate({ where: { vendorId }, _sum: { amount: true } }),
-      prisma.vendorAdjustment.aggregate({ where: { vendorId }, _sum: { amount: true } }),
+    for (const o of deduped) {
+      const isToday = o.date.getTime() === selectedDate.getTime();
+      if (isToday) {
+        todayAmount += o.total;
+        if (o.status === "CANCELLED") todayCancelled += o.total;
+        if (o.status === "DELIVERED") todayCharge += o.deliveryCharge;
+      } else {
+        openingAmount += o.total;
+        if (o.status === "CANCELLED") openingCancelled += o.total;
+        if (o.status === "DELIVERED") openingCharge += o.deliveryCharge;
+      }
+    }
+
+    const [openingPayments, todayPayments, openingAdjustments, todayAdjustments] = await Promise.all([
+      prisma.vendorPayment.aggregate({ where: { vendorId, date: { lt: selectedDate } }, _sum: { amount: true } }),
+      prisma.vendorPayment.aggregate({ where: { vendorId, date: selectedDate }, _sum: { amount: true } }),
+      prisma.vendorAdjustment.aggregate({ where: { vendorId, date: { lt: selectedDate } }, _sum: { amount: true } }),
+      prisma.vendorAdjustment.aggregate({ where: { vendorId, date: selectedDate }, _sum: { amount: true } }),
     ]);
-    const totalPaid = paymentTotal._sum.amount ?? 0;
-    const adjustment = adjustmentTotal._sum.amount ?? 0;
 
-    const adjustedTotal = totalAmount + adjustment;
-    const balance = adjustedTotal - cancelledTotal - totalDeliveryCharge - totalPaid;
+    const openingAdj = openingAdjustments._sum.amount ?? 0;
+    const todayAdj = todayAdjustments._sum.amount ?? 0;
+    openingAmount += openingAdj;
+    todayAmount += todayAdj;
+
+    const openingPaid = openingPayments._sum.amount ?? 0;
+    const todayPaid = todayPayments._sum.amount ?? 0;
+
+    const totalAmount = openingAmount + todayAmount;
+    const cancelledTotal = openingCancelled + todayCancelled;
+    const totalDeliveryCharge = openingCharge + todayCharge;
+    const totalPaid = openingPaid + todayPaid;
+    const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
 
     res.json({
-      totalAmount: adjustedTotal,
+      openingAmount,
+      openingCancelled,
+      todayAmount,
+      todayCancelled,
+      totalAmount,
       cancelledTotal,
       totalDeliveryCharge,
       totalPaid,
