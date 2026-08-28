@@ -123,7 +123,7 @@ export default function ExpensesPage() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
         <div className="flex gap-2">
-          
+          <a
             href={expenseReportUrl(
               useRange
                 ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "pdf" }
@@ -135,7 +135,7 @@ export default function ExpensesPage() {
           >
             Download PDF
           </a>
-          
+          <a
             href={expenseReportUrl(
               useRange
                 ? { from: fromDate, to: toDate, category: categoryFilter || undefined, format: "excel" }
