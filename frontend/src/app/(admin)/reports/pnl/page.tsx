@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, pnlExportUrl } from "@/lib/api";
 
 interface PnlData {
   revenue: number;
@@ -53,7 +53,27 @@ export default function PnlPage() {
   return (
     <div>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Reports</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Profit &amp; Loss</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-3xl font-semibold text-navy">Profit &amp; Loss</h1>
+        <div className="flex gap-2">
+          <a
+            href={pnlExportUrl({ from, to, format: "pdf" })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+          >
+            Download PDF
+          </a>
+          <a
+            href={pnlExportUrl({ from, to, format: "excel" })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
+          >
+            Download Excel
+          </a>
+        </div>
+      </div>
 
       <div className="mb-6 flex flex-wrap items-end gap-3 border border-line bg-white p-5">
         <div>
