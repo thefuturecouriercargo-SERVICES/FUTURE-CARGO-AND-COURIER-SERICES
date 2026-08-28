@@ -67,4 +67,32 @@ export function employeePerformancePdfUrl(query: Record<string, string | undefin
   return url.toString();
 }
 
+export function pnlExportUrl(query: Record<string, string | undefined>) {
+  const url = new URL(`${API_URL}/api/reports/pnl`);
+  Object.entries(query).forEach(([k, v]) => {
+    if (v) url.searchParams.set(k, v);
+  });
+  return url.toString();
+}
+
+export function expenseReportUrl(query: Record<string, string | undefined>) {
+  const url = new URL(`${API_URL}/api/reports/expenses/export`);
+  Object.entries(query).forEach(([k, v]) => {
+    if (v) url.searchParams.set(k, v);
+  });
+  return url.toString();
+}
+
+export function vendorCreditExportUrl(query: Record<string, string | undefined>) {
+  const url = new URL(`${API_URL}/api/vendor-credit/export`);
+  Object.entries(query).forEach(([k, v]) => {
+    if (v) url.searchParams.set(k, v);
+  });
+  return url.toString();
+}
+
+export function agentCreditExportUrl() {
+  return `${API_URL}/api/agent-credit/export`;
+}
+
 export { API_URL };
