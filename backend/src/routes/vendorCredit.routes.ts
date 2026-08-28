@@ -10,30 +10,33 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
-// Vendor credit = what's left to pay each vendor.
-//   Balance = Total Amount (every consignment/order we've taken from them, any status)
-//           - Cancelled Total (orders that never got delivered — no money involved)
-//           - Delivery Charge Total (our fee, only counted once an order is actually Delivered)
-//           - Paid Amount (manually logged payments)
+// Vendor credit = what's left to pay each vendor, shown date-wise like a ledger:
+//   Opening Amount   = running Total Amount from everything BEFORE the selected date
+//   Opening Cancelled = running Cancelled Total from before the selected date
+//   Today Amount / Today Cancelled = just the selected date's own activity
+//   Total Amount (running through selected date) = Opening Amount + Today Amount
+//   Balance = Total Amount - Cancelled Total - Delivery Charge Total - Paid Amount
 // Pending/Transfer orders stay counted in Total Amount as-is (expected to convert to
 // Delivered soon); once they do, their delivery charge gets deducted automatically.
 //
 // Safeguard: the same consignment (CN No) must never be counted twice for a vendor,
 // even if it was accidentally entered more than once. Before totalling anything, orders
-// are deduplicated by (vendorId, cnNo) — keeping only the most recent entry for each
-// consignment number.
+// are deduplicated by (vendorId, cnNo) — keeping only the most recent entry (up to the
+// selected date) for each consignment number.
 router.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { start: selectedDate } = dayRange(req.query.date as string | undefined);
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
 
     const allOrders = await prisma.order.findMany({
+      where: { date: { lte: selectedDate } },
       select: { vendorId: true, cnNo: true, status: true, total: true, deliveryCharge: true, date: true, createdAt: true },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
 
-    // Dedupe: for a given vendor + CN No, keep only the most recent entry
-    // (orderBy above means the first one seen per key is the most recent).
+    // Dedupe: for a given vendor + CN No, keep only the most recent entry up to the
+    // selected date (orderBy above means the first one seen per key is the most recent).
     const seenKeys = new Set<string>();
     const dedupedOrders = allOrders.filter((o) => {
       const key = `${o.vendorId}::${o.cnNo}`;
@@ -42,12 +45,20 @@ router.get(
       return true;
     });
 
-    const totalMap = new Map<string, number>();
-    const cancelledMap = new Map<string, number>();
-    const chargeMap = new Map<string, number>();
+    const openingAmountMap = new Map<string, number>();
+    const openingCancelledMap = new Map<string, number>();
+    const openingChargeMap = new Map<string, number>();
+    const todayAmountMap = new Map<string, number>();
+    const todayCancelledMap = new Map<string, number>();
+    const todayChargeMap = new Map<string, number>();
 
     for (const o of dedupedOrders) {
-      totalMap.set(o.vendorId, (totalMap.get(o.vendorId) ?? 0) + o.total);
+      const isToday = o.date.getTime() === selectedDate.getTime();
+      const amountMap = isToday ? todayAmountMap : openingAmountMap;
+      const cancelledMap = isToday ? todayCancelledMap : openingCancelledMap;
+      const chargeMap = isToday ? todayChargeMap : openingChargeMap;
+
+      amountMap.set(o.vendorId, (amountMap.get(o.vendorId) ?? 0) + o.total);
       if (o.status === "CANCELLED") {
         cancelledMap.set(o.vendorId, (cancelledMap.get(o.vendorId) ?? 0) + o.total);
       }
@@ -56,38 +67,74 @@ router.get(
       }
     }
 
-    const paymentTotals = await prisma.vendorPayment.groupBy({
-      by: ["vendorId"],
-      _sum: { amount: true },
-    });
-    const driverPaymentTotals = await prisma.purchase.groupBy({
-      by: ["vendorId"],
-      where: { vendorId: { not: null } },
-      _sum: { amount: true },
-    });
-    const paymentMap = new Map(paymentTotals.map((p) => [p.vendorId, p._sum.amount ?? 0]));
-    for (const p of driverPaymentTotals) {
-      if (!p.vendorId) continue;
-      paymentMap.set(p.vendorId, (paymentMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+    function toMap(list: { vendorId: string | null; _sum: { amount: number | null } }[]) {
+      const m = new Map<string, number>();
+      for (const item of list) {
+        if (!item.vendorId) continue;
+        m.set(item.vendorId, (m.get(item.vendorId) ?? 0) + (item._sum.amount ?? 0));
+      }
+      return m;
     }
 
-    // Manual adjustments (positive or negative) that correct a vendor's Total Amount.
-    const adjustmentTotals = await prisma.vendorAdjustment.groupBy({
-      by: ["vendorId"],
-      _sum: { amount: true },
-    });
-    const adjustmentMap = new Map(adjustmentTotals.map((a) => [a.vendorId, a._sum.amount ?? 0]));
+    const [
+      openingPayments,
+      todayPayments,
+      openingDriverPayments,
+      todayDriverPayments,
+      openingAdjustments,
+      todayAdjustments,
+    ] = await Promise.all([
+      prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+      prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+      prisma.purchase.groupBy({
+        by: ["vendorId"],
+        where: { vendorId: { not: null }, date: { lt: selectedDate } },
+        _sum: { amount: true },
+      }),
+      prisma.purchase.groupBy({
+        by: ["vendorId"],
+        where: { vendorId: { not: null }, date: selectedDate },
+        _sum: { amount: true },
+      }),
+      prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+      prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+    ]);
+
+    const openingPaidMap = toMap(openingPayments);
+    for (const p of openingDriverPayments) {
+      if (p.vendorId) openingPaidMap.set(p.vendorId, (openingPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+    }
+    const todayPaidMap = toMap(todayPayments);
+    for (const p of todayDriverPayments) {
+      if (p.vendorId) todayPaidMap.set(p.vendorId, (todayPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+    }
+    const openingAdjMap = toMap(openingAdjustments);
+    const todayAdjMap = toMap(todayAdjustments);
 
     const rows = vendors.map((v) => {
-      const rawTotalAmount = totalMap.get(v.id) ?? 0;
-      const adjustmentTotal = adjustmentMap.get(v.id) ?? 0;
-      const totalAmount = rawTotalAmount + adjustmentTotal;
-      const cancelledTotal = cancelledMap.get(v.id) ?? 0;
-      const totalDeliveryCharge = chargeMap.get(v.id) ?? 0;
-      const totalPaid = paymentMap.get(v.id) ?? 0;
+      const openingAmount = (openingAmountMap.get(v.id) ?? 0) + (openingAdjMap.get(v.id) ?? 0);
+      const openingCancelled = openingCancelledMap.get(v.id) ?? 0;
+      const openingCharge = openingChargeMap.get(v.id) ?? 0;
+      const openingPaid = openingPaidMap.get(v.id) ?? 0;
+
+      const todayAmount = (todayAmountMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
+      const todayCancelled = todayCancelledMap.get(v.id) ?? 0;
+      const todayCharge = todayChargeMap.get(v.id) ?? 0;
+      const todayPaid = todayPaidMap.get(v.id) ?? 0;
+
+      const totalAmount = openingAmount + todayAmount;
+      const cancelledTotal = openingCancelled + todayCancelled;
+      const totalDeliveryCharge = openingCharge + todayCharge;
+      const totalPaid = openingPaid + todayPaid;
+      const adjustmentTotal = (openingAdjMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
       const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
+
       return {
         vendor: { id: v.id, name: v.name, active: v.active },
+        openingAmount,
+        openingCancelled,
+        todayAmount,
+        todayCancelled,
         totalAmount,
         adjustmentTotal,
         cancelledTotal,
