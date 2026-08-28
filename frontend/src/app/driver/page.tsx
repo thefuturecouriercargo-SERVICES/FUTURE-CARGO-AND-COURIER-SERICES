@@ -158,6 +158,10 @@ export default function DriverPortalPage() {
         <StatusModal
           order={statusOrder}
           onClose={() => setStatusOrder(null)}
+          onTransfer={() => {
+            setTransferOrder(statusOrder);
+            setStatusOrder(null);
+          }}
           onConfirm={async (status, payment, reason) => {
             await updateStatus(statusOrder, status, payment, reason);
             setStatusOrder(null);
@@ -267,10 +271,12 @@ function StatusModal({
   order,
   onClose,
   onConfirm,
+  onTransfer,
 }: {
   order: Order;
   onClose: () => void;
   onConfirm: (status: OrderStatus, payment: "CASH" | "BANK", reason?: string) => Promise<void>;
+  onTransfer: () => void;
 }) {
   const [selected, setSelected] = useState<OrderStatus | null>(null);
   const [payment, setPayment] = useState<"CASH" | "BANK">(order.payment);
@@ -305,8 +311,8 @@ function StatusModal({
           Total <b className="text-ink">{fmtNumber(order.total)} AED</b> · {order.brandName}
         </p>
         <p className="mb-4 text-xs text-ink-soft">
-          Currently <b>{order.status}</b>. Pick the new status below. To reassign this consignment to another
-          driver, use the Transfer button instead.
+          Currently <b>{order.status}</b>. Pick the new status below, or transfer this consignment to another
+          driver instead.
         </p>
         <div className="mb-3 grid grid-cols-2 gap-2">
           {STATUSES.filter((s) => s !== "TRANSFER").map((s) => (
@@ -320,6 +326,12 @@ function StatusModal({
               {s}
             </button>
           ))}
+          <button
+            onClick={onTransfer}
+            className="col-span-2 rounded border border-transferred px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide text-transferred hover:bg-transferred-bg"
+          >
+            Transfer to another driver
+          </button>
         </div>
 
         <div className="mb-3">
