@@ -398,7 +398,7 @@ router.post(
 router.get(
   "/pending-carryover",
   asyncHandler(async (req, res) => {
-    const { start } = dayRange();
+    const { start } = dayRange(req.query.date as string | undefined);
 
     // Look at ALL past orders (any status), not just Pending/Transfer ones, so we can
     // tell whether a consignment number was later re-resolved under a newer entry.
