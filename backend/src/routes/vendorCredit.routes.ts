@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
@@ -23,128 +24,191 @@ router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 // even if it was accidentally entered more than once. Before totalling anything, orders
 // are deduplicated by (vendorId, cnNo) — keeping only the most recent entry (up to the
 // selected date) for each consignment number.
+async function computeVendorCreditRows(selectedDate: Date) {
+  const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+
+  const allOrders = await prisma.order.findMany({
+    where: { date: { lte: selectedDate } },
+    select: { vendorId: true, cnNo: true, status: true, total: true, deliveryCharge: true, date: true, createdAt: true },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+  });
+
+  const seenKeys = new Set<string>();
+  const dedupedOrders = allOrders.filter((o) => {
+    const key = `${o.vendorId}::${o.cnNo}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+
+  const openingAmountMap = new Map<string, number>();
+  const openingCancelledMap = new Map<string, number>();
+  const openingChargeMap = new Map<string, number>();
+  const todayAmountMap = new Map<string, number>();
+  const todayCancelledMap = new Map<string, number>();
+  const todayChargeMap = new Map<string, number>();
+
+  for (const o of dedupedOrders) {
+    const isToday = o.date.getTime() === selectedDate.getTime();
+    const amountMap = isToday ? todayAmountMap : openingAmountMap;
+    const cancelledMap = isToday ? todayCancelledMap : openingCancelledMap;
+    const chargeMap = isToday ? todayChargeMap : openingChargeMap;
+
+    amountMap.set(o.vendorId, (amountMap.get(o.vendorId) ?? 0) + o.total);
+    if (o.status === "CANCELLED") {
+      cancelledMap.set(o.vendorId, (cancelledMap.get(o.vendorId) ?? 0) + o.total);
+    }
+    if (o.status === "DELIVERED") {
+      chargeMap.set(o.vendorId, (chargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+  }
+
+  function toMap(list: { vendorId: string | null; _sum: { amount: number | null } }[]) {
+    const m = new Map<string, number>();
+    for (const item of list) {
+      if (!item.vendorId) continue;
+      m.set(item.vendorId, (m.get(item.vendorId) ?? 0) + (item._sum.amount ?? 0));
+    }
+    return m;
+  }
+
+  const [
+    openingPayments,
+    todayPayments,
+    openingDriverPayments,
+    todayDriverPayments,
+    openingAdjustments,
+    todayAdjustments,
+  ] = await Promise.all([
+    prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+    prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+    prisma.purchase.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null }, date: { lt: selectedDate } },
+      _sum: { amount: true },
+    }),
+    prisma.purchase.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null }, date: selectedDate },
+      _sum: { amount: true },
+    }),
+    prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+    prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+  ]);
+
+  const openingPaidMap = toMap(openingPayments);
+  for (const p of openingDriverPayments) {
+    if (p.vendorId) openingPaidMap.set(p.vendorId, (openingPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+  }
+  const todayPaidMap = toMap(todayPayments);
+  for (const p of todayDriverPayments) {
+    if (p.vendorId) todayPaidMap.set(p.vendorId, (todayPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+  }
+  const openingAdjMap = toMap(openingAdjustments);
+  const todayAdjMap = toMap(todayAdjustments);
+
+  return vendors.map((v) => {
+    const openingAmount = (openingAmountMap.get(v.id) ?? 0) + (openingAdjMap.get(v.id) ?? 0);
+    const openingCancelled = openingCancelledMap.get(v.id) ?? 0;
+    const openingCharge = openingChargeMap.get(v.id) ?? 0;
+    const openingPaid = openingPaidMap.get(v.id) ?? 0;
+
+    const todayAmount = (todayAmountMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
+    const todayCancelled = todayCancelledMap.get(v.id) ?? 0;
+    const todayCharge = todayChargeMap.get(v.id) ?? 0;
+    const todayPaid = todayPaidMap.get(v.id) ?? 0;
+
+    const totalAmount = openingAmount + todayAmount;
+    const cancelledTotal = openingCancelled + todayCancelled;
+    const totalDeliveryCharge = openingCharge + todayCharge;
+    const totalPaid = openingPaid + todayPaid;
+    const adjustmentTotal = (openingAdjMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
+    const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
+
+    return {
+      vendor: { id: v.id, name: v.name, active: v.active },
+      openingAmount,
+      openingCancelled,
+      todayAmount,
+      todayCancelled,
+      totalAmount,
+      adjustmentTotal,
+      cancelledTotal,
+      totalDeliveryCharge,
+      totalPaid,
+      balance,
+    };
+  });
+}
+
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const { start: selectedDate } = dayRange(req.query.date as string | undefined);
-    const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+    res.json(await computeVendorCreditRows(selectedDate));
+  })
+);
 
-    const allOrders = await prisma.order.findMany({
-      where: { date: { lte: selectedDate } },
-      select: { vendorId: true, cnNo: true, status: true, total: true, deliveryCharge: true, date: true, createdAt: true },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-    });
+// Excel statement of the same ledger shown on screen, for a given date.
+router.get(
+  "/export",
+  asyncHandler(async (req, res) => {
+    const { start: selectedDate } = dayRange(req.query.date as string | undefined);
+    const rows = await computeVendorCreditRows(selectedDate);
 
-    // Dedupe: for a given vendor + CN No, keep only the most recent entry up to the
-    // selected date (orderBy above means the first one seen per key is the most recent).
-    const seenKeys = new Set<string>();
-    const dedupedOrders = allOrders.filter((o) => {
-      const key = `${o.vendorId}::${o.cnNo}`;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      return true;
-    });
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Future Courier Operations";
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet("Vendor Credit Statement");
+    sheet.columns = [
+      { header: "Vendor", key: "vendor", width: 20 },
+      { header: "Opening Amount", key: "openingAmount", width: 15 },
+      { header: "Opening Cancelled", key: "openingCancelled", width: 16 },
+      { header: "Today's Amount", key: "todayAmount", width: 14 },
+      { header: "Today's Cancelled", key: "todayCancelled", width: 15 },
+      { header: "Total Amount", key: "totalAmount", width: 14 },
+      { header: "Adjustment", key: "adjustmentTotal", width: 12 },
+      { header: "Cancelled (Total)", key: "cancelledTotal", width: 15 },
+      { header: "Delivery Charge", key: "totalDeliveryCharge", width: 15 },
+      { header: "Paid", key: "totalPaid", width: 12 },
+      { header: "Balance", key: "balance", width: 14 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    rows.forEach((r) => sheet.addRow({ vendor: r.vendor.name, ...r }));
 
-    const openingAmountMap = new Map<string, number>();
-    const openingCancelledMap = new Map<string, number>();
-    const openingChargeMap = new Map<string, number>();
-    const todayAmountMap = new Map<string, number>();
-    const todayCancelledMap = new Map<string, number>();
-    const todayChargeMap = new Map<string, number>();
-
-    for (const o of dedupedOrders) {
-      const isToday = o.date.getTime() === selectedDate.getTime();
-      const amountMap = isToday ? todayAmountMap : openingAmountMap;
-      const cancelledMap = isToday ? todayCancelledMap : openingCancelledMap;
-      const chargeMap = isToday ? todayChargeMap : openingChargeMap;
-
-      amountMap.set(o.vendorId, (amountMap.get(o.vendorId) ?? 0) + o.total);
-      if (o.status === "CANCELLED") {
-        cancelledMap.set(o.vendorId, (cancelledMap.get(o.vendorId) ?? 0) + o.total);
-      }
-      if (o.status === "DELIVERED") {
-        chargeMap.set(o.vendorId, (chargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
-      }
-    }
-
-    function toMap(list: { vendorId: string | null; _sum: { amount: number | null } }[]) {
-      const m = new Map<string, number>();
-      for (const item of list) {
-        if (!item.vendorId) continue;
-        m.set(item.vendorId, (m.get(item.vendorId) ?? 0) + (item._sum.amount ?? 0));
-      }
-      return m;
-    }
-
-    const [
-      openingPayments,
-      todayPayments,
-      openingDriverPayments,
-      todayDriverPayments,
-      openingAdjustments,
-      todayAdjustments,
-    ] = await Promise.all([
-      prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
-      prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
-      prisma.purchase.groupBy({
-        by: ["vendorId"],
-        where: { vendorId: { not: null }, date: { lt: selectedDate } },
-        _sum: { amount: true },
+    const totals = rows.reduce(
+      (acc, r) => ({
+        openingAmount: acc.openingAmount + r.openingAmount,
+        openingCancelled: acc.openingCancelled + r.openingCancelled,
+        todayAmount: acc.todayAmount + r.todayAmount,
+        todayCancelled: acc.todayCancelled + r.todayCancelled,
+        totalAmount: acc.totalAmount + r.totalAmount,
+        adjustmentTotal: acc.adjustmentTotal + r.adjustmentTotal,
+        cancelledTotal: acc.cancelledTotal + r.cancelledTotal,
+        totalDeliveryCharge: acc.totalDeliveryCharge + r.totalDeliveryCharge,
+        totalPaid: acc.totalPaid + r.totalPaid,
+        balance: acc.balance + r.balance,
       }),
-      prisma.purchase.groupBy({
-        by: ["vendorId"],
-        where: { vendorId: { not: null }, date: selectedDate },
-        _sum: { amount: true },
-      }),
-      prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
-      prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
-    ]);
+      {
+        openingAmount: 0,
+        openingCancelled: 0,
+        todayAmount: 0,
+        todayCancelled: 0,
+        totalAmount: 0,
+        adjustmentTotal: 0,
+        cancelledTotal: 0,
+        totalDeliveryCharge: 0,
+        totalPaid: 0,
+        balance: 0,
+      }
+    );
+    const totalRow = sheet.addRow({ vendor: "TOTAL", ...totals });
+    totalRow.font = { bold: true };
 
-    const openingPaidMap = toMap(openingPayments);
-    for (const p of openingDriverPayments) {
-      if (p.vendorId) openingPaidMap.set(p.vendorId, (openingPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
-    }
-    const todayPaidMap = toMap(todayPayments);
-    for (const p of todayDriverPayments) {
-      if (p.vendorId) todayPaidMap.set(p.vendorId, (todayPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
-    }
-    const openingAdjMap = toMap(openingAdjustments);
-    const todayAdjMap = toMap(todayAdjustments);
-
-    const rows = vendors.map((v) => {
-      const openingAmount = (openingAmountMap.get(v.id) ?? 0) + (openingAdjMap.get(v.id) ?? 0);
-      const openingCancelled = openingCancelledMap.get(v.id) ?? 0;
-      const openingCharge = openingChargeMap.get(v.id) ?? 0;
-      const openingPaid = openingPaidMap.get(v.id) ?? 0;
-
-      const todayAmount = (todayAmountMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
-      const todayCancelled = todayCancelledMap.get(v.id) ?? 0;
-      const todayCharge = todayChargeMap.get(v.id) ?? 0;
-      const todayPaid = todayPaidMap.get(v.id) ?? 0;
-
-      const totalAmount = openingAmount + todayAmount;
-      const cancelledTotal = openingCancelled + todayCancelled;
-      const totalDeliveryCharge = openingCharge + todayCharge;
-      const totalPaid = openingPaid + todayPaid;
-      const adjustmentTotal = (openingAdjMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
-      const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
-
-      return {
-        vendor: { id: v.id, name: v.name, active: v.active },
-        openingAmount,
-        openingCancelled,
-        todayAmount,
-        todayCancelled,
-        totalAmount,
-        adjustmentTotal,
-        cancelledTotal,
-        totalDeliveryCharge,
-        totalPaid,
-        balance,
-      };
-    });
-
-    res.json(rows);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="vendor-credit-statement.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   })
 );
 
