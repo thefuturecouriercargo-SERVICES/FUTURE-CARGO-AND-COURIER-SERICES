@@ -18,7 +18,7 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    apiFetch<Employee[]>("/employees").then(setEmployees);
+    apiFetch<Employee[]>("/employees", { query: { isAgent: "false" } }).then(setEmployees);
     apiFetch<Vendor[]>("/vendors").then(setVendors);
   }, []);
 
