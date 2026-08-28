@@ -71,7 +71,9 @@ router.get(
     }));
 
     const sumTotal = rows.reduce((s, r) => s + r.total, 0);
-    const sumDl = rows.reduce((s, r) => s + r.dl, 0);
+    // Only count delivery charge on Delivered orders — a Cancelled order's charge
+    // was never actually earned, and its total is already removed via sumCancelled below.
+    const sumDl = rows.filter((r) => r.status === "DELIVERED").reduce((s, r) => s + r.dl, 0);
     const sumCancelled = rows.filter((r) => r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
     const balance = sumTotal - sumCancelled - sumDl;
 
