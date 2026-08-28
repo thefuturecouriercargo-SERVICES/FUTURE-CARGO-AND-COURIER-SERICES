@@ -40,7 +40,7 @@ export default function ExpensesPage() {
   }, []);
 
   useEffect(() => {
-    apiFetch<Employee[]>("/employees").then(setEmployees);
+    apiFetch<Employee[]>("/employees", { query: { isAgent: "false" } }).then(setEmployees);
   }, []);
 
   useEffect(() => {
