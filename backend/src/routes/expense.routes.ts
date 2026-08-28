@@ -103,4 +103,44 @@ router.delete(
   })
 );
 
+const updateSchema = z.object({
+  date: z.string().optional(),
+  category: z.enum(CATEGORIES).optional(),
+  amount: z.number().int().min(0).optional(),
+  remarks: z.string().max(500).optional(),
+  employeeId: z.string().optional().nullable(),
+});
+
+// Update an existing expense entry.
+router.put(
+  "/:id",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.expenseEntry.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Expense entry not found");
+
+    const data = updateSchema.parse(req.body);
+    const entry = await prisma.expenseEntry.update({
+      where: { id: req.params.id },
+      data: {
+        ...(data.date ? { date: dayRange(data.date).start } : {}),
+        ...(data.category ? { category: data.category } : {}),
+        ...(data.amount !== undefined ? { amount: data.amount } : {}),
+        ...(data.remarks !== undefined ? { remarks: data.remarks } : {}),
+        ...(data.employeeId !== undefined ? { employeeId: data.employeeId || null } : {}),
+      },
+      include: { employee: { select: { id: true, name: true } } },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "EXPENSE_UPDATE",
+      entity: "ExpenseEntry",
+      entityId: entry.id,
+    });
+    emitGlobal("expense:changed", { entry });
+    res.json(entry);
+  })
+);
+
 export default router;
