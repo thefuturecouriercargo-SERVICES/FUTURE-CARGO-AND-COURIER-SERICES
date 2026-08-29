@@ -5,6 +5,56 @@ import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, isAgingPending } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
+
+// Minimal typing for the Web Speech API (not in default TS lib).
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+interface SpeechRecognitionEventLike {
+  results: { [key: number]: { [key: number]: SpeechRecognitionResultLike } };
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function useVoiceSearch(onResult: (digits: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  function start() {
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Recognition = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSupported(false);
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const digits = transcript.replace(/\D/g, "");
+      if (digits) onResult(digits);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  }
+
+  return { listening, supported, start };
+}
 import { Employee, Order, OrderStatus, PAYMENTS, EMIRATES, STATUSES, Vendor } from "@/types";
 
 const emptyForm = {
@@ -29,6 +79,7 @@ export default function OrdersPage() {
 const [saving, setSaving] = useState(false);
   const [lockFields, setLockFields] = useState(false);
   const [search, setSearch] = useState("");
+  const voiceSearch = useVoiceSearch((digits) => setSearch(digits));
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
 const [paymentFilter, setPaymentFilter] = useState<"" | "CASH" | "BANK">("");
 const [emirateFilter, setEmirateFilter] = useState("");
@@ -44,6 +95,12 @@ const [bulkSaving, setBulkSaving] = useState(false);
 const cnNoRef = useRef<HTMLInputElement>(null);
 const vendorRef = useRef<HTMLSelectElement>(null);
 const totalRef = useRef<HTMLInputElement>(null);
+const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: Order[] }[]>([]);
+
+  const loadDuplicates = useCallback(async () => {
+    const res = await apiFetch<{ groups: { cnNo: number; orders: Order[] }[] }>("/orders/duplicates");
+    setDuplicateGroups(res.groups);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,10 +115,11 @@ const totalRef = useRef<HTMLInputElement>(null);
         setEmployees(employeesRes);
         const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");
         setPendingCarryover(carryoverRes.orders);
+        await loadDuplicates();
       } finally {
         setLoading(false);
       }
-  }, [date]);
+  }, [date, loadDuplicates]);
 
   useEffect(() => {
     load();
@@ -191,6 +249,13 @@ await load();
   async function deleteOrder(id: string) {
     if (!confirm("Delete this consignment? This cannot be undone.")) return;
     await apiFetch(`/orders/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  async function deleteDuplicate(id: string) {
+    if (!confirm("Delete this duplicate consignment entry? This cannot be undone.")) return;
+    await apiFetch(`/orders/${id}`, { method: "DELETE" });
+    await loadDuplicates();
     await load();
   }
 
@@ -349,6 +414,52 @@ required
         </form>
       </div>
 
+      {duplicateGroups.length > 0 && (
+        <div className="mb-6 border border-cancelled bg-cancelled-bg p-5">
+          <h2 className="mb-1 font-display text-[17px] font-semibold text-cancelled">
+            Duplicate CN No. Found ({duplicateGroups.length})
+          </h2>
+          <p className="mb-3 text-sm text-cancelled">
+            These consignment numbers exist more than once — likely leftover from before duplicates were blocked.
+            Review each and delete the wrong entry.
+          </p>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>CN No.</th>
+                  <th>Date</th>
+                  <th>Vendor</th>
+                  <th className="text-right">Total</th>
+                  <th>Employee</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {duplicateGroups.map((g) =>
+                  g.orders.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-mono font-semibold">{o.cnNo}</td>
+                      <td>{o.date.slice(0, 10)}</td>
+                      <td>{o.brandName}</td>
+                      <td className="text-right font-mono">{fmtNumber(o.total)}</td>
+                      <td>{o.employee.name}</td>
+                      <td>{o.status}</td>
+                      <td>
+                        <button onClick={() => deleteDuplicate(o.id)} className="text-xs text-cancelled hover:underline">
+                          Delete this one
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
           <div className="border border-line bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-[17px] font-semibold text-navy">
@@ -365,6 +476,18 @@ required
     onChange={(e) => setSearch(e.target.value)}
     className="rounded border border-line px-3 py-1.5 text-sm"
   />
+  {voiceSearch.supported && (
+    <button
+      onClick={voiceSearch.start}
+      title="Search by voice"
+      type="button"
+      className={`rounded border px-2.5 py-1.5 text-sm ${
+        voiceSearch.listening ? "border-cancelled bg-cancelled text-white animate-pulse" : "border-line bg-white text-ink-soft hover:border-brass"
+      }`}
+    >
+      🎤
+    </button>
+  )}
   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")} className="rounded border border-line px-3 py-1.5 text-sm">
     <option value="">All statuses</option>
     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
