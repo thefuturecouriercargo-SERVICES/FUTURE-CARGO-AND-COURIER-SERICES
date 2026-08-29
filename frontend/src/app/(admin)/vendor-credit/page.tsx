@@ -182,7 +182,150 @@ export default function VendorCreditPage() {
         </p>
 
         <div className="border border-line bg-white p-5">
-          <div className="table-scroll">
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 md:hidden">
+            {rows.map((r) => (
+              <div key={r.vendor.id} className={`rounded border border-line p-4 ${r.vendor.active ? "" : "opacity-50"}`}>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">{r.vendor.name}</span>
+                  <span className={`font-mono text-base font-bold ${r.balance > 0 ? "text-cancelled" : "text-delivered"}`}>
+                    {fmtNumber(r.balance)}
+                  </span>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between"><span className="text-ink-soft">Opening Amount</span><span>{fmtNumber(r.openingAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Opening Cancelled</span><span>{fmtNumber(r.openingCancelled)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Today&apos;s Amount</span><span>{fmtNumber(r.todayAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Today&apos;s Cancelled</span><span>{fmtNumber(r.todayCancelled)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Total Amount</span><span className="font-semibold">{fmtNumber(r.totalAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Cancelled (Total)</span><span>{fmtNumber(r.cancelledTotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Delivery Charge</span><span>{fmtNumber(r.totalDeliveryCharge)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Paid</span><span>{fmtNumber(r.totalPaid)}</span></div>
+                </div>
+
+                <div className="mb-3 rounded border border-line bg-paper-2 p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="font-mono text-[10px] uppercase text-ink-soft">Adjustment</span>
+                    <span className={`font-mono text-xs ${r.adjustmentTotal !== 0 ? (r.adjustmentTotal > 0 ? "text-delivered" : "text-cancelled") : "text-ink-soft"}`}>
+                      {r.adjustmentTotal > 0 ? "+" : ""}
+                      {fmtNumber(r.adjustmentTotal)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      placeholder="+/-"
+                      value={adjustInput[r.vendor.id] ?? ""}
+                      onChange={(e) => setAdjustInput((prev) => ({ ...prev, [r.vendor.id]: e.target.value }))}
+                      onKeyDown={(e) => e.key === "Enter" && addAdjustment(r.vendor.id)}
+                      className="w-full rounded border border-line px-2 py-1 text-xs"
+                    />
+                    <button
+                      onClick={() => addAdjustment(r.vendor.id)}
+                      disabled={savingAdjust === r.vendor.id}
+                      className="shrink-0 rounded bg-navy px-3 py-1 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => toggleExpand(r.vendor.id)}
+                  className="w-full rounded border border-line py-2 text-xs font-semibold text-brass hover:border-brass"
+                >
+                  {expandedVendorId === r.vendor.id ? "Close" : "Add / View Payments"}
+                </button>
+
+                {expandedVendorId === r.vendor.id && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <form onSubmit={(e) => addPayment(r.vendor.id, e)} className="mb-4 space-y-2.5">
+                      <div>
+                        <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
+                        <input
+                          type="date"
+                          required
+                          value={paymentForm.date}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                          className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Amount Paid (AED)</label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          value={paymentForm.amount}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                          className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Note (optional)</label>
+                        <input
+                          value={paymentForm.note}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
+                          className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="w-full rounded bg-navy py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+                      >
+                        {saving ? "Saving…" : "Add Payment"}
+                      </button>
+                      {error && <p className="text-xs text-cancelled">{error}</p>}
+                    </form>
+
+                    <h3 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Payment history</h3>
+                    {loadingPayments ? (
+                      <p className="text-sm text-ink-soft">Loading…</p>
+                    ) : payments.length === 0 ? (
+                      <p className="text-sm text-ink-soft">No payments logged yet.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {payments.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between rounded border border-line px-2.5 py-2 text-xs">
+                            <span>
+                              {p.date.slice(0, 10)}
+                              {p.note && <span className="text-ink-soft"> — {p.note}</span>}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <span className="font-mono">{fmtNumber(p.amount)}</span>
+                              <button onClick={() => removePayment(r.vendor.id, p.id)} className="text-cancelled hover:underline">
+                                Remove
+                              </button>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {rows.length > 0 && (
+              <div className="rounded border-2 border-navy p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
+                  <span className={`font-mono text-base font-bold ${totals.balance > 0 ? "text-cancelled" : "text-delivered"}`}>
+                    {fmtNumber(totals.balance)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between"><span className="text-ink-soft">Total Amount</span><span>{fmtNumber(totals.totalAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Cancelled</span><span>{fmtNumber(totals.cancelledTotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Delivery Charge</span><span>{fmtNumber(totals.totalDeliveryCharge)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Paid</span><span>{fmtNumber(totals.totalPaid)}</span></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: full table */}
+          <div className="table-scroll hidden md:block">
           <table className="data-table">
             <thead>
               <tr>
@@ -200,6 +343,7 @@ export default function VendorCreditPage() {
                 <th>Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {rows.map((r) => (
                 <Fragment key={r.vendor.id}>
