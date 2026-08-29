@@ -265,7 +265,7 @@ const adjustmentSchema = z.object({
 // Adjustment amount can be positive (adds to Total Amount) or negative (subtracts).
 router.post(
   "/:vendorId/adjustments",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const vendor = await prisma.vendor.findUnique({ where: { id: req.params.vendorId } });
     if (!vendor) throw new ApiError(404, "Vendor not found");
@@ -301,7 +301,7 @@ router.get(
 
 router.delete(
   "/adjustments/:id",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const existing = await prisma.vendorAdjustment.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Adjustment entry not found");
@@ -320,7 +320,7 @@ router.delete(
 
 router.post(
   "/:vendorId/payments",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const vendor = await prisma.vendor.findUnique({ where: { id: req.params.vendorId } });
     if (!vendor) throw new ApiError(404, "Vendor not found");
@@ -345,7 +345,7 @@ router.post(
 
 router.delete(
   "/payments/:id",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const existing = await prisma.vendorPayment.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Payment entry not found");
