@@ -4,6 +4,56 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
 import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
+
+// Minimal typing for the Web Speech API (not in default TS lib).
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+interface SpeechRecognitionEventLike {
+  results: { [key: number]: { [key: number]: SpeechRecognitionResultLike } };
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function useVoiceSearch(onResult: (digits: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  function start() {
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Recognition = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSupported(false);
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const digits = transcript.replace(/\D/g, "");
+      if (digits) onResult(digits);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  }
+
+  return { listening, supported, start };
+}
 import KpiCard from "@/components/KpiCard";
 import StatusStamp from "@/components/StatusStamp";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
@@ -26,6 +76,7 @@ export default function DailyDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
+  const voiceSearch = useVoiceSearch((digits) => setSearch(digits));
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
 const [useRange, setUseRange] = useState(false);
 const [fromDate, setFromDate] = useState(todayStr());
@@ -568,6 +619,18 @@ return (
                 onChange={(e) => setSearch(e.target.value)}
                 className="rounded border border-line px-3 py-1.5 text-sm"
               />
+              {voiceSearch.supported && (
+                <button
+                  onClick={voiceSearch.start}
+                  title="Search by voice"
+                  type="button"
+                  className={`rounded border px-2.5 py-1.5 text-sm ${
+                    voiceSearch.listening ? "border-cancelled bg-cancelled text-white animate-pulse" : "border-line bg-white text-ink-soft hover:border-brass"
+                  }`}
+                >
+                  🎤
+                </button>
+              )}
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")}
