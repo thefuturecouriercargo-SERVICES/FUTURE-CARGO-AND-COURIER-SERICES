@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, todayStr, isAgingPending } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
-import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor } from "@/types";
+import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
+import StatusDoughnut from "@/components/charts/StatusDoughnut";
 
 interface Summary {
   assigned: number;
@@ -136,6 +137,24 @@ export default function DriverPortalPage() {
         </div>
       )}
 
+      {summary && summary.assigned > 0 && (
+        <div className="mb-7 border border-line bg-white p-4">
+          <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Today&apos;s Breakdown</h2>
+          <div className="mx-auto max-w-xs">
+            <StatusDoughnut
+              summary={
+                {
+                  delivered: summary.delivered,
+                  pending: orders.filter((o) => o.status === "PENDING").length,
+                  transferred: orders.filter((o) => o.status === "TRANSFER").length,
+                  cancelled: summary.cancelled,
+                } as unknown as SharedSummary
+              }
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
@@ -188,6 +207,24 @@ export default function DriverPortalPage() {
                 {o.remarks && (
                   <div className="mt-1 text-xs text-cancelled">
                     Reason: {o.remarks}
+                  </div>
+                )}
+                {o.vendor.phone && (
+                  <div className="mt-2 flex gap-2">
+                    <a
+                      href={`tel:${o.vendor.phone}`}
+                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
+                    >
+                      📞 Call Vendor
+                    </a>
+                    <a
+                      href={`https://wa.me/${o.vendor.phone.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
+                    >
+                      💬 WhatsApp
+                    </a>
                   </div>
                 )}
               </div>
