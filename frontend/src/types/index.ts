@@ -16,6 +16,7 @@ export interface Vendor {
   name: string;
   deliveryCharge: number;
   active: boolean;
+  phone?: string | null;
   username?: string | null;
 }
 
