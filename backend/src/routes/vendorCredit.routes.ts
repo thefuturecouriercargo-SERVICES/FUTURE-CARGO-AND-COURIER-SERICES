@@ -24,6 +24,14 @@ router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 // even if it was accidentally entered more than once. Before totalling anything, orders
 // are deduplicated by (vendorId, cnNo) — keeping only the most recent entry (up to the
 // selected date) for each consignment number.
+// Converts a timestamp to its Dubai calendar date (midnight UTC of that day), so we
+// can compare "was this order genuinely created today" regardless of time-of-day.
+function toDubaiDateOnly(d: Date): number {
+  const dubaiOffsetMs = 4 * 60 * 60 * 1000;
+  const shifted = new Date(d.getTime() + dubaiOffsetMs);
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+}
+
 async function computeVendorCreditRows(selectedDate: Date) {
   const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
 
@@ -49,7 +57,11 @@ async function computeVendorCreditRows(selectedDate: Date) {
   const todayChargeMap = new Map<string, number>();
 
   for (const o of dedupedOrders) {
-    const isToday = o.date.getTime() === selectedDate.getTime();
+    // "Today" means genuinely entered today — NOT just resolved today. An order
+    // created days ago that only just got Delivered/Cancelled today has its `date`
+    // field bumped forward to today for reporting purposes, but that's backlog being
+    // cleared, not new business — so it belongs in Opening, not Today.
+    const isToday = toDubaiDateOnly(o.createdAt) === selectedDate.getTime();
     const amountMap = isToday ? todayAmountMap : openingAmountMap;
     const cancelledMap = isToday ? todayCancelledMap : openingCancelledMap;
     const chargeMap = isToday ? todayChargeMap : openingChargeMap;
