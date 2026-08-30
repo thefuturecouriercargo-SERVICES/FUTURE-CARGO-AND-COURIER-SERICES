@@ -7,6 +7,13 @@ import { parseDateParam, monthRange, formatDate, dayRange } from "../utils/dates
 const router = Router();
 router.use(authenticateVendor);
 
+// Converts a timestamp to its Dubai calendar date (midnight UTC of that day).
+function toDubaiDateOnly(d: Date): number {
+  const dubaiOffsetMs = 4 * 60 * 60 * 1000;
+  const shifted = new Date(d.getTime() + dubaiOffsetMs);
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+}
+
 router.get(
   "/orders",
   asyncHandler(async (req, res) => {
@@ -111,7 +118,9 @@ router.get(
     let todayCharge = 0;
 
     for (const o of deduped) {
-      const isToday = o.date.getTime() === selectedDate.getTime();
+      // Same rule as the admin Vendor Credit page: "today" means genuinely entered
+      // today, not just resolved today (which would bump `date` forward).
+      const isToday = toDubaiDateOnly(o.createdAt) === selectedDate.getTime();
       if (isToday) {
         todayAmount += o.total;
         if (o.status === "CANCELLED") todayCancelled += o.total;
