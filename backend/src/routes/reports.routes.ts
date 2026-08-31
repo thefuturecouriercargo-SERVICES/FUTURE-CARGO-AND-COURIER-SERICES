@@ -39,17 +39,19 @@ router.get(
     const q = req.query as Record<string, unknown>;
     const where = buildWhere(q);
 
-    const orders = await prisma.order.findMany({
+    const rangeOrders = await prisma.order.findMany({
       where,
       include: { vendor: true, employee: { select: { name: true } } },
       orderBy: [{ date: "asc" }, { slNo: "asc" }],
       take: 50000,
     });
 
-    // Carry forward any still-unresolved Pending/Transfer orders that were entered
-    // before the "from" date but haven't been Delivered/Cancelled yet — otherwise an
-    // old consignment (e.g. entered 3 days ago, still Pending today) silently drops
-    // out of a report scoped to a specific date/range, even though it's still active.
+    // Carry forward any still-unresolved Pending/Transfer orders entered before the
+    // "from" date but not yet Delivered/Cancelled — kept as a clearly separate section
+    // below, so it's obvious which rows are the requested date range vs. older backlog
+    // still open. (Never silently blended together — that's what caused a report for
+    // a single day to look dominated by much older dates.)
+    let carriedOrders: typeof rangeOrders = [];
     if (q.from) {
       const fromDate = parseDateParam(q.from as string);
       const carryWhere: Record<string, unknown> = {
@@ -66,21 +68,24 @@ router.get(
       const skipCarryover = statusFilter && statusFilter !== "PENDING" && statusFilter !== "TRANSFER";
 
       if (!skipCarryover) {
-        const carriedOrders = await prisma.order.findMany({
+        const raw = await prisma.order.findMany({
           where: carryWhere,
           include: { vendor: true, employee: { select: { name: true } } },
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         });
         // Dedupe by CN No., keeping only the most recent entry per consignment.
         const seenCn = new Set<number>();
-        const deduped = carriedOrders.filter((o) => {
-          if (seenCn.has(o.cnNo)) return false;
-          seenCn.add(o.cnNo);
-          return true;
-        });
-        orders.unshift(...deduped.sort((a, b) => a.date.getTime() - b.date.getTime()));
+        carriedOrders = raw
+          .filter((o) => {
+            if (seenCn.has(o.cnNo)) return false;
+            seenCn.add(o.cnNo);
+            return true;
+          })
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
       }
     }
+
+    const orders = [...rangeOrders, ...carriedOrders];
 
     const columns = [
       { header: "Date", key: "date", width: 12 },
@@ -151,12 +156,24 @@ router.get(
       }
 
       drawRow(columns.map((c) => c.header), { header: true });
-      rows.forEach((r, i) =>
-        drawRow(
-          columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number),
-          { zebra: i % 2 === 1 }
-        )
-      );
+      rangeOrders.forEach((o, i) => {
+        const r = rows[i];
+        drawRow(columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number), { zebra: i % 2 === 1 });
+      });
+
+      if (carriedOrders.length > 0) {
+        y += 4;
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(PDF_COLORS.cancelled).text(
+          `Carried Forward — Still Pending From Before ${q.from} (${carriedOrders.length})`,
+          startX,
+          y
+        );
+        y += 18;
+        carriedOrders.forEach((o, i) => {
+          const r = rows[rangeOrders.length + i];
+          drawRow(columns.map((c) => (r as Record<string, unknown>)[c.key] as string | number), { zebra: i % 2 === 1 });
+        });
+      }
 
       // Totals summary at the end of the report.
       y += 6;
@@ -176,17 +193,23 @@ router.get(
     const sheet = workbook.addWorksheet("Consignment Report");
     sheet.columns = columns;
     sheet.getRow(1).font = { bold: true };
-    rows.forEach((r) => sheet.addRow(r));
+    rows.slice(0, rangeOrders.length).forEach((r) => sheet.addRow(r));
+
+    if (carriedOrders.length > 0) {
+      sheet.addRow({});
+      const carryHeaderRow = sheet.addRow({ date: `CARRIED FORWARD — STILL PENDING FROM BEFORE ${q.from} (${carriedOrders.length})` });
+      carryHeaderRow.font = { bold: true, color: { argb: "FFAC3529" } };
+      rows.slice(rangeOrders.length).forEach((r) => sheet.addRow(r));
+    }
 
     // Totals summary at the end of the report.
+    sheet.addRow({});
     const totalRow = sheet.addRow({ brand: "TOTAL", total: sumTotal, dl: sumDl });
     totalRow.font = { bold: true };
     const cancelledRow = sheet.addRow({ brand: "CANCELLED", total: sumCancelled });
     cancelledRow.font = { bold: true };
     const balanceRow = sheet.addRow({ brand: "BALANCE (Total - Cancelled - DL Charge)", total: balance });
     balanceRow.font = { bold: true };
-
-    sheet.autoFilter = { from: "A1", to: `J${rows.length + 1}` };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", 'attachment; filename="consignment-report.xlsx"');
