@@ -17,6 +17,9 @@ interface VendorCreditRow {
   totalDeliveryCharge: number;
   totalPaid: number;
   balance: number;
+  pendingTotal: number;
+  pendingDeliveryCharge: number;
+  pendingPayable: number;
 }
 
 interface VendorPayment {
@@ -131,6 +134,9 @@ export default function VendorCreditPage() {
       totalDeliveryCharge: acc.totalDeliveryCharge + r.totalDeliveryCharge,
       totalPaid: acc.totalPaid + r.totalPaid,
       balance: acc.balance + r.balance,
+      pendingTotal: acc.pendingTotal + r.pendingTotal,
+      pendingDeliveryCharge: acc.pendingDeliveryCharge + r.pendingDeliveryCharge,
+      pendingPayable: acc.pendingPayable + r.pendingPayable,
     }),
     {
       openingAmount: 0,
@@ -143,6 +149,9 @@ export default function VendorCreditPage() {
       totalDeliveryCharge: 0,
       totalPaid: 0,
       balance: 0,
+      pendingTotal: 0,
+      pendingDeliveryCharge: 0,
+      pendingPayable: 0,
     }
   );
 
@@ -508,6 +517,79 @@ export default function VendorCreditPage() {
             )}
           </table>
           </div>
+        </div>
+
+        <div className="mt-6 border border-line bg-white p-5">
+          <h2 className="mb-1 font-display text-[17px] font-semibold text-navy">Pending Consignments Summary</h2>
+          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+            View only — what&apos;s sitting in currently Pending orders per vendor, and what would be payable to
+            them (Pending Total minus Delivery Charge) once delivered. Not part of the Balance above.
+          </p>
+
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2.5 md:hidden">
+            {rows.map((r) => (
+              <div key={r.vendor.id} className={`rounded border border-line p-3.5 ${r.vendor.active ? "" : "opacity-50"}`}>
+                <div className="mb-2 font-display text-sm font-semibold text-navy">{r.vendor.name}</div>
+                <div className="grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Pending Total</div>
+                    <div className="font-semibold">{fmtNumber(r.pendingTotal)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Delivery Charge</div>
+                    <div className="font-semibold">{fmtNumber(r.pendingDeliveryCharge)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Payable</div>
+                    <div className="font-semibold text-brass">{fmtNumber(r.pendingPayable)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rows.length > 0 && (
+              <div className="rounded border-2 border-navy p-3.5">
+                <div className="mb-2 font-display text-sm font-semibold text-navy">TOTAL</div>
+                <div className="grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                  <div className="font-semibold">{fmtNumber(totals.pendingTotal)}</div>
+                  <div className="font-semibold">{fmtNumber(totals.pendingDeliveryCharge)}</div>
+                  <div className="font-semibold text-brass">{fmtNumber(totals.pendingPayable)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="data-table hidden md:table">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th className="text-right">Pending Total</th>
+                <th className="text-right">Delivery Charge</th>
+                <th className="text-right">Payable Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.vendor.id} className={r.vendor.active ? "" : "opacity-50"}>
+                  <td>{r.vendor.name}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.pendingTotal)}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.pendingDeliveryCharge)}</td>
+                  <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.pendingPayable)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr className="font-semibold">
+                  <td>TOTAL</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.pendingTotal)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.pendingDeliveryCharge)}</td>
+                  <td className="text-right font-mono text-brass">{fmtNumber(totals.pendingPayable)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
       </div>
     </AuthGate>
