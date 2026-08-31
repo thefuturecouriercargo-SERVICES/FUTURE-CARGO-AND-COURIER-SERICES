@@ -55,6 +55,7 @@ body {
 .table-scroll {
   max-height: 480px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 table.data-table {
@@ -81,5 +82,22 @@ table.data-table td {
   border-bottom: 1px solid #efebdf;
 }
 table.data-table tbody tr:hover {
+  background: #fbfaf5;
+}
+
+/* Keep the first column (usually a name) visible while scrolling a wide table
+   sideways — same pattern GitHub/Sheets use for "frozen" leftmost columns. */
+table.data-table th:first-child,
+table.data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 1px 0 0 #efebdf;
+}
+table.data-table th:first-child {
+  z-index: 3;
+}
+table.data-table tbody tr:hover td:first-child {
   background: #fbfaf5;
 }
