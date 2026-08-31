@@ -258,7 +258,38 @@ export default function AgentsPage() {
           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
             Agents ({agents.filter((a) => a.active).length} active)
           </h2>
-          <table className="data-table">
+
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2.5 md:hidden">
+            {agents.map((a) => (
+              <div key={a.id} className={`rounded border border-line p-3.5 ${a.active ? "" : "opacity-50"}`}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">{a.name}</span>
+                  <span className={`stamp ${a.active ? "delivered" : "cancelled"}`}>{a.active ? "Active" : "Inactive"}</span>
+                </div>
+                <div className="mb-2.5 font-mono text-xs text-ink-soft">
+                  {a.username} {(a.email || a.phone) && `· ${a.email || a.phone}`}
+                </div>
+                {isSuperAdmin && (
+                  <div className="flex flex-wrap gap-3 border-t border-line pt-2">
+                    <button onClick={() => startEdit(a)} className="text-xs text-brass hover:underline">
+                      Edit
+                    </button>
+                    <button onClick={() => toggleActive(a)} className="text-xs text-cancelled hover:underline">
+                      {a.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                    <button onClick={() => removeAgent(a)} className="text-xs text-cancelled hover:underline">
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {agents.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agents added yet.</p>}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -319,7 +350,30 @@ export default function AgentsPage() {
               </button>
             </div>
           </div>
-          <table className="data-table">
+
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2.5 md:hidden">
+            {performance.map((r) => (
+              <div key={r.employee.id} className="rounded border border-line p-3.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
+                  <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(r.cashBalance ?? 0)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between"><span className="text-ink-soft">Delivered</span><span>{r.delivered}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Pending</span><span>{r.pending}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Sales</span><span>{fmtNumber(r.totalSales)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">DL Charge</span><span>{fmtNumber(r.totalDeliveryCharge)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Cash Collected</span><span>{fmtNumber(r.cashCollected ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Expenses</span><span>{fmtNumber(r.totalExpenses ?? 0)}</span></div>
+                </div>
+              </div>
+            ))}
+            {performance.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agent activity on this date.</p>}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Agent</th>
@@ -364,39 +418,60 @@ export default function AgentsPage() {
           {loadingMonthly ? (
             <p className="text-sm text-ink-soft">Loading…</p>
           ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th className="text-right">Delivered</th>
-                  <th className="text-right">Pending</th>
-                  <th className="text-right">Transfer</th>
-                  <th className="text-right">Cancelled</th>
-                  <th className="text-right">Sales</th>
-                  <th className="text-right">DL Charge</th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2.5 md:hidden">
                 {monthlyRows.map((r) => (
-                  <tr key={r.employee.id}>
-                    <td>{r.employee.name}</td>
-                    <td className="text-right font-mono">{r.delivered}</td>
-                    <td className="text-right font-mono">{r.pending}</td>
-                    <td className="text-right font-mono">{r.transferred}</td>
-                    <td className="text-right font-mono">{r.cancelled}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
-                  </tr>
+                  <div key={r.employee.id} className="rounded border border-line p-3.5">
+                    <div className="mb-2 font-display text-[15px] font-semibold text-navy">{r.employee.name}</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                      <div className="flex justify-between"><span className="text-ink-soft">Delivered</span><span>{r.delivered}</span></div>
+                      <div className="flex justify-between"><span className="text-ink-soft">Pending</span><span>{r.pending}</span></div>
+                      <div className="flex justify-between"><span className="text-ink-soft">Transfer</span><span>{r.transferred}</span></div>
+                      <div className="flex justify-between"><span className="text-ink-soft">Cancelled</span><span>{r.cancelled}</span></div>
+                      <div className="flex justify-between"><span className="text-ink-soft">Sales</span><span>{fmtNumber(r.totalSales)}</span></div>
+                      <div className="flex justify-between"><span className="text-ink-soft">DL Charge</span><span>{fmtNumber(r.totalDeliveryCharge)}</span></div>
+                    </div>
+                  </div>
                 ))}
-                {monthlyRows.length === 0 && (
+                {monthlyRows.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agent activity this month.</p>}
+              </div>
+
+              {/* Desktop: table */}
+              <table className="data-table hidden md:table">
+                <thead>
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-ink-soft">
-                      No agent activity this month.
-                    </td>
+                    <th>Agent</th>
+                    <th className="text-right">Delivered</th>
+                    <th className="text-right">Pending</th>
+                    <th className="text-right">Transfer</th>
+                    <th className="text-right">Cancelled</th>
+                    <th className="text-right">Sales</th>
+                    <th className="text-right">DL Charge</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {monthlyRows.map((r) => (
+                    <tr key={r.employee.id}>
+                      <td>{r.employee.name}</td>
+                      <td className="text-right font-mono">{r.delivered}</td>
+                      <td className="text-right font-mono">{r.pending}</td>
+                      <td className="text-right font-mono">{r.transferred}</td>
+                      <td className="text-right font-mono">{r.cancelled}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
+                    </tr>
+                  ))}
+                  {monthlyRows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-ink-soft">
+                        No agent activity this month.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
 
@@ -414,7 +489,107 @@ export default function AgentsPage() {
               Download Excel
             </a>
           </div>
-          <table className="data-table">
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2.5 md:hidden">
+            {creditRows.map((r) => (
+              <div key={r.agent.id} className={`rounded border border-line p-3.5 ${r.agent.active ? "" : "opacity-50"}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-display text-[15px] font-semibold text-navy">{r.agent.name}</span>
+                  <span className={`font-mono text-sm font-bold ${r.balance > 0 ? "text-cancelled" : "text-delivered"}`}>
+                    {fmtNumber(r.balance)}
+                  </span>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between"><span className="text-ink-soft">Total Amount</span><span>{fmtNumber(r.totalAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Cancelled</span><span>{fmtNumber(r.cancelledTotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">DL Charge (Kept)</span><span>{fmtNumber(r.totalDeliveryCharge)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-soft">Paid Back</span><span>{fmtNumber(r.totalPaid)}</span></div>
+                </div>
+                <button
+                  onClick={() => toggleExpand(r.agent.id)}
+                  className="w-full rounded border border-line py-2 text-xs font-semibold text-brass hover:border-brass"
+                >
+                  {expandedAgentId === r.agent.id ? "Close" : "Add / View Payments"}
+                </button>
+
+                {expandedAgentId === r.agent.id && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    {isSuperAdmin && (
+                      <form onSubmit={(e) => addPayment(r.agent.id, e)} className="mb-4 space-y-2.5">
+                        <div>
+                          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
+                          <input
+                            type="date"
+                            required
+                            value={payForm.date}
+                            onChange={(e) => setPayForm({ ...payForm, date: e.target.value })}
+                            className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Amount Paid Back (AED)</label>
+                          <input
+                            type="number"
+                            required
+                            min={1}
+                            value={payForm.amount}
+                            onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                            className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Note (optional)</label>
+                          <input
+                            value={payForm.note}
+                            onChange={(e) => setPayForm({ ...payForm, note: e.target.value })}
+                            className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={paySaving}
+                          className="w-full rounded bg-navy py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+                        >
+                          {paySaving ? "Saving…" : "Add Payment"}
+                        </button>
+                        {payError && <p className="text-xs text-cancelled">{payError}</p>}
+                      </form>
+                    )}
+
+                    <h3 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Payment history</h3>
+                    {loadingPayments ? (
+                      <p className="text-sm text-ink-soft">Loading…</p>
+                    ) : payments.length === 0 ? (
+                      <p className="text-sm text-ink-soft">No payments logged yet.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {payments.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between rounded border border-line px-2.5 py-2 text-xs">
+                            <span>
+                              {p.date.slice(0, 10)}
+                              {p.note && <span className="text-ink-soft"> — {p.note}</span>}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <span className="font-mono">{fmtNumber(p.amount)}</span>
+                              {isSuperAdmin && (
+                                <button onClick={() => removePayment(r.agent.id, p.id)} className="text-cancelled hover:underline">
+                                  Remove
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {creditRows.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agents added yet.</p>}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Agent</th>
