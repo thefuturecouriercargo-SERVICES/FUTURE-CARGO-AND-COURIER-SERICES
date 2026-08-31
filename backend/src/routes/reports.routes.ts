@@ -36,7 +36,8 @@ router.get(
   "/export",
   asyncHandler(async (req, res) => {
     const format = (req.query.format as string) ?? "excel";
-    const where = buildWhere(req.query as Record<string, unknown>);
+    const q = req.query as Record<string, unknown>;
+    const where = buildWhere(q);
 
     const orders = await prisma.order.findMany({
       where,
@@ -44,6 +45,42 @@ router.get(
       orderBy: [{ date: "asc" }, { slNo: "asc" }],
       take: 50000,
     });
+
+    // Carry forward any still-unresolved Pending/Transfer orders that were entered
+    // before the "from" date but haven't been Delivered/Cancelled yet — otherwise an
+    // old consignment (e.g. entered 3 days ago, still Pending today) silently drops
+    // out of a report scoped to a specific date/range, even though it's still active.
+    if (q.from) {
+      const fromDate = parseDateParam(q.from as string);
+      const carryWhere: Record<string, unknown> = {
+        date: { lt: fromDate },
+        status: { in: ["PENDING", "TRANSFER"] },
+      };
+      if (q.employeeId) carryWhere.employeeId = q.employeeId as string;
+      if (q.vendorId) carryWhere.vendorId = q.vendorId as string;
+      if (q.payment) carryWhere.payment = q.payment as never;
+      if (q.emirate) carryWhere.emirate = (q.emirate as string).toUpperCase();
+      // A status filter narrower than Pending/Transfer means the user explicitly
+      // wants only that status, so skip carryover in that case (nothing would match).
+      const statusFilter = q.status as string | undefined;
+      const skipCarryover = statusFilter && statusFilter !== "PENDING" && statusFilter !== "TRANSFER";
+
+      if (!skipCarryover) {
+        const carriedOrders = await prisma.order.findMany({
+          where: carryWhere,
+          include: { vendor: true, employee: { select: { name: true } } },
+          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        });
+        // Dedupe by CN No., keeping only the most recent entry per consignment.
+        const seenCn = new Set<number>();
+        const deduped = carriedOrders.filter((o) => {
+          if (seenCn.has(o.cnNo)) return false;
+          seenCn.add(o.cnNo);
+          return true;
+        });
+        orders.unshift(...deduped.sort((a, b) => a.date.getTime() - b.date.getTime()));
+      }
+    }
 
     const columns = [
       { header: "Date", key: "date", width: 12 },
