@@ -26,6 +26,12 @@ export default function ReportsPage() {
     setFilters((f) => ({ ...f, [key]: value }));
   }
 
+  function clearFilters() {
+    setFilters({ from: "", to: "", employeeId: "", vendorId: "", status: "", payment: "", emirate: "" });
+  }
+
+  const activeFilters = Object.entries(filters).filter(([, v]) => v);
+
   function exportReport(format: "excel" | "pdf") {
     const url = reportExportUrl({ ...filters, format });
     window.open(url, "_blank");
@@ -107,14 +113,28 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button onClick={() => exportReport("excel")} className="rounded bg-navy px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2">
             Export Excel
           </button>
           <button onClick={() => exportReport("pdf")} className="rounded border border-navy px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-navy hover:bg-paper-2">
             Export PDF
           </button>
+          {activeFilters.length > 0 && (
+            <button onClick={clearFilters} className="rounded border border-cancelled px-4 py-2.5 font-mono text-xs uppercase tracking-wide text-cancelled hover:bg-cancelled-bg">
+              Clear all filters
+            </button>
+          )}
         </div>
+
+        {activeFilters.length > 0 ? (
+          <p className="mt-4 text-xs text-ink-soft">
+            <span className="font-semibold text-navy">Active filters:</span>{" "}
+            {activeFilters.map(([k, v]) => `${k}=${v}`).join(", ")}
+          </p>
+        ) : (
+          <p className="mt-4 text-xs text-ink-soft">No filters active — this will export everything.</p>
+        )}
       </div>
     </div>
   );
