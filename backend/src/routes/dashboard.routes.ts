@@ -14,6 +14,9 @@ function summarize(orders: Order[]) {
   const delivered = orders.filter((o) => o.status === "DELIVERED");
   return {
     totalOrders: orders.length,
+    // Total value of every item assigned that day, regardless of status — "how much
+    // was handed over" as opposed to totalSales below (which is only what's Delivered).
+    totalAssignedValue: orders.reduce((s, o) => s + o.total, 0),
     delivered: delivered.length,
     pending: orders.filter((o) => o.status === "PENDING").length,
     transferred: orders.filter((o) => o.status === "TRANSFER").length,
