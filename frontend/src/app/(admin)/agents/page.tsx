@@ -15,6 +15,8 @@ interface AgentBreakdownRow {
   pending: number;
   transferred: number;
   cancelled: number;
+  totalOrders?: number;
+  totalAssignedValue?: number;
   totalSales: number;
   totalDeliveryCharge: number;
   cashCollected?: number;
@@ -359,6 +361,12 @@ export default function AgentsPage() {
                   <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
                   <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(r.cashBalance ?? 0)}</span>
                 </div>
+                <div className="mb-2 flex items-center justify-between rounded border border-brass/40 bg-brass/10 px-2.5 py-1.5">
+                  <span className="font-mono text-[10px] uppercase text-ink-soft">Items Given Today</span>
+                  <span className="font-mono text-xs font-semibold">
+                    {r.totalOrders ?? 0} items · {fmtNumber(r.totalAssignedValue ?? 0)} AED
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
                   <div className="flex justify-between"><span className="text-ink-soft">Delivered</span><span>{r.delivered}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Pending</span><span>{r.pending}</span></div>
@@ -377,6 +385,8 @@ export default function AgentsPage() {
             <thead>
               <tr>
                 <th>Agent</th>
+                <th className="text-right bg-brass/10">Items Given</th>
+                <th className="text-right bg-brass/10">Amount Given</th>
                 <th className="text-right">Delivered</th>
                 <th className="text-right">Pending</th>
                 <th className="text-right">Sales</th>
@@ -390,6 +400,8 @@ export default function AgentsPage() {
               {performance.map((r) => (
                 <tr key={r.employee.id}>
                   <td>{r.employee.name}</td>
+                  <td className="text-right font-mono font-semibold bg-brass/10">{r.totalOrders ?? 0}</td>
+                  <td className="text-right font-mono font-semibold bg-brass/10">{fmtNumber(r.totalAssignedValue ?? 0)}</td>
                   <td className="text-right font-mono">{r.delivered}</td>
                   <td className="text-right font-mono">{r.pending}</td>
                   <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
@@ -401,7 +413,7 @@ export default function AgentsPage() {
               ))}
               {performance.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-ink-soft">
+                  <td colSpan={10} className="py-8 text-center text-ink-soft">
                     No agent activity on this date.
                   </td>
                 </tr>
@@ -480,7 +492,7 @@ export default function AgentsPage() {
             <h2 className="font-display text-[17px] font-semibold text-navy">
               Agent Credit — What They Owe Back
             </h2>
-            <a
+            
               href={agentCreditExportUrl()}
               target="_blank"
               rel="noopener noreferrer"
