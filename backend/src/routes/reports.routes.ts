@@ -120,6 +120,19 @@ router.get(
     const sumCancelled = rows.filter((r) => r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
     const balance = sumTotal - sumCancelled - sumDl;
 
+    // A plain-English summary of exactly what was requested, so the report itself
+    // states its own scope — not just when it happened to be generated.
+    const filterParts: string[] = [];
+    if (q.from && q.to && q.from === q.to) filterParts.push(`Date: ${q.from}`);
+    else if (q.from || q.to) filterParts.push(`Date: ${q.from ?? "…"} to ${q.to ?? "…"}`);
+    else filterParts.push("Date: All dates");
+    if (q.status) filterParts.push(`Status: ${q.status}`);
+    if (q.payment) filterParts.push(`Payment: ${q.payment}`);
+    if (q.emirate) filterParts.push(`Emirate: ${q.emirate}`);
+    if (q.vendorId) filterParts.push(`Vendor filtered`);
+    if (q.employeeId) filterParts.push(`Employee filtered`);
+    const filterSummary = filterParts.join("  ·  ");
+
     if (format === "pdf") {
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", 'attachment; filename="consignment-report.pdf"');
@@ -128,7 +141,12 @@ router.get(
       doc.pipe(res);
 
       let y = drawLetterheadHeader(doc, "Consignment Report");
-      doc.fontSize(9).fillColor("#555").text(`${rows.length} records`, doc.page.margins.left, y, {
+      doc.fontSize(10).fillColor(PDF_COLORS.navy).font("Helvetica-Bold").text(filterSummary, doc.page.margins.left, y, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: "center",
+      });
+      y = doc.y + 4;
+      doc.fontSize(9).fillColor("#555").font("Helvetica").text(`${rows.length} records · Exported ${formatDate(new Date())}`, doc.page.margins.left, y, {
         width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
         align: "center",
       });
@@ -191,8 +209,16 @@ router.get(
     workbook.creator = "Future Courier Operations";
     workbook.created = new Date();
     const sheet = workbook.addWorksheet("Consignment Report");
-    sheet.columns = columns;
-    sheet.getRow(1).font = { bold: true };
+    // Set column widths only (no header text yet) so we can place our own summary
+    // rows above the actual column header row.
+    sheet.columns = columns.map((c) => ({ key: c.key, width: c.width }));
+
+    const filterHeaderRow = sheet.addRow({ date: filterSummary });
+    filterHeaderRow.font = { bold: true };
+    sheet.addRow({ date: `${rows.length} records · Exported ${formatDate(new Date())}` });
+    sheet.addRow({});
+    const columnHeaderRow = sheet.addRow(Object.fromEntries(columns.map((c) => [c.key, c.header])));
+    columnHeaderRow.font = { bold: true };
     rows.slice(0, rangeOrders.length).forEach((r) => sheet.addRow(r));
 
     if (carriedOrders.length > 0) {
