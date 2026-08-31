@@ -55,6 +55,10 @@ async function computeVendorCreditRows(selectedDate: Date) {
   const todayAmountMap = new Map<string, number>();
   const todayCancelledMap = new Map<string, number>();
   const todayChargeMap = new Map<string, number>();
+  // Separate, view-only figures for a standalone "Pending Consignments" table below
+  // the main ledger — never fed into the Balance calculation above.
+  const pendingTotalMap = new Map<string, number>();
+  const pendingDeliveryChargeMap = new Map<string, number>();
 
   for (const o of dedupedOrders) {
     // "Today" means genuinely entered today — NOT just resolved today. An order
@@ -72,6 +76,10 @@ async function computeVendorCreditRows(selectedDate: Date) {
     }
     if (o.status === "DELIVERED") {
       chargeMap.set(o.vendorId, (chargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+    if (o.status === "PENDING") {
+      pendingTotalMap.set(o.vendorId, (pendingTotalMap.get(o.vendorId) ?? 0) + o.total);
+      pendingDeliveryChargeMap.set(o.vendorId, (pendingDeliveryChargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
     }
   }
 
@@ -136,6 +144,9 @@ async function computeVendorCreditRows(selectedDate: Date) {
     const totalPaid = openingPaid + todayPaid;
     const adjustmentTotal = (openingAdjMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
     const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
+    const pendingTotal = pendingTotalMap.get(v.id) ?? 0;
+    const pendingDeliveryCharge = pendingDeliveryChargeMap.get(v.id) ?? 0;
+    const pendingPayable = pendingTotal - pendingDeliveryCharge;
 
     return {
       vendor: { id: v.id, name: v.name, active: v.active },
@@ -149,6 +160,9 @@ async function computeVendorCreditRows(selectedDate: Date) {
       totalDeliveryCharge,
       totalPaid,
       balance,
+      pendingTotal,
+      pendingDeliveryCharge,
+      pendingPayable,
     };
   });
 }
