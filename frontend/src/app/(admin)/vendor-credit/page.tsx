@@ -51,6 +51,9 @@ const emptyPaymentForm = { date: dubaiToday(), amount: "", note: "" };
 
 export default function VendorCreditPage() {
   const [date, setDate] = useState(dubaiToday());
+  const [deliveredMonth, setDeliveredMonth] = useState(() => dubaiToday().slice(0, 7));
+  const [deliveredRows, setDeliveredRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; payable: number }[]>([]);
+  const [loadingDelivered, setLoadingDelivered] = useState(false);
   const [newEntriesMonth, setNewEntriesMonth] = useState(() => dubaiToday().slice(0, 7));
   const [newEntriesRows, setNewEntriesRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
@@ -71,6 +74,20 @@ export default function VendorCreditPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadDelivered = useCallback(async () => {
+    setLoadingDelivered(true);
+    try {
+      const res = await apiFetch<{ rows: typeof deliveredRows }>("/vendor-credit/delivered-daily", { query: { month: deliveredMonth } });
+      setDeliveredRows(res.rows);
+    } finally {
+      setLoadingDelivered(false);
+    }
+  }, [deliveredMonth]);
+
+  useEffect(() => {
+    loadDelivered();
+  }, [loadDelivered]);
 
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);
@@ -625,88 +642,61 @@ export default function VendorCreditPage() {
         </div>
 
         <div className="mt-6 border border-line bg-white p-5">
-          <h2 className="mb-1 font-display text-[17px] font-semibold text-navy">Delivered Consignments Summary</h2>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-semibold text-navy">Delivered Consignments Summary</h2>
+            <input
+              type="month"
+              value={deliveredMonth}
+              onChange={(e) => setDeliveredMonth(e.target.value)}
+              className="rounded border border-line px-2.5 py-1.5 text-sm"
+            />
+          </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            View only — what&apos;s already Delivered per vendor for <b>{date}</b>, split into Opening (before
-            today) and Today, with delivery charge deducted to show what&apos;s payable. Not part of the Balance
-            above.
+            View only — Delivered consignments per vendor, per day, with delivery charge deducted to show
+            what&apos;s payable. Grouped by the day each order was actually delivered. Not part of the Balance above.
           </p>
 
-          {/* Mobile: stacked cards */}
-          <div className="space-y-2.5 md:hidden">
-            {rows.map((r) => (
-              <div key={r.vendor.id} className={`rounded border border-line p-3.5 ${r.vendor.active ? "" : "opacity-50"}`}>
-                <div className="mb-2 font-display text-sm font-semibold text-navy">{r.vendor.name}</div>
-                <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
-                  <div>
-                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Opening</div>
-                    <div className="font-semibold">{fmtNumber(r.deliveredOpening)}</div>
-                  </div>
-                  <div>
-                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Today</div>
-                    <div className="font-semibold">{fmtNumber(r.deliveredToday)}</div>
-                  </div>
-                  <div>
-                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Delivered Charge</div>
-                    <div className="font-semibold">{fmtNumber(r.deliveredCharge)}</div>
-                  </div>
-                  <div>
-                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Balance to Pay</div>
-                    <div className="font-semibold text-brass">{fmtNumber(r.deliveredPayable)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {rows.length > 0 && (
-              <div className="rounded border-2 border-navy p-3.5">
-                <div className="mb-2 font-display text-sm font-semibold text-navy">TOTAL</div>
-                <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
-                  <div className="font-semibold">{fmtNumber(totals.deliveredOpening)}</div>
-                  <div className="font-semibold">{fmtNumber(totals.deliveredToday)}</div>
-                  <div className="font-semibold">{fmtNumber(totals.deliveredCharge)}</div>
-                  <div className="font-semibold text-brass">{fmtNumber(totals.deliveredPayable)}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Desktop: table */}
-          <table className="data-table hidden md:table">
-            <thead>
-              <tr>
-                <th>Vendor</th>
-                <th className="text-right">Opening</th>
-                <th className="text-right">Today</th>
-                <th className="text-right">Delivered (Total)</th>
-                <th className="text-right">Delivery Charge (Less)</th>
-                <th className="text-right">Balance to Pay</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.vendor.id} className={r.vendor.active ? "" : "opacity-50"}>
-                  <td>{r.vendor.name}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.deliveredOpening)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.deliveredToday)}</td>
-                  <td className="text-right font-mono font-semibold">{fmtNumber(r.deliveredTotal)}</td>
-                  <td className="text-right font-mono">{fmtNumber(r.deliveredCharge)}</td>
-                  <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.deliveredPayable)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr className="font-semibold">
-                  <td>TOTAL</td>
-                  <td className="text-right font-mono">{fmtNumber(totals.deliveredOpening)}</td>
-                  <td className="text-right font-mono">{fmtNumber(totals.deliveredToday)}</td>
-                  <td className="text-right font-mono">{fmtNumber(totals.deliveredTotal)}</td>
-                  <td className="text-right font-mono">{fmtNumber(totals.deliveredCharge)}</td>
-                  <td className="text-right font-mono text-brass">{fmtNumber(totals.deliveredPayable)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+          {loadingDelivered ? (
+            <p className="text-sm text-ink-soft">Loading…</p>
+          ) : deliveredRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-soft">No deliveries this month.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th className="text-right">Delivered</th>
+                    <th className="text-right">Total Amount</th>
+                    <th className="text-right">Delivery Charge</th>
+                    <th className="text-right">Payable</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveredRows.map((r) => (
+                    <tr key={`${r.date}-${r.vendorId}`}>
+                      <td>{r.date}</td>
+                      <td>{r.vendorName}</td>
+                      <td className="text-right font-mono">{r.count}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.deliveryCharge)}</td>
+                      <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.payable)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td colSpan={2}>TOTAL</td>
+                    <td className="text-right font-mono">{deliveredRows.reduce((s, r) => s + r.count, 0)}</td>
+                    <td className="text-right font-mono">{fmtNumber(deliveredRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
+                    <td className="text-right font-mono">{fmtNumber(deliveredRows.reduce((s, r) => s + r.deliveryCharge, 0))}</td>
+                    <td className="text-right font-mono text-brass">{fmtNumber(deliveredRows.reduce((s, r) => s + r.payable, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 border border-line bg-white p-5">
