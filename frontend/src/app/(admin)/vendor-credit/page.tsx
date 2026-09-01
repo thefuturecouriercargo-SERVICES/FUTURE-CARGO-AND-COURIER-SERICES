@@ -51,11 +51,11 @@ const emptyPaymentForm = { date: dubaiToday(), amount: "", note: "" };
 
 export default function VendorCreditPage() {
   const [date, setDate] = useState(dubaiToday());
-  const [deliveredMonth, setDeliveredMonth] = useState(() => dubaiToday().slice(0, 7));
-  const [deliveredRows, setDeliveredRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; payable: number }[]>([]);
+  const [deliveredDate, setDeliveredDate] = useState(dubaiToday());
+  const [deliveredRows, setDeliveredRows] = useState<{ vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; payable: number }[]>([]);
   const [loadingDelivered, setLoadingDelivered] = useState(false);
-  const [newEntriesMonth, setNewEntriesMonth] = useState(() => dubaiToday().slice(0, 7));
-  const [newEntriesRows, setNewEntriesRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
+  const [newEntriesDate, setNewEntriesDate] = useState(dubaiToday());
+  const [newEntriesRows, setNewEntriesRows] = useState<{ vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
   const [rows, setRows] = useState<VendorCreditRow[]>([]);
   const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
@@ -78,12 +78,12 @@ export default function VendorCreditPage() {
   const loadDelivered = useCallback(async () => {
     setLoadingDelivered(true);
     try {
-      const res = await apiFetch<{ rows: typeof deliveredRows }>("/vendor-credit/delivered-daily", { query: { month: deliveredMonth } });
+      const res = await apiFetch<{ rows: typeof deliveredRows }>("/vendor-credit/delivered-daily", { query: { date: deliveredDate } });
       setDeliveredRows(res.rows);
     } finally {
       setLoadingDelivered(false);
     }
-  }, [deliveredMonth]);
+  }, [deliveredDate]);
 
   useEffect(() => {
     loadDelivered();
@@ -92,12 +92,12 @@ export default function VendorCreditPage() {
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);
     try {
-      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/vendor-credit/new-entries", { query: { month: newEntriesMonth } });
+      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/vendor-credit/new-entries", { query: { date: newEntriesDate } });
       setNewEntriesRows(res.rows);
     } finally {
       setLoadingNewEntries(false);
     }
-  }, [newEntriesMonth]);
+  }, [newEntriesDate]);
 
   useEffect(() => {
     loadNewEntries();
@@ -644,28 +644,34 @@ export default function VendorCreditPage() {
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-[17px] font-semibold text-navy">Delivered Consignments Summary</h2>
-            <input
-              type="month"
-              value={deliveredMonth}
-              onChange={(e) => setDeliveredMonth(e.target.value)}
-              className="rounded border border-line px-2.5 py-1.5 text-sm"
-            />
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDeliveredDate(addDaysStr(deliveredDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                ← Prev
+              </button>
+              <input type="date" value={deliveredDate} onChange={(e) => setDeliveredDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+              <button onClick={() => setDeliveredDate(addDaysStr(deliveredDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                Next →
+              </button>
+              <button onClick={() => setDeliveredDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+                Today
+              </button>
+            </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            View only — Delivered consignments per vendor, per day, with delivery charge deducted to show
-            what&apos;s payable. Grouped by the day each order was actually delivered. Not part of the Balance above.
+            View only — Delivered consignments per vendor for <b>{deliveredDate}</b>, with delivery charge
+            deducted to show what&apos;s payable. Grouped by the day each order was actually delivered. Not part
+            of the Balance above.
           </p>
 
           {loadingDelivered ? (
             <p className="text-sm text-ink-soft">Loading…</p>
           ) : deliveredRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No deliveries this month.</p>
+            <p className="py-8 text-center text-sm text-ink-soft">No deliveries on this date.</p>
           ) : (
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
                     <th>Vendor</th>
                     <th className="text-right">Delivered</th>
                     <th className="text-right">Total Amount</th>
@@ -675,8 +681,7 @@ export default function VendorCreditPage() {
                 </thead>
                 <tbody>
                   {deliveredRows.map((r) => (
-                    <tr key={`${r.date}-${r.vendorId}`}>
-                      <td>{r.date}</td>
+                    <tr key={r.vendorId}>
                       <td>{r.vendorName}</td>
                       <td className="text-right font-mono">{r.count}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
@@ -687,7 +692,7 @@ export default function VendorCreditPage() {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td colSpan={2}>TOTAL</td>
+                    <td>TOTAL</td>
                     <td className="text-right font-mono">{deliveredRows.reduce((s, r) => s + r.count, 0)}</td>
                     <td className="text-right font-mono">{fmtNumber(deliveredRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                     <td className="text-right font-mono">{fmtNumber(deliveredRows.reduce((s, r) => s + r.deliveryCharge, 0))}</td>
@@ -702,28 +707,33 @@ export default function VendorCreditPage() {
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
-            <input
-              type="month"
-              value={newEntriesMonth}
-              onChange={(e) => setNewEntriesMonth(e.target.value)}
-              className="rounded border border-line px-2.5 py-1.5 text-sm"
-            />
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                ← Prev
+              </button>
+              <input type="date" value={newEntriesDate} onChange={(e) => setNewEntriesDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                Next →
+              </button>
+              <button onClick={() => setNewEntriesDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+                Today
+              </button>
+            </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            How many genuinely new consignments each vendor got, per day. Counts an order only on the day it was
-            actually entered — not carried-over or resolved days.
+            How many genuinely new consignments each vendor got on <b>{newEntriesDate}</b>. Counts an order only
+            on the day it was actually entered — not carried-over or resolved days.
           </p>
 
           {loadingNewEntries ? (
             <p className="text-sm text-ink-soft">Loading…</p>
           ) : newEntriesRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No new entries this month.</p>
+            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
           ) : (
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
                     <th>Vendor</th>
                     <th className="text-right">New Entries</th>
                     <th className="text-right">Total Amount</th>
@@ -731,8 +741,7 @@ export default function VendorCreditPage() {
                 </thead>
                 <tbody>
                   {newEntriesRows.map((r) => (
-                    <tr key={`${r.date}-${r.vendorId}`}>
-                      <td>{r.date}</td>
+                    <tr key={r.vendorId}>
                       <td>{r.vendorName}</td>
                       <td className="text-right font-mono">{r.count}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
@@ -741,7 +750,7 @@ export default function VendorCreditPage() {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td colSpan={2}>TOTAL</td>
+                    <td>TOTAL</td>
                     <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
                     <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                   </tr>
