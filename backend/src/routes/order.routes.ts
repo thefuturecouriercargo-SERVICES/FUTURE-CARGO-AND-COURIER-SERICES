@@ -1,443 +1,389 @@
 import { Router } from "express";
-import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma";
-import { asyncHandler, ApiError } from "../utils/asyncHandler";
+import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange, monthRange, parseDateParam } from "../utils/dates";
-import { writeAuditLog } from "../services/audit.service";
-import { emitGlobal, emitToUser } from "../lib/socket";
+import { dayRange, monthRange, formatDate } from "../utils/dates";
+import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
+import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
+import { Order } from "@prisma/client";
 
 const router = Router();
-router.use(authenticate);
+router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
-const STATUSES = ["PENDING", "DELIVERED", "TRANSFER", "CANCELLED"] as const;
-const PAYMENTS = ["CASH", "BANK"] as const;
+type OrderWithAgentFlag = Order & { employee?: { isAgent?: boolean } };
 
-function buildWhere(query: Record<string, unknown>): Prisma.OrderWhereInput {
-  const where: Prisma.OrderWhereInput = {};
+function summarize(orders: Order[]) {
+  const delivered = orders.filter((o) => o.status === "DELIVERED");
+  return {
+    totalOrders: orders.length,
+    // Total value of every item assigned that day, regardless of status — "how much
+    // was handed over" as opposed to totalSales below (which is only what's Delivered).
+    totalAssignedValue: orders.reduce((s, o) => s + o.total, 0),
+    delivered: delivered.length,
+    pending: orders.filter((o) => o.status === "PENDING").length,
+    transferred: orders.filter((o) => o.status === "TRANSFER").length,
+    cancelled: orders.filter((o) => o.status === "CANCELLED").length,
+    totalSales: delivered.reduce((s, o) => s + o.total, 0),
+    totalDeliveryCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
+    cashCollected: delivered.filter((o) => o.payment === "CASH").reduce((s, o) => s + o.total, 0),
+    bankCollected: delivered.filter((o) => o.payment === "BANK").reduce((s, o) => s + o.total, 0),
+  };
+}
 
-  if (query.date) {
-    const { start } = dayRange(query.date as string);
-    where.date = start;
-  } else if (query.month) {
-    const { start, end } = monthRange(query.month as string);
-    where.date = { gte: start, lte: end };
-  } else if (query.from || query.to) {
-    where.date = {
-      ...(query.from ? { gte: parseDateParam(query.from as string) } : {}),
-      ...(query.to ? { lte: parseDateParam(query.to as string) } : {}),
-    };
-  }
+// Agent employees' delivery charges are recorded (needed for vendor credit
+// calculations) but must never count toward company revenue/profit.
+function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
+  return orders
+    .filter((o) => o.status === "DELIVERED" && !o.employee?.isAgent)
+    .reduce((s, o) => s + o.deliveryCharge, 0);
+}
 
-  if (query.employeeId) where.employeeId = query.employeeId as string;
-  if (query.vendorId) where.vendorId = query.vendorId as string;
-  if (query.status) where.status = query.status as (typeof STATUSES)[number];
-  if (query.payment) where.payment = query.payment as (typeof PAYMENTS)[number];
-  if (query.emirate) where.emirate = (query.emirate as string).toUpperCase();
-  if (query.cn) {
-    const cnNum = Number(query.cn);
-    if (!Number.isNaN(cnNum)) where.cnNo = cnNum;
-  }
-  if (query.search) {
-    const search = query.search as string;
-    const cnNum = Number(search);
-    where.OR = [
-      ...(Number.isNaN(cnNum) ? [] : [{ cnNo: cnNum }]),
-      { brandName: { contains: search, mode: "insensitive" as const } },
+ router.get(
+  "/daily",
+  asyncHandler(async (req, res) => {
+    let where: { date: Date } | { date: { gte: Date; lte: Date } };
+    let label: string;
+
+    if (req.query.from || req.query.to) {
+      const { start: fromStart } = dayRange(req.query.from as string | undefined);
+      const { start: toStart } = dayRange(req.query.to as string | undefined);
+      where = { date: { gte: fromStart, lte: toStart } };
+      label = `${formatDate(fromStart)} to ${formatDate(toStart)}`;
+    } else {
+      const { start, date } = dayRange(req.query.date as string | undefined);
+      where = { date: start };
+      label = formatDate(date);
+    }
+
+    const rawOrders = await prisma.order.findMany({
+      where,
+      include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
+    });
+
+    // Guard against duplicate CN No. entries (e.g. leftover double-entries from before
+    // the creation-time duplicate check existed) inflating same-day counts. Carryover
+    // already dedupes by CN, so the daily view must too — otherwise a duplicate that's
+    // counted twice today silently collapses to one the moment it becomes "carryover"
+    // tomorrow, making the pending count drop with no actual status change behind it.
+    const seenCn = new Set<number>();
+    const orders = [...rawOrders]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .filter((o) => {
+        if (seenCn.has(o.cnNo)) return false;
+        seenCn.add(o.cnNo);
+        return true;
+      });
+const expenses = await prisma.expenseEntry.findMany({
+      where: { ...where, source: "ADMIN" },
+    });
+
+   function expensesFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId && e.category !== "OTHER")
+        .reduce((s, e) => s + e.amount, 0);
+    }
+
+    function otherDeductionFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
+        .reduce((s, e) => s + e.amount, 0);
+    }
+    function otherDeductionEntriesFor(employeeId: string) {
+      return expenses
+        .filter((e) => e.employeeId === employeeId && e.category === "OTHER")
+        .map((e) => ({ id: e.id, amount: e.amount }));
+    }
+    const employees = await prisma.user.findMany({ where: { role: "DRIVER", isAgent: false }, orderBy: { name: "asc" } });
+ const employeeBreakdown = employees.map((e) => {
+      const own = orders.filter((o) => o.employeeId === e.id);
+      const ownSummary = summarize(own);
+      const totalExpenses = expensesFor(e.id);
+      const otherDeduction = otherDeductionFor(e.id);
+      const otherDeductionEntries = otherDeductionEntriesFor(e.id);
+      return {
+        employee: { id: e.id, name: e.name },
+        ...ownSummary,
+        totalExpenses,
+        otherDeduction,
+        otherDeductionEntries,
+        cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
+      };
+    }); 
+
+    // Agents are tracked completely separately from drivers — their own performance,
+    // cash collection, and delivery-charge totals never mix into the driver breakdown above.
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const agentBreakdown = agents.map((a) => {
+      const own = orders.filter((o) => o.employeeId === a.id);
+      const ownSummary = summarize(own);
+      const totalExpenses = expensesFor(a.id);
+      const otherDeduction = otherDeductionFor(a.id);
+      const otherDeductionEntries = otherDeductionEntriesFor(a.id);
+      return {
+        employee: { id: a.id, name: a.name },
+        ...ownSummary,
+        totalExpenses,
+        otherDeduction,
+        otherDeductionEntries,
+        cashBalance: ownSummary.cashCollected - totalExpenses - otherDeduction,
+      };
+    });
+
+    const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+    const vendorBreakdown = vendors
+      .map((v) => {
+        const own = orders.filter((o) => o.vendorId === v.id);
+        return { vendor: { id: v.id, name: v.name }, ...summarize(own) };
+      })
+      .filter((v) => v.totalOrders > 0);
+
+    const emirateMap = new Map<string, Order[]>();
+    for (const o of orders) {
+      const list = emirateMap.get(o.emirate) ?? [];
+      list.push(o);
+      emirateMap.set(o.emirate, list);
+    }
+    const emirateBreakdown = Array.from(emirateMap.entries()).map(([emirate, own]) => ({
+      emirate,
+      ...summarize(own),
+    }));
+
+    const paymentBreakdown = [
+      { method: "CASH", ...summarize(orders.filter((o) => o.payment === "CASH")) },
+      { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
     ];
-  }
 
-  return where;
-}
+ const totalExpensesAll = expenses.filter((e) => e.category !== "OTHER").reduce((s, e) => s + e.amount, 0);
+    const totalOtherDeductionAll = expenses.filter((e) => e.category === "OTHER").reduce((s, e) => s + e.amount, 0);
+    const overallSummary = summarize(orders);
+    // Company revenue excludes delivery charge from agent employees (no delivery
+    // charge is actually received on their orders — recorded only for vendor credit calc).
+    const revenueDlCharge = revenueDeliveryCharge(orders);
+
+    res.json({
+      date: label,
+      summary: {
+        ...overallSummary,
+        totalDeliveryCharge: revenueDlCharge,
+        totalExpenses: totalExpensesAll,
+        otherDeduction: totalOtherDeductionAll,
+        netProfit: revenueDlCharge - totalExpensesAll - totalOtherDeductionAll,
+        cashBalance: overallSummary.cashCollected - totalExpensesAll - totalOtherDeductionAll,
+      },
+      employeeBreakdown,
+      agentBreakdown,
+      vendorBreakdown,
+      emirateBreakdown,
+      paymentBreakdown,
+      orders,
+    });
+  })
+);
 
 router.get(
-  "/",
+  "/monthly",
   asyncHandler(async (req, res) => {
-    const where = buildWhere(req.query as Record<string, unknown>);
-    const take = req.query.limit ? Math.min(Number(req.query.limit), 500) : 1000;
-    const skip = req.query.offset ? Number(req.query.offset) : 0;
+    const { start, end, year, month } = monthRange(req.query.month as string | undefined);
+    const rawOrders = await prisma.order.findMany({
+      where: { date: { gte: start, lte: end } },
+      include: { vendor: true, employee: { select: { id: true, name: true, isAgent: true } } },
+    });
 
-    const [orders, total] = await Promise.all([
-      prisma.order.findMany({
-        where,
-        include: { vendor: true, employee: { select: { id: true, name: true } } },
-        orderBy: [{ date: "desc" }, { slNo: "asc" }],
-        take,
-        skip,
-      }),
-      prisma.order.count({ where }),
-    ]);
-
-    res.json({ orders, total });
-  })
-);
-
-const createSchema = z.object({
-  date: z.string(),
-  cnNo: z.number().int().positive(),
-  vendorId: z.string(),
-  payment: z.enum(PAYMENTS),
-  emirate: z.string().min(1).max(30),
-  employeeId: z.string(),
-total: z.number().int(),
-  status: z.enum(STATUSES).optional(),
-  remarks: z.string().max(500).optional(),
-});
-
-router.post(
-  "/",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req, res) => {
-    const data = createSchema.parse(req.body);
-    const { date } = dayRange(data.date);
-
-    const vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
-    if (!vendor) throw new ApiError(404, "Vendor not found");
-
-   const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
-if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
-
-const existingCn = await prisma.order.findFirst({
-  where: {
-    cnNo: data.cnNo,
-    OR: [
-      { date },
-      { status: { in: ["PENDING", "TRANSFER"] } },
-    ],
-  },
-});
-if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active/transferred or same-day)`);
-
-const order = await prisma.$transaction(async (tx) => {
-      const lastSl = await tx.order.aggregate({
-        where: { date },
-        _max: { slNo: true },
+    // Same duplicate-CN guard as /daily — keeps monthly totals consistent with
+    // day-by-day and carryover figures.
+    const seenCn = new Set<number>();
+    const orders = [...rawOrders]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .filter((o) => {
+        if (seenCn.has(o.cnNo)) return false;
+        seenCn.add(o.cnNo);
+        return true;
       });
-      const slNo = (lastSl._max.slNo ?? 0) + 1;
 
-      return tx.order.create({
-        data: {
-          date,
-          slNo,
-          cnNo: data.cnNo,
-          vendorId: vendor.id,
-          brandName: vendor.name,
-          deliveryCharge: vendor.deliveryCharge,
-          total: data.total,
-          payment: data.payment,
-          emirate: data.emirate.toUpperCase(),
-          employeeId: data.employeeId,
-          status: data.status ?? "PENDING",
-          remarks: data.remarks,
-        },
-        include: { vendor: true, employee: { select: { id: true, name: true } } },
+    const employees = await prisma.user.findMany({ where: { role: "DRIVER", isAgent: false }, orderBy: { name: "asc" } });
+    const employeeBreakdown = employees.map((e) => {
+      const own = orders.filter((o) => o.employeeId === e.id);
+      return { employee: { id: e.id, name: e.name }, ...summarize(own) };
+    });
+
+    // Agents get their own monthly breakdown, kept separate from the driver one above.
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const agentBreakdown = agents.map((a) => {
+      const own = orders.filter((o) => o.employeeId === a.id);
+      return { employee: { id: a.id, name: a.name }, ...summarize(own) };
+    });
+
+    const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+    const vendorBreakdown = vendors
+      .map((v) => {
+        const own = orders.filter((o) => o.vendorId === v.id);
+        return { vendor: { id: v.id, name: v.name }, ...summarize(own) };
+      })
+      .filter((v) => v.totalOrders > 0);
+
+    const emirateMap = new Map<string, Order[]>();
+    for (const o of orders) {
+      const list = emirateMap.get(o.emirate) ?? [];
+      list.push(o);
+      emirateMap.set(o.emirate, list);
+    }
+    const emirateBreakdown = Array.from(emirateMap.entries()).map(([emirate, own]) => ({
+      emirate,
+      ...summarize(own),
+    }));
+
+    const dateMap = new Map<string, Order[]>();
+    for (const o of orders) {
+      const key = formatDate(o.date);
+      const list = dateMap.get(key) ?? [];
+      list.push(o);
+      dateMap.set(key, list);
+    }
+    const dailyBreakdown = Array.from(dateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, own]) => ({ date, ...summarize(own) }));
+
+    const paymentBreakdown = [
+      { method: "CASH", ...summarize(orders.filter((o) => o.payment === "CASH")) },
+      { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
+    ];
+
+    const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
+    const overallSummary = { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) };
+
+    if (req.query.format === "pdf") {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="monthly-dashboard-${monthLabel}.pdf"`);
+
+      const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
+      doc.pipe(res);
+
+      let y = drawLetterheadHeader(doc, "Monthly Dashboard Report");
+      doc.fontSize(11).fillColor(PDF_COLORS.navy).font("Helvetica-Bold").text(`Month: ${monthLabel}`, doc.page.margins.left, y, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: "center",
       });
-    });
+      y = doc.y + 14;
 
-    await writeAuditLog({ userId: req.user!.sub, action: "CREATE", entity: "Order", entityId: order.id, meta: data });
-    emitGlobal("order:changed", { type: "created", order });
-    emitToUser(order.employeeId, "order:assigned", { order });
+      const left = doc.page.margins.left;
+      const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const boxGap = 10;
+      const boxCount = 6;
+      const boxW = (boxWidth - boxGap * (boxCount - 1)) / boxCount;
+      const boxH = 50;
+      function kpiBox(x: number, label: string, value: string | number) {
+        doc.rect(x, y, boxW, boxH).fill(PDF_COLORS.zebra);
+        doc.font("Helvetica").fontSize(8).fillColor(PDF_COLORS.inkSoft).text(label, x + 8, y + 8, { width: boxW - 16 });
+        doc.font("Helvetica-Bold").fontSize(14).fillColor(PDF_COLORS.navy).text(String(value), x + 8, y + 22, { width: boxW - 16 });
+      }
+      kpiBox(left, "Total Orders", overallSummary.totalOrders);
+      kpiBox(left + (boxW + boxGap) * 1, "Delivered", overallSummary.delivered);
+      kpiBox(left + (boxW + boxGap) * 2, "Pending", overallSummary.pending);
+      kpiBox(left + (boxW + boxGap) * 3, "Cancelled", overallSummary.cancelled);
+      kpiBox(left + (boxW + boxGap) * 4, "Total Sales (AED)", overallSummary.totalSales.toLocaleString("en-US"));
+      kpiBox(left + (boxW + boxGap) * 5, "Total DL Charge (AED)", overallSummary.totalDeliveryCharge.toLocaleString("en-US"));
+      y += boxH + 20;
 
-    res.status(201).json(order);
-  })
-);
-
-const updateSchema = z.object({
-  cnNo: z.number().int().positive().optional(),
-  vendorId: z.string().optional(),
-  payment: z.enum(PAYMENTS).optional(),
-  emirate: z.string().min(1).max(30).optional(),
-  employeeId: z.string().optional(),
-  total: z.number().int().optional(),
-  status: z.enum(STATUSES).optional(),
-  remarks: z.string().max(500).optional(),
-});
-
-router.put(
-  "/:id",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req, res) => {
-    const data = updateSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Order not found");
-
-    let vendorFields: { vendorId?: string; brandName?: string; deliveryCharge?: number } = {};
-    if (data.vendorId) {
-      const vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
-      if (!vendor) throw new ApiError(404, "Vendor not found");
-     vendorFields = { vendorId: vendor.id, brandName: vendor.name, deliveryCharge: vendor.deliveryCharge };
-}
-
-if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
-  const existingCn = await prisma.order.findFirst({
-    where: {
-      cnNo: data.cnNo,
-      id: { not: existing.id },
-      OR: [
-        { date: existing.date },
-        { status: { in: ["PENDING", "TRANSFER"] } },
-      ],
-    },
-  });
-  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (active/transferred or same-day)`);
-}
-
-const order = await prisma.order.update({
-      where: { id: req.params.id },
-      data: {
-        ...(data.cnNo !== undefined ? { cnNo: data.cnNo } : {}),
-        ...vendorFields,
-        ...(data.payment ? { payment: data.payment } : {}),
-        ...(data.emirate ? { emirate: data.emirate.toUpperCase() } : {}),
-        ...(data.employeeId ? { employeeId: data.employeeId } : {}),
-        ...(data.total !== undefined ? { total: data.total } : {}),
-        ...(data.status ? { status: data.status } : {}),
-        ...(data.remarks !== undefined ? { remarks: data.remarks } : {}),
-      },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
-    });
-
-    await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "Order", entityId: order.id, meta: data });
-    emitGlobal("order:changed", { type: "updated", order });
-    res.json(order);
-  })
-);
-
-const bulkUpdateSchema = z
-  .object({
-    ids: z.array(z.string()).min(1, "Select at least one consignment"),
-    emirate: z.string().min(1).max(30).optional(),
-    employeeId: z.string().optional(),
-  })
-  .refine((data) => data.emirate || data.employeeId, {
-    message: "Provide an emirate and/or an employee to apply",
-  });
-
-router.patch(
-  "/bulk",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req, res) => {
-    const data = bulkUpdateSchema.parse(req.body);
-
-    if (data.employeeId) {
-      const employee = await prisma.user.findUnique({ where: { id: data.employeeId } });
-      if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee not found");
-    }
-
-    const updateData: Prisma.OrderUncheckedUpdateManyInput = {};
-    if (data.emirate) updateData.emirate = data.emirate.toUpperCase();
-    if (data.employeeId) updateData.employeeId = data.employeeId;
-
-    const result = await prisma.order.updateMany({
-      where: { id: { in: data.ids } },
-      data: updateData,
-    });
-
-    await writeAuditLog({
-      userId: req.user!.sub,
-      action: "BULK_UPDATE",
-      entity: "Order",
-      entityId: data.ids.join(","),
-      meta: { ids: data.ids, emirate: data.emirate, employeeId: data.employeeId, count: result.count },
-    });
-
-    emitGlobal("order:changed", { type: "bulk-updated", ids: data.ids });
-
-    res.json({ updated: result.count });
-  })
-);
-
-router.delete(
-  "/:id",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req, res) => {
-    await prisma.order.delete({ where: { id: req.params.id } });
-    await writeAuditLog({ userId: req.user!.sub, action: "DELETE", entity: "Order", entityId: req.params.id });
-    emitGlobal("order:changed", { type: "deleted", id: req.params.id });
-    res.json({ deleted: true });
-  })
-);
-
-const statusSchema = z
-  .object({ status: z.enum(STATUSES), reason: z.string().max(300).optional() })
-  .refine((data) => data.status !== "CANCELLED" || (data.reason && data.reason.trim().length > 0), {
-    message: "A reason is required to cancel a consignment",
-    path: ["reason"],
-  });
-
-router.patch(
-  "/:id/status",
-  asyncHandler(async (req, res) => {
-    const { status, reason } = statusSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Order not found");
-
-    // Drivers may only update the status of their own assigned orders.
-    if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
-      throw new ApiError(403, "You can only update your own deliveries");
-    }
-
-  const { start: todayStart } = dayRange();
-      const isCarryover = status !== "PENDING" && existing.date.getTime() < todayStart.getTime();
-
-      const order = await prisma.$transaction(async (tx) => {
-        let carryFields: { date?: Date; slNo?: number } = {};
-        if (isCarryover) {
-          const lastSl = await tx.order.aggregate({
-            where: { date: todayStart },
-            _max: { slNo: true },
-          });
-          carryFields = { date: todayStart, slNo: (lastSl._max.slNo ?? 0) + 1 };
+      function sectionTitle(label: string) {
+        if (y > doc.page.height - doc.page.margins.bottom - 120) {
+          drawLetterheadFooter(doc);
+          doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
+          y = doc.page.margins.top;
         }
-        return tx.order.update({
-          where: { id: req.params.id },
-          data: {
-            status,
-            ...carryFields,
-            ...(status === "CANCELLED" ? { remarks: reason } : {}),
-          },
-          include: { vendor: true, employee: { select: { id: true, name: true } } },
-        });
-      });
+        doc.rect(left, y - 4, boxWidth, 20).fill(PDF_COLORS.navy);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#FFFFFF").text(label, left + 6, y);
+        y += 22;
+      }
 
-      await writeAuditLog({
-        userId: req.user!.sub,
-        action: "STATUS_UPDATE",
-        entity: "Order",
-        entityId: order.id,
-        meta: { from: existing.status, to: status, reason, carriedOverToToday: isCarryover },
-      });
-    emitGlobal("order:changed", { type: "updated", order });
-    res.json(order);
-  })
-);
-const paymentSchema = z.object({ payment: z.enum(PAYMENTS) });
+      function table(headers: string[], colWidths: number[], rows: (string | number)[][], align?: ("left" | "right")[]) {
+        function row(values: (string | number)[], opts: { header?: boolean; zebra?: boolean; summary?: boolean } = {}) {
+          drawPdfRow(doc, left, y, 16, values, colWidths, {
+            bg: opts.header ? PDF_COLORS.navy : opts.summary ? PDF_COLORS.brassLight : opts.zebra ? PDF_COLORS.zebra : "#FFFFFF",
+            color: opts.header ? "#FFFFFF" : undefined,
+            bold: opts.header || opts.summary,
+            fontSize: 8,
+            align: align ?? headers.map((_, i) => (i === 0 ? "left" : "right")),
+          });
+          y += 16;
+          if (y > doc.page.height - doc.page.margins.bottom - 40) {
+            drawLetterheadFooter(doc);
+            doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
+            y = doc.page.margins.top;
+          }
+        }
+        row(headers, { header: true });
+        rows.forEach((r, i) => row(r, { zebra: i % 2 === 1 }));
+        y += 10;
+      }
 
-router.patch(
-  "/:id/payment",
-  asyncHandler(async (req, res) => {
-    const { payment } = paymentSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Order not found");
+      sectionTitle("Employee-wise Deliveries & Charges");
+      table(
+        ["Employee", "Delivered", "Sales", "DL Charge"],
+        [200, 130, 130, 130],
+        employeeBreakdown.map((r) => [r.employee.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+      );
 
-    if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
-      throw new ApiError(403, "You can only update your own deliveries");
+      sectionTitle("Vendor-wise Deliveries & Charges");
+      table(
+        ["Vendor", "Delivered", "Sales", "DL Charge"],
+        [200, 130, 130, 130],
+        vendorBreakdown.map((r) => [r.vendor.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+      );
+
+      if (agentBreakdown.length > 0) {
+        sectionTitle("Agent-wise Deliveries & Charges");
+        table(
+          ["Agent", "Delivered", "Sales", "DL Charge"],
+          [200, 130, 130, 130],
+          agentBreakdown.map((r) => [r.employee.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+        );
+      }
+
+      sectionTitle("Emirate-wise Summary");
+      table(
+        ["Emirate", "Delivered", "Amount"],
+        [200, 130, 130],
+        emirateBreakdown.map((r) => [r.emirate, r.delivered, r.totalSales.toLocaleString("en-US")])
+      );
+
+      sectionTitle("Payment-wise Summary");
+      table(
+        ["Method", "Delivered", "Amount"],
+        [200, 130, 130],
+        paymentBreakdown.map((r) => [r.method, r.delivered, r.totalSales.toLocaleString("en-US")])
+      );
+
+      sectionTitle(`Daily Breakdown — ${monthLabel}`);
+      table(
+        ["Date", "Delivered", "Pending", "Transfer", "Cancelled", "Sales", "DL Charge"],
+        [110, 90, 90, 90, 90, 110, 110],
+        dailyBreakdown.map((r) => [
+          r.date,
+          r.delivered,
+          r.pending,
+          r.transferred,
+          r.cancelled,
+          r.totalSales.toLocaleString("en-US"),
+          r.totalDeliveryCharge.toLocaleString("en-US"),
+        ])
+      );
+
+      drawLetterheadFooter(doc);
+      doc.end();
+      return;
     }
 
-    const order = await prisma.order.update({
-      where: { id: req.params.id },
-      data: { payment },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
+    res.json({
+      month: monthLabel,
+      summary: overallSummary,
+      employeeBreakdown,
+      agentBreakdown,
+      vendorBreakdown,
+      emirateBreakdown,
+      dailyBreakdown,
+      paymentBreakdown,
     });
-
-    await writeAuditLog({
-      userId: req.user!.sub,
-      action: "PAYMENT_UPDATE",
-      entity: "Order",
-      entityId: order.id,
-      meta: { from: existing.payment, to: payment },
-    });
-    emitGlobal("order:changed", { type: "updated", order });
-    res.json(order);
-  })
-);
-const transferSchema = z.object({ toEmployeeId: z.string(), note: z.string().max(300).optional() });
-
-router.post(
-  "/:id/transfer",
-  asyncHandler(async (req, res) => {
-    const { toEmployeeId, note } = transferSchema.parse(req.body);
-    const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new ApiError(404, "Order not found");
-
-    if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
-      throw new ApiError(403, "You can only transfer your own deliveries");
-    }
-    if (toEmployeeId === existing.employeeId) {
-      throw new ApiError(400, "Cannot transfer an order to the same driver");
-    }
-
-    const toEmployee = await prisma.user.findUnique({ where: { id: toEmployeeId } });
-    if (!toEmployee || toEmployee.role !== "DRIVER" || !toEmployee.active) {
-      throw new ApiError(404, "Target driver not found or inactive");
-    }
-
-    const [order] = await prisma.$transaction([
-      prisma.order.update({
-        where: { id: req.params.id },
-        data: { employeeId: toEmployeeId, status: "TRANSFER" },
-        include: { vendor: true, employee: { select: { id: true, name: true } } },
-      }),
-      prisma.orderTransfer.create({
-        data: {
-          orderId: req.params.id,
-          fromEmployeeId: existing.employeeId,
-          toEmployeeId,
-          note,
-        },
-      }),
-    ]);
-
-    await writeAuditLog({
-      userId: req.user!.sub,
-      action: "TRANSFER",
-      entity: "Order",
-      entityId: order.id,
-      meta: { from: existing.employeeId, to: toEmployeeId, note },
-    });
-
-    emitGlobal("order:changed", { type: "transferred", order });
-    emitToUser(existing.employeeId, "order:removed", { orderId: order.id });
-    emitToUser(toEmployeeId, "order:assigned", { order });
-
-    res.json(order);
-  })
-);
-
-router.get(
-  "/pending-carryover",
-  asyncHandler(async (req, res) => {
-    const { start } = dayRange(req.query.date as string | undefined);
-
-    // Look at ALL past orders (any status), not just Pending/Transfer ones, so we can
-    // tell whether a consignment number was later re-resolved under a newer entry.
-    const pastOrders = await prisma.order.findMany({
-      where: { date: { lt: start } },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-    });
-
-    // Dedupe by (vendor, CN No): keep only the most recent entry for each consignment.
-    // If that most recent entry is already Delivered/Cancelled, the consignment is
-    // resolved and must not show up as a stale carryover duplicate.
-    const seenKeys = new Set<string>();
-    const orders = pastOrders.filter((o) => {
-      const key = `${o.vendorId}::${o.cnNo}`;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      return o.status === "PENDING" || o.status === "TRANSFER";
-    });
-
-    orders.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    res.json({ orders });
-  })
-);
-
-router.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.id },
-      include: {
-        vendor: true,
-        employee: { select: { id: true, name: true } },
-        transfers: { include: { fromEmployee: { select: { name: true } }, toEmployee: { select: { name: true } } } },
-      },
-    });
-    if (!order) throw new ApiError(404, "Order not found");
-    res.json(order);
   })
 );
 
