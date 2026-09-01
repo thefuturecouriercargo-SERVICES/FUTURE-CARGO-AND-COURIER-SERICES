@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange, monthRange, formatDate } from "../utils/dates";
+import { dayRange } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -32,74 +32,68 @@ function toDubaiDateOnly(d: Date): number {
   return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
 }
 
-// New-entries report: for a given month, how many genuinely new consignments each
-// vendor got each day. "New" means created that day (same rule as Today/Opening
-// elsewhere) — not orders merely carried over or resolved that day.
+// New-entries report: for a given day, how many genuinely new consignments each
+// vendor got. "New" means created that day (same rule as Today/Opening elsewhere) —
+// not orders merely carried over or resolved that day.
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
-    const { start, end, year, month } = monthRange(req.query.month as string | undefined);
+    const { start, end } = dayRange(req.query.date as string | undefined);
     const orders = await prisma.order.findMany({
-      where: { createdAt: { gte: start, lt: new Date(end.getTime() + 24 * 60 * 60 * 1000) } },
+      where: { createdAt: { gte: start, lt: end } },
       select: { vendorId: true, vendor: { select: { name: true } }, total: true, createdAt: true, cnNo: true },
     });
 
     // Only count each CN once even if somehow entered more than once.
     const seenCn = new Set<number>();
-    const key = (dateStr: string, vendorId: string) => `${dateStr}::${vendorId}`;
-    const grouped = new Map<string, { date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }>();
+    const grouped = new Map<string, { vendorId: string; vendorName: string; count: number; totalAmount: number }>();
 
     for (const o of orders) {
       if (seenCn.has(o.cnNo)) continue;
       seenCn.add(o.cnNo);
-      const dateStr = formatDate(new Date(toDubaiDateOnly(o.createdAt)));
-      const k = key(dateStr, o.vendorId);
-      const existing = grouped.get(k) ?? { date: dateStr, vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0 };
+      const existing = grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0 };
       existing.count += 1;
       existing.totalAmount += o.total;
-      grouped.set(k, existing);
+      grouped.set(o.vendorId, existing);
     }
 
-    const rows = Array.from(grouped.values()).sort((a, b) => (a.date === b.date ? a.vendorName.localeCompare(b.vendorName) : a.date.localeCompare(b.date)));
+    const rows = Array.from(grouped.values()).sort((a, b) => a.vendorName.localeCompare(b.vendorName));
 
-    res.json({ month: `${year}-${String(month).padStart(2, "0")}`, rows });
+    res.json({ rows });
   })
 );
 
-// Delivered report: for a given month, how many consignments each vendor had
-// actually Delivered each day (grouped by the order's effective date, which reflects
-// the day it was resolved — not necessarily when it was first entered).
+// Delivered report: for a given day, how many consignments each vendor had actually
+// Delivered (grouped by the order's effective date, which reflects the day it was
+// resolved — not necessarily when it was first entered).
 router.get(
   "/delivered-daily",
   asyncHandler(async (req, res) => {
-    const { start, end } = monthRange(req.query.month as string | undefined);
+    const { start } = dayRange(req.query.date as string | undefined);
     const orders = await prisma.order.findMany({
-      where: { date: { gte: start, lte: end }, status: "DELIVERED" },
-      select: { vendorId: true, vendor: { select: { name: true } }, total: true, deliveryCharge: true, date: true, cnNo: true },
+      where: { date: start, status: "DELIVERED" },
+      select: { vendorId: true, vendor: { select: { name: true } }, total: true, deliveryCharge: true, cnNo: true },
     });
 
     const seenCn = new Set<number>();
-    const key = (dateStr: string, vendorId: string) => `${dateStr}::${vendorId}`;
     const grouped = new Map<
       string,
-      { date: string; vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number }
+      { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number }
     >();
 
     for (const o of orders) {
       if (seenCn.has(o.cnNo)) continue;
       seenCn.add(o.cnNo);
-      const dateStr = formatDate(o.date);
-      const k = key(dateStr, o.vendorId);
-      const existing = grouped.get(k) ?? { date: dateStr, vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0 };
+      const existing = grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0 };
       existing.count += 1;
       existing.totalAmount += o.total;
       existing.deliveryCharge += o.deliveryCharge;
-      grouped.set(k, existing);
+      grouped.set(o.vendorId, existing);
     }
 
     const rows = Array.from(grouped.values())
       .map((r) => ({ ...r, payable: r.totalAmount - r.deliveryCharge }))
-      .sort((a, b) => (a.date === b.date ? a.vendorName.localeCompare(b.vendorName) : a.date.localeCompare(b.date)));
+      .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
 
     res.json({ rows });
   })
