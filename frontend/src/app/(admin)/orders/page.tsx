@@ -65,6 +65,7 @@ const emptyForm = {
   employeeId: "",
   total: "",
   status: "PENDING" as OrderStatus,
+  editDate: "",
 };
 
 export default function OrdersPage() {
@@ -219,6 +220,7 @@ const filteredOrders = useMemo(() => {
       employeeId: order.employeeId,
       total: String(order.total),
       status: order.status,
+      editDate: order.date.slice(0, 10),
     });
   }
 
@@ -232,7 +234,7 @@ const filteredOrders = useMemo(() => {
     setSaving(true);
     try {
       const payload = {
-        date,
+        date: editingId ? form.editDate : date,
         cnNo: Number(form.cnNo),
         vendorId: form.vendorId,
         payment: form.payment,
@@ -313,6 +315,18 @@ return (
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Consignment" : "New Consignment"}</h2>
         <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+          {editingId && (
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-cancelled">Date (correct if needed)</label>
+              <input
+                type="date"
+                value={form.editDate}
+                onChange={(e) => setForm({ ...form, editDate: e.target.value })}
+                className="w-full rounded border border-cancelled px-2.5 py-2 text-sm"
+                required
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">CN No.</label>
             <input
@@ -548,6 +562,7 @@ required
                 <th>Emirate</th>
                 <th>Employee</th>
                 <th>Status</th>
+                <th>Entry Date</th>
                 <th>Reason</th>
                 <th>Actions</th>
               </tr>
@@ -555,13 +570,13 @@ required
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-ink-soft">
+                  <td colSpan={13} className="py-8 text-center text-ink-soft">
                     Loading…
                   </td>
                 </tr>
              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-ink-soft">
+                  <td colSpan={13} className="py-8 text-center text-ink-soft">
                     No consignments entered for this date yet.
                   </td>
                 </tr>
@@ -601,6 +616,9 @@ required
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
+                      {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
                     </td>
                     <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                       {o.remarks || "—"}
