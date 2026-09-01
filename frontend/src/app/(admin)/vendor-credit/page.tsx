@@ -51,6 +51,9 @@ const emptyPaymentForm = { date: dubaiToday(), amount: "", note: "" };
 
 export default function VendorCreditPage() {
   const [date, setDate] = useState(dubaiToday());
+  const [newEntriesMonth, setNewEntriesMonth] = useState(() => dubaiToday().slice(0, 7));
+  const [newEntriesRows, setNewEntriesRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
+  const [loadingNewEntries, setLoadingNewEntries] = useState(false);
   const [rows, setRows] = useState<VendorCreditRow[]>([]);
   const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
   const [payments, setPayments] = useState<VendorPayment[]>([]);
@@ -68,6 +71,20 @@ export default function VendorCreditPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadNewEntries = useCallback(async () => {
+    setLoadingNewEntries(true);
+    try {
+      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/vendor-credit/new-entries", { query: { month: newEntriesMonth } });
+      setNewEntriesRows(res.rows);
+    } finally {
+      setLoadingNewEntries(false);
+    }
+  }, [newEntriesMonth]);
+
+  useEffect(() => {
+    loadNewEntries();
+  }, [loadNewEntries]);
 
   async function addAdjustment(vendorId: string) {
     const amount = Number(adjustInput[vendorId]);
@@ -690,6 +707,58 @@ export default function VendorCreditPage() {
               </tfoot>
             )}
           </table>
+        </div>
+
+        <div className="mt-6 border border-line bg-white p-5">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
+            <input
+              type="month"
+              value={newEntriesMonth}
+              onChange={(e) => setNewEntriesMonth(e.target.value)}
+              className="rounded border border-line px-2.5 py-1.5 text-sm"
+            />
+          </div>
+          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+            How many genuinely new consignments each vendor got, per day. Counts an order only on the day it was
+            actually entered — not carried-over or resolved days.
+          </p>
+
+          {loadingNewEntries ? (
+            <p className="text-sm text-ink-soft">Loading…</p>
+          ) : newEntriesRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-soft">No new entries this month.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th className="text-right">New Entries</th>
+                    <th className="text-right">Total Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newEntriesRows.map((r) => (
+                    <tr key={`${r.date}-${r.vendorId}`}>
+                      <td>{r.date}</td>
+                      <td>{r.vendorName}</td>
+                      <td className="text-right font-mono">{r.count}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td colSpan={2}>TOTAL</td>
+                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
+                    <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </AuthGate>
