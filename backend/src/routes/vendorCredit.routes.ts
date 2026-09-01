@@ -66,6 +66,45 @@ router.get(
   })
 );
 
+// Delivered report: for a given month, how many consignments each vendor had
+// actually Delivered each day (grouped by the order's effective date, which reflects
+// the day it was resolved — not necessarily when it was first entered).
+router.get(
+  "/delivered-daily",
+  asyncHandler(async (req, res) => {
+    const { start, end } = monthRange(req.query.month as string | undefined);
+    const orders = await prisma.order.findMany({
+      where: { date: { gte: start, lte: end }, status: "DELIVERED" },
+      select: { vendorId: true, vendor: { select: { name: true } }, total: true, deliveryCharge: true, date: true, cnNo: true },
+    });
+
+    const seenCn = new Set<number>();
+    const key = (dateStr: string, vendorId: string) => `${dateStr}::${vendorId}`;
+    const grouped = new Map<
+      string,
+      { date: string; vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number }
+    >();
+
+    for (const o of orders) {
+      if (seenCn.has(o.cnNo)) continue;
+      seenCn.add(o.cnNo);
+      const dateStr = formatDate(o.date);
+      const k = key(dateStr, o.vendorId);
+      const existing = grouped.get(k) ?? { date: dateStr, vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0 };
+      existing.count += 1;
+      existing.totalAmount += o.total;
+      existing.deliveryCharge += o.deliveryCharge;
+      grouped.set(k, existing);
+    }
+
+    const rows = Array.from(grouped.values())
+      .map((r) => ({ ...r, payable: r.totalAmount - r.deliveryCharge }))
+      .sort((a, b) => (a.date === b.date ? a.vendorName.localeCompare(b.vendorName) : a.date.localeCompare(b.date)));
+
+    res.json({ rows });
+  })
+);
+
 async function computeVendorCreditRows(selectedDate: Date) {
   const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
 
