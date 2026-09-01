@@ -37,8 +37,9 @@ router.get(
       totalMap.set(o.employeeId, (totalMap.get(o.employeeId) ?? 0) + o.total);
       if (o.status === "CANCELLED") {
         cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
-      }
-      if (o.status === "DELIVERED") {
+      } else {
+        // Same rule as Vendor Credit: deduct delivery charge for anything not
+        // Cancelled (Pending/Transfer included), not just once actually Delivered.
         chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
       }
     }
@@ -84,8 +85,11 @@ router.get(
     const chargeMap = new Map<string, number>();
     for (const o of allOrders) {
       totalMap.set(o.employeeId, (totalMap.get(o.employeeId) ?? 0) + o.total);
-      if (o.status === "CANCELLED") cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
-      if (o.status === "DELIVERED") chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
+      if (o.status === "CANCELLED") {
+        cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
+      } else {
+        chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
+      }
     }
     const paymentTotals = await prisma.agentPayment.groupBy({ by: ["employeeId"], _sum: { amount: true } });
     const paymentMap = new Map(paymentTotals.map((p) => [p.employeeId, p._sum.amount ?? 0]));
