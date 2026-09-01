@@ -124,11 +124,13 @@ router.get(
       if (isToday) {
         todayAmount += o.total;
         if (o.status === "CANCELLED") todayCancelled += o.total;
-        if (o.status === "DELIVERED") todayCharge += o.deliveryCharge;
+        // Delivery charge deducted for anything not Cancelled (Pending/Transfer
+        // included), matching the same rule used on the admin Vendor Credit page.
+        else todayCharge += o.deliveryCharge;
       } else {
         openingAmount += o.total;
         if (o.status === "CANCELLED") openingCancelled += o.total;
-        if (o.status === "DELIVERED") openingCharge += o.deliveryCharge;
+        else openingCharge += o.deliveryCharge;
       }
     }
 
