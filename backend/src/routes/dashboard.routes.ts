@@ -1,8 +1,11 @@
 import { Router } from "express";
+import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange, formatDate } from "../utils/dates";
+import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
+import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
 import { Order } from "@prisma/client";
 
 const router = Router();
@@ -246,9 +249,134 @@ router.get(
       { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
     ];
 
+    const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
+    const overallSummary = { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) };
+
+    if (req.query.format === "pdf") {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="monthly-dashboard-${monthLabel}.pdf"`);
+
+      const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
+      doc.pipe(res);
+
+      let y = drawLetterheadHeader(doc, "Monthly Dashboard Report");
+      doc.fontSize(11).fillColor(PDF_COLORS.navy).font("Helvetica-Bold").text(`Month: ${monthLabel}`, doc.page.margins.left, y, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+        align: "center",
+      });
+      y = doc.y + 14;
+
+      const left = doc.page.margins.left;
+      const boxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const boxGap = 10;
+      const boxCount = 6;
+      const boxW = (boxWidth - boxGap * (boxCount - 1)) / boxCount;
+      const boxH = 50;
+      function kpiBox(x: number, label: string, value: string | number) {
+        doc.rect(x, y, boxW, boxH).fill(PDF_COLORS.zebra);
+        doc.font("Helvetica").fontSize(8).fillColor(PDF_COLORS.inkSoft).text(label, x + 8, y + 8, { width: boxW - 16 });
+        doc.font("Helvetica-Bold").fontSize(14).fillColor(PDF_COLORS.navy).text(String(value), x + 8, y + 22, { width: boxW - 16 });
+      }
+      kpiBox(left, "Total Orders", overallSummary.totalOrders);
+      kpiBox(left + (boxW + boxGap) * 1, "Delivered", overallSummary.delivered);
+      kpiBox(left + (boxW + boxGap) * 2, "Pending", overallSummary.pending);
+      kpiBox(left + (boxW + boxGap) * 3, "Cancelled", overallSummary.cancelled);
+      kpiBox(left + (boxW + boxGap) * 4, "Total Sales (AED)", overallSummary.totalSales.toLocaleString("en-US"));
+      kpiBox(left + (boxW + boxGap) * 5, "Total DL Charge (AED)", overallSummary.totalDeliveryCharge.toLocaleString("en-US"));
+      y += boxH + 20;
+
+      function sectionTitle(label: string) {
+        if (y > doc.page.height - doc.page.margins.bottom - 120) {
+          drawLetterheadFooter(doc);
+          doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
+          y = doc.page.margins.top;
+        }
+        doc.rect(left, y - 4, boxWidth, 20).fill(PDF_COLORS.navy);
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#FFFFFF").text(label, left + 6, y);
+        y += 22;
+      }
+
+      function table(headers: string[], colWidths: number[], rows: (string | number)[][], align?: ("left" | "right")[]) {
+        function row(values: (string | number)[], opts: { header?: boolean; zebra?: boolean; summary?: boolean } = {}) {
+          drawPdfRow(doc, left, y, 16, values, colWidths, {
+            bg: opts.header ? PDF_COLORS.navy : opts.summary ? PDF_COLORS.brassLight : opts.zebra ? PDF_COLORS.zebra : "#FFFFFF",
+            color: opts.header ? "#FFFFFF" : undefined,
+            bold: opts.header || opts.summary,
+            fontSize: 8,
+            align: align ?? headers.map((_, i) => (i === 0 ? "left" : "right")),
+          });
+          y += 16;
+          if (y > doc.page.height - doc.page.margins.bottom - 40) {
+            drawLetterheadFooter(doc);
+            doc.addPage({ margin: 30, size: "A4", layout: "landscape" });
+            y = doc.page.margins.top;
+          }
+        }
+        row(headers, { header: true });
+        rows.forEach((r, i) => row(r, { zebra: i % 2 === 1 }));
+        y += 10;
+      }
+
+      sectionTitle("Employee-wise Deliveries & Charges");
+      table(
+        ["Employee", "Delivered", "Sales", "DL Charge"],
+        [200, 130, 130, 130],
+        employeeBreakdown.map((r) => [r.employee.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+      );
+
+      sectionTitle("Vendor-wise Deliveries & Charges");
+      table(
+        ["Vendor", "Delivered", "Sales", "DL Charge"],
+        [200, 130, 130, 130],
+        vendorBreakdown.map((r) => [r.vendor.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+      );
+
+      if (agentBreakdown.length > 0) {
+        sectionTitle("Agent-wise Deliveries & Charges");
+        table(
+          ["Agent", "Delivered", "Sales", "DL Charge"],
+          [200, 130, 130, 130],
+          agentBreakdown.map((r) => [r.employee.name, r.delivered, r.totalSales.toLocaleString("en-US"), r.totalDeliveryCharge.toLocaleString("en-US")])
+        );
+      }
+
+      sectionTitle("Emirate-wise Summary");
+      table(
+        ["Emirate", "Delivered", "Amount"],
+        [200, 130, 130],
+        emirateBreakdown.map((r) => [r.emirate, r.delivered, r.totalSales.toLocaleString("en-US")])
+      );
+
+      sectionTitle("Payment-wise Summary");
+      table(
+        ["Method", "Delivered", "Amount"],
+        [200, 130, 130],
+        paymentBreakdown.map((r) => [r.method, r.delivered, r.totalSales.toLocaleString("en-US")])
+      );
+
+      sectionTitle(`Daily Breakdown — ${monthLabel}`);
+      table(
+        ["Date", "Delivered", "Pending", "Transfer", "Cancelled", "Sales", "DL Charge"],
+        [110, 90, 90, 90, 90, 110, 110],
+        dailyBreakdown.map((r) => [
+          r.date,
+          r.delivered,
+          r.pending,
+          r.transferred,
+          r.cancelled,
+          r.totalSales.toLocaleString("en-US"),
+          r.totalDeliveryCharge.toLocaleString("en-US"),
+        ])
+      );
+
+      drawLetterheadFooter(doc);
+      doc.end();
+      return;
+    }
+
     res.json({
-      month: `${year}-${String(month).padStart(2, "0")}`,
-      summary: { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) },
+      month: monthLabel,
+      summary: overallSummary,
       employeeBreakdown,
       agentBreakdown,
       vendorBreakdown,
