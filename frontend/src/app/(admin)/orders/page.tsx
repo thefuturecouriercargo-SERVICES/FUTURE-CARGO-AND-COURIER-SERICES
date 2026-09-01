@@ -91,6 +91,8 @@ const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 const [bulkEmirate, setBulkEmirate] = useState("");
 const [bulkEmployeeId, setBulkEmployeeId] = useState("");
+const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
+const [bulkReason, setBulkReason] = useState("");
 const [bulkSaving, setBulkSaving] = useState(false);
 const cnNoRef = useRef<HTMLInputElement>(null);
 const vendorRef = useRef<HTMLSelectElement>(null);
@@ -168,8 +170,12 @@ const filteredOrders = useMemo(() => {
 
   async function applyBulkUpdate() {
     if (selectedIds.size === 0) return;
-    if (!bulkEmirate && !bulkEmployeeId) {
-      setError("Choose an emirate and/or employee to apply to the selected consignments.");
+    if (!bulkEmirate && !bulkEmployeeId && !bulkStatus) {
+      setError("Choose an emirate, employee, and/or status to apply to the selected consignments.");
+      return;
+    }
+    if (bulkStatus === "CANCELLED" && !bulkReason.trim()) {
+      setError("Enter a reason for cancelling the selected consignments.");
       return;
     }
     setError(null);
@@ -181,11 +187,15 @@ const filteredOrders = useMemo(() => {
           ids: Array.from(selectedIds),
           ...(bulkEmirate ? { emirate: bulkEmirate } : {}),
           ...(bulkEmployeeId ? { employeeId: bulkEmployeeId } : {}),
+          ...(bulkStatus ? { status: bulkStatus } : {}),
+          ...(bulkStatus === "CANCELLED" ? { reason: bulkReason.trim() } : {}),
         },
       });
       setSelectedIds(new Set());
       setBulkEmirate("");
       setBulkEmployeeId("");
+      setBulkStatus("");
+      setBulkReason("");
       await load();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to update selected consignments");
@@ -531,9 +541,25 @@ required
         </option>
       ))}
     </select>
+    <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as OrderStatus | "")} className="rounded border border-line px-3 py-1.5 text-sm">
+      <option value="">Set status…</option>
+      {STATUSES.map((s) => (
+        <option key={s} value={s}>
+          {s}
+        </option>
+      ))}
+    </select>
+    {bulkStatus === "CANCELLED" && (
+      <input
+        value={bulkReason}
+        onChange={(e) => setBulkReason(e.target.value)}
+        placeholder="Reason for cancelling…"
+        className="rounded border border-cancelled px-3 py-1.5 text-sm"
+      />
+    )}
     <button
       onClick={applyBulkUpdate}
-      disabled={bulkSaving || (!bulkEmirate && !bulkEmployeeId)}
+      disabled={bulkSaving || (!bulkEmirate && !bulkEmployeeId && !bulkStatus)}
       className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
     >
       {bulkSaving ? "Applying…" : "Apply to selected"}
