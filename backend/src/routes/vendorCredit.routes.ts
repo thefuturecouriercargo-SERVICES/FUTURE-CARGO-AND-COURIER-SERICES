@@ -59,6 +59,12 @@ async function computeVendorCreditRows(selectedDate: Date) {
   // the main ledger — never fed into the Balance calculation above.
   const pendingTotalMap = new Map<string, number>();
   const pendingDeliveryChargeMap = new Map<string, number>();
+  // Same idea, but for a "Delivered Consignments" table — Opening/Today split just
+  // like the main ledger, scoped to Delivered orders only.
+  const deliveredOpeningAmountMap = new Map<string, number>();
+  const deliveredOpeningChargeMap = new Map<string, number>();
+  const deliveredTodayAmountMap = new Map<string, number>();
+  const deliveredTodayChargeMap = new Map<string, number>();
 
   for (const o of dedupedOrders) {
     // "Today" means genuinely entered today — NOT just resolved today. An order
@@ -73,13 +79,21 @@ async function computeVendorCreditRows(selectedDate: Date) {
     amountMap.set(o.vendorId, (amountMap.get(o.vendorId) ?? 0) + o.total);
     if (o.status === "CANCELLED") {
       cancelledMap.set(o.vendorId, (cancelledMap.get(o.vendorId) ?? 0) + o.total);
-    }
-    if (o.status === "DELIVERED") {
+    } else {
+      // Delivery charge is deducted as soon as an order isn't Cancelled — Pending and
+      // Transfer orders are still expected to complete, so their charge is counted
+      // right away instead of waiting until they're actually marked Delivered.
       chargeMap.set(o.vendorId, (chargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
     }
     if (o.status === "PENDING") {
       pendingTotalMap.set(o.vendorId, (pendingTotalMap.get(o.vendorId) ?? 0) + o.total);
       pendingDeliveryChargeMap.set(o.vendorId, (pendingDeliveryChargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+    if (o.status === "DELIVERED") {
+      const deliveredAmountMap = isToday ? deliveredTodayAmountMap : deliveredOpeningAmountMap;
+      const deliveredChargeMap = isToday ? deliveredTodayChargeMap : deliveredOpeningChargeMap;
+      deliveredAmountMap.set(o.vendorId, (deliveredAmountMap.get(o.vendorId) ?? 0) + o.total);
+      deliveredChargeMap.set(o.vendorId, (deliveredChargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
     }
   }
 
@@ -148,6 +162,14 @@ async function computeVendorCreditRows(selectedDate: Date) {
     const pendingDeliveryCharge = pendingDeliveryChargeMap.get(v.id) ?? 0;
     const pendingPayable = pendingTotal - pendingDeliveryCharge;
 
+    const deliveredOpening = deliveredOpeningAmountMap.get(v.id) ?? 0;
+    const deliveredOpeningCharge = deliveredOpeningChargeMap.get(v.id) ?? 0;
+    const deliveredToday = deliveredTodayAmountMap.get(v.id) ?? 0;
+    const deliveredTodayCharge = deliveredTodayChargeMap.get(v.id) ?? 0;
+    const deliveredTotal = deliveredOpening + deliveredToday;
+    const deliveredCharge = deliveredOpeningCharge + deliveredTodayCharge;
+    const deliveredPayable = deliveredTotal - deliveredCharge;
+
     return {
       vendor: { id: v.id, name: v.name, active: v.active },
       openingAmount,
@@ -163,6 +185,11 @@ async function computeVendorCreditRows(selectedDate: Date) {
       pendingTotal,
       pendingDeliveryCharge,
       pendingPayable,
+      deliveredOpening,
+      deliveredToday,
+      deliveredTotal,
+      deliveredCharge,
+      deliveredPayable,
     };
   });
 }
