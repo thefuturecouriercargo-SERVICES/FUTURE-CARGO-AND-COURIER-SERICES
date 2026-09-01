@@ -423,7 +423,6 @@ required
           </div>
         </form>
       </div>
-      )}
 
           <div className="border border-line bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
