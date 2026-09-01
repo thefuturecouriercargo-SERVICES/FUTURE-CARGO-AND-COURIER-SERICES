@@ -423,51 +423,6 @@ required
           </div>
         </form>
       </div>
-
-      {duplicateGroups.length > 0 && (
-        <div className="mb-6 border border-cancelled bg-cancelled-bg p-5">
-          <h2 className="mb-1 font-display text-[17px] font-semibold text-cancelled">
-            Duplicate CN No. Found ({duplicateGroups.length})
-          </h2>
-          <p className="mb-3 text-sm text-cancelled">
-            These consignment numbers exist more than once — likely leftover from before duplicates were blocked.
-            Review each and delete the wrong entry.
-          </p>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>CN No.</th>
-                  <th>Date</th>
-                  <th>Vendor</th>
-                  <th className="text-right">Total</th>
-                  <th>Employee</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {duplicateGroups.map((g) =>
-                  g.orders.map((o) => (
-                    <tr key={o.id}>
-                      <td className="font-mono font-semibold">{o.cnNo}</td>
-                      <td>{o.date.slice(0, 10)}</td>
-                      <td>{o.brandName}</td>
-                      <td className="text-right font-mono">{fmtNumber(o.total)}</td>
-                      <td>{o.employee.name}</td>
-                      <td>{o.status}</td>
-                      <td>
-                        <button onClick={() => deleteDuplicate(o.id)} className="text-xs text-cancelled hover:underline">
-                          Delete this one
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
 
           <div className="border border-line bg-white p-5">
