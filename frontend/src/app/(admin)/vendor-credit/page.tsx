@@ -20,6 +20,11 @@ interface VendorCreditRow {
   pendingTotal: number;
   pendingDeliveryCharge: number;
   pendingPayable: number;
+  deliveredOpening: number;
+  deliveredToday: number;
+  deliveredTotal: number;
+  deliveredCharge: number;
+  deliveredPayable: number;
 }
 
 interface VendorPayment {
@@ -137,6 +142,11 @@ export default function VendorCreditPage() {
       pendingTotal: acc.pendingTotal + r.pendingTotal,
       pendingDeliveryCharge: acc.pendingDeliveryCharge + r.pendingDeliveryCharge,
       pendingPayable: acc.pendingPayable + r.pendingPayable,
+      deliveredOpening: acc.deliveredOpening + r.deliveredOpening,
+      deliveredToday: acc.deliveredToday + r.deliveredToday,
+      deliveredTotal: acc.deliveredTotal + r.deliveredTotal,
+      deliveredCharge: acc.deliveredCharge + r.deliveredCharge,
+      deliveredPayable: acc.deliveredPayable + r.deliveredPayable,
     }),
     {
       openingAmount: 0,
@@ -152,6 +162,11 @@ export default function VendorCreditPage() {
       pendingTotal: 0,
       pendingDeliveryCharge: 0,
       pendingPayable: 0,
+      deliveredOpening: 0,
+      deliveredToday: 0,
+      deliveredTotal: 0,
+      deliveredCharge: 0,
+      deliveredPayable: 0,
     }
   );
 
@@ -586,6 +601,91 @@ export default function VendorCreditPage() {
                   <td className="text-right font-mono">{fmtNumber(totals.pendingTotal)}</td>
                   <td className="text-right font-mono">{fmtNumber(totals.pendingDeliveryCharge)}</td>
                   <td className="text-right font-mono text-brass">{fmtNumber(totals.pendingPayable)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        <div className="mt-6 border border-line bg-white p-5">
+          <h2 className="mb-1 font-display text-[17px] font-semibold text-navy">Delivered Consignments Summary</h2>
+          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+            View only — what&apos;s already Delivered per vendor for <b>{date}</b>, split into Opening (before
+            today) and Today, with delivery charge deducted to show what&apos;s payable. Not part of the Balance
+            above.
+          </p>
+
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2.5 md:hidden">
+            {rows.map((r) => (
+              <div key={r.vendor.id} className={`rounded border border-line p-3.5 ${r.vendor.active ? "" : "opacity-50"}`}>
+                <div className="mb-2 font-display text-sm font-semibold text-navy">{r.vendor.name}</div>
+                <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Opening</div>
+                    <div className="font-semibold">{fmtNumber(r.deliveredOpening)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Today</div>
+                    <div className="font-semibold">{fmtNumber(r.deliveredToday)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Delivered Charge</div>
+                    <div className="font-semibold">{fmtNumber(r.deliveredCharge)}</div>
+                  </div>
+                  <div>
+                    <div className="mb-0.5 text-[10px] uppercase text-ink-soft">Balance to Pay</div>
+                    <div className="font-semibold text-brass">{fmtNumber(r.deliveredPayable)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rows.length > 0 && (
+              <div className="rounded border-2 border-navy p-3.5">
+                <div className="mb-2 font-display text-sm font-semibold text-navy">TOTAL</div>
+                <div className="grid grid-cols-2 gap-2 text-center font-mono text-xs">
+                  <div className="font-semibold">{fmtNumber(totals.deliveredOpening)}</div>
+                  <div className="font-semibold">{fmtNumber(totals.deliveredToday)}</div>
+                  <div className="font-semibold">{fmtNumber(totals.deliveredCharge)}</div>
+                  <div className="font-semibold text-brass">{fmtNumber(totals.deliveredPayable)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop: table */}
+          <table className="data-table hidden md:table">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th className="text-right">Opening</th>
+                <th className="text-right">Today</th>
+                <th className="text-right">Delivered (Total)</th>
+                <th className="text-right">Delivery Charge (Less)</th>
+                <th className="text-right">Balance to Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.vendor.id} className={r.vendor.active ? "" : "opacity-50"}>
+                  <td>{r.vendor.name}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.deliveredOpening)}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.deliveredToday)}</td>
+                  <td className="text-right font-mono font-semibold">{fmtNumber(r.deliveredTotal)}</td>
+                  <td className="text-right font-mono">{fmtNumber(r.deliveredCharge)}</td>
+                  <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.deliveredPayable)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {rows.length > 0 && (
+              <tfoot>
+                <tr className="font-semibold">
+                  <td>TOTAL</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.deliveredOpening)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.deliveredToday)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.deliveredTotal)}</td>
+                  <td className="text-right font-mono">{fmtNumber(totals.deliveredCharge)}</td>
+                  <td className="text-right font-mono text-brass">{fmtNumber(totals.deliveredPayable)}</td>
                 </tr>
               </tfoot>
             )}
