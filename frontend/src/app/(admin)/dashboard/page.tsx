@@ -76,6 +76,9 @@ export default function DailyDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
+  const [newEntriesMonth, setNewEntriesMonth] = useState(() => todayStr().slice(0, 7));
+  const [newEntriesRows, setNewEntriesRows] = useState<{ date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
+  const [loadingNewEntries, setLoadingNewEntries] = useState(false);
   const voiceSearch = useVoiceSearch((digits) => setSearch(digits));
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
 const [useRange, setUseRange] = useState(false);
@@ -163,6 +166,20 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 }, [search]);
 
   useSocketEvent("order:changed", load);
+
+  const loadNewEntries = useCallback(async () => {
+    setLoadingNewEntries(true);
+    try {
+      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/vendor-credit/new-entries", { query: { month: newEntriesMonth } });
+      setNewEntriesRows(res.rows);
+    } finally {
+      setLoadingNewEntries(false);
+    }
+  }, [newEntriesMonth]);
+
+  useEffect(() => {
+    loadNewEntries();
+  }, [loadNewEntries]);
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
@@ -675,13 +692,14 @@ return (
                     <th>Emirate</th>
                     <th>Employee</th>
                     <th>Status</th>
+                    <th>Entry Date</th>
                     <th>Reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-10 text-center text-ink-soft">
+                      <td colSpan={11} className="py-10 text-center text-ink-soft">
                         No consignments match this filter.
                       </td>
                     </tr>
@@ -699,6 +717,9 @@ return (
                         <td>
                           <StatusStamp status={o.status} date={o.date} />
                         </td>
+                        <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
+                          {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </td>
                         <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                           {o.remarks || "—"}
                         </td>
@@ -708,6 +729,58 @@ return (
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="mt-5 border border-line bg-white p-5">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
+              <input
+                type="month"
+                value={newEntriesMonth}
+                onChange={(e) => setNewEntriesMonth(e.target.value)}
+                className="rounded border border-line px-2.5 py-1.5 text-sm"
+              />
+            </div>
+            <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+              How many genuinely new consignments each vendor got, per day. Counts an order only on the day it
+              was actually entered — not carried-over or resolved days.
+            </p>
+
+            {loadingNewEntries ? (
+              <p className="text-sm text-ink-soft">Loading…</p>
+            ) : newEntriesRows.length === 0 ? (
+              <p className="py-8 text-center text-sm text-ink-soft">No new entries this month.</p>
+            ) : (
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Vendor</th>
+                      <th className="text-right">New Entries</th>
+                      <th className="text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {newEntriesRows.map((r) => (
+                      <tr key={`${r.date}-${r.vendorId}`}>
+                        <td>{r.date}</td>
+                        <td>{r.vendorName}</td>
+                        <td className="text-right font-mono">{r.count}</td>
+                        <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td colSpan={2}>TOTAL</td>
+                      <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
+                      <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         </>
       ) : null}
