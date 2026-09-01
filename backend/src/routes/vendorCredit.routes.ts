@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange } from "../utils/dates";
+import { dayRange, monthRange, formatDate } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -31,6 +31,40 @@ function toDubaiDateOnly(d: Date): number {
   const shifted = new Date(d.getTime() + dubaiOffsetMs);
   return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
 }
+
+// New-entries report: for a given month, how many genuinely new consignments each
+// vendor got each day. "New" means created that day (same rule as Today/Opening
+// elsewhere) — not orders merely carried over or resolved that day.
+router.get(
+  "/new-entries",
+  asyncHandler(async (req, res) => {
+    const { start, end, year, month } = monthRange(req.query.month as string | undefined);
+    const orders = await prisma.order.findMany({
+      where: { createdAt: { gte: start, lt: new Date(end.getTime() + 24 * 60 * 60 * 1000) } },
+      select: { vendorId: true, vendor: { select: { name: true } }, total: true, createdAt: true, cnNo: true },
+    });
+
+    // Only count each CN once even if somehow entered more than once.
+    const seenCn = new Set<number>();
+    const key = (dateStr: string, vendorId: string) => `${dateStr}::${vendorId}`;
+    const grouped = new Map<string, { date: string; vendorId: string; vendorName: string; count: number; totalAmount: number }>();
+
+    for (const o of orders) {
+      if (seenCn.has(o.cnNo)) continue;
+      seenCn.add(o.cnNo);
+      const dateStr = formatDate(new Date(toDubaiDateOnly(o.createdAt)));
+      const k = key(dateStr, o.vendorId);
+      const existing = grouped.get(k) ?? { date: dateStr, vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0 };
+      existing.count += 1;
+      existing.totalAmount += o.total;
+      grouped.set(k, existing);
+    }
+
+    const rows = Array.from(grouped.values()).sort((a, b) => (a.date === b.date ? a.vendorName.localeCompare(b.vendorName) : a.date.localeCompare(b.date)));
+
+    res.json({ month: `${year}-${String(month).padStart(2, "0")}`, rows });
+  })
+);
 
 async function computeVendorCreditRows(selectedDate: Date) {
   const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
