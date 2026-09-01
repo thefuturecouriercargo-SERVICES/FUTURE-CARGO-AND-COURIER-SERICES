@@ -117,7 +117,9 @@ router.get(
       status: o.status,
     }));
 
-    const sumTotal = rows.reduce((s, r) => s + r.total, 0);
+    // Total excludes still-open orders (Pending/Transfer) — only resolved business
+    // (Delivered + Cancelled) counts toward the report's totals.
+    const sumTotal = rows.filter((r) => r.status === "DELIVERED" || r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
     // Only count delivery charge on Delivered orders — a Cancelled order's charge
     // was never actually earned, and its total is already removed via sumCancelled below.
     const sumDl = rows.filter((r) => r.status === "DELIVERED").reduce((s, r) => s + r.dl, 0);
