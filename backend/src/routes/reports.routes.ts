@@ -22,7 +22,11 @@ function buildWhere(query: Record<string, unknown>): Prisma.OrderWhereInput {
   }
   if (query.employeeId) where.employeeId = query.employeeId as string;
   if (query.vendorId) where.vendorId = query.vendorId as string;
-  if (query.status) where.status = query.status as never;
+  if (query.status) {
+    // Supports one or more statuses, comma-separated (e.g. "PENDING,TRANSFER").
+    const statuses = (query.status as string).split(",").filter(Boolean);
+    where.status = statuses.length > 1 ? { in: statuses as never[] } : (statuses[0] as never);
+  }
   if (query.payment) where.payment = query.payment as never;
   if (query.emirate) where.emirate = (query.emirate as string).toUpperCase();
   return where;
@@ -66,10 +70,10 @@ router.get(
       if (q.vendorId) carryWhere.vendorId = q.vendorId as string;
       if (q.payment) carryWhere.payment = q.payment as never;
       if (q.emirate) carryWhere.emirate = (q.emirate as string).toUpperCase();
-      // A status filter narrower than Pending/Transfer means the user explicitly
-      // wants only that status, so skip carryover in that case (nothing would match).
-      const statusFilter = q.status as string | undefined;
-      const skipCarryover = statusFilter && statusFilter !== "PENDING" && statusFilter !== "TRANSFER";
+      // A status filter that includes neither Pending nor Transfer means the user
+      // explicitly wants only resolved statuses, so skip carryover (nothing would match).
+      const statusFilterList = q.status ? (q.status as string).split(",").filter(Boolean) : [];
+      const skipCarryover = statusFilterList.length > 0 && !statusFilterList.includes("PENDING") && !statusFilterList.includes("TRANSFER");
 
       if (!skipCarryover) {
         const raw = await prisma.order.findMany({
