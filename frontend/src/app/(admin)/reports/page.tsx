@@ -12,10 +12,10 @@ export default function ReportsPage() {
     to: "",
     employeeId: "",
     vendorId: "",
-    status: "",
     payment: "",
     emirate: "",
   });
+  const [statuses, setStatuses] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch<Employee[]>("/employees", { query: { isAgent: "false" } }).then(setEmployees);
@@ -26,14 +26,19 @@ export default function ReportsPage() {
     setFilters((f) => ({ ...f, [key]: value }));
   }
 
-  function clearFilters() {
-    setFilters({ from: "", to: "", employeeId: "", vendorId: "", status: "", payment: "", emirate: "" });
+  function toggleStatus(s: string) {
+    setStatuses((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
-  const activeFilters = Object.entries(filters).filter(([, v]) => v);
+  function clearFilters() {
+    setFilters({ from: "", to: "", employeeId: "", vendorId: "", payment: "", emirate: "" });
+    setStatuses([]);
+  }
+
+  const activeFilters = [...Object.entries(filters).filter(([, v]) => v), ...(statuses.length > 0 ? [["status", statuses.join(", ")]] : [])];
 
   function exportReport(format: "excel" | "pdf") {
-    const url = reportExportUrl({ ...filters, format });
+    const url = reportExportUrl({ ...filters, status: statuses.join(","), format });
     window.open(url, "_blank");
   }
 
@@ -80,14 +85,14 @@ export default function ReportsPage() {
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Status</label>
-            <select value={filters.status} onChange={(e) => set("status", e.target.value)} className="w-full rounded border border-line px-2.5 py-2 text-sm">
-              <option value="">All statuses</option>
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5 rounded border border-line px-2.5 py-2">
               {STATUSES.map((s) => (
-                <option key={s} value={s}>
+                <label key={s} className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={statuses.includes(s)} onChange={() => toggleStatus(s)} />
                   {s}
-                </option>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Payment mode</label>
