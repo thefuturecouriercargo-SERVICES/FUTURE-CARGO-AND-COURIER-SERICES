@@ -11,6 +11,42 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
+// New-entries report: for a given day, how many genuinely new consignments each
+// agent got. "New" means created that day — not orders merely carried over or
+// resolved that day. Same rule used on the Vendor Credit page's equivalent report.
+router.get(
+  "/new-entries",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange(req.query.date as string | undefined);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const agents = await prisma.user.findMany({ where: { isAgent: true }, select: { id: true, name: true } });
+    const agentIds = agents.map((a) => a.id);
+
+    const orders = await prisma.order.findMany({
+      where: { employeeId: { in: agentIds }, createdAt: { gte: start, lt: end } },
+      select: { employeeId: true, total: true, cnNo: true },
+    });
+
+    const seenCn = new Set<number>();
+    const grouped = new Map<string, { agentId: string; agentName: string; count: number; totalAmount: number }>();
+
+    for (const o of orders) {
+      if (seenCn.has(o.cnNo)) continue;
+      seenCn.add(o.cnNo);
+      const agent = agents.find((a) => a.id === o.employeeId);
+      if (!agent) continue;
+      const existing = grouped.get(o.employeeId) ?? { agentId: o.employeeId, agentName: agent.name, count: 0, totalAmount: 0 };
+      existing.count += 1;
+      existing.totalAmount += o.total;
+      grouped.set(o.employeeId, existing);
+    }
+
+    const rows = Array.from(grouped.values()).sort((a, b) => a.agentName.localeCompare(b.agentName));
+
+    res.json({ rows });
+  })
+);
+
 // Agent credit = what each agent still owes us.
 //   Balance = Total Amount (every consignment/order the agent has taken, any status)
 //           - Cancelled Total (orders that never got delivered — no money involved)
