@@ -64,6 +64,10 @@ export default function AgentsPage() {
   const [monthlyRows, setMonthlyRows] = useState<AgentBreakdownRow[]>([]);
   const [loadingMonthly, setLoadingMonthly] = useState(false);
 
+  const [newEntriesDate, setNewEntriesDate] = useState(todayStr());
+  const [newEntriesRows, setNewEntriesRows] = useState<{ agentId: string; agentName: string; count: number; totalAmount: number }[]>([]);
+  const [loadingNewEntries, setLoadingNewEntries] = useState(false);
+
   const load = useCallback(async () => {
     const list = await apiFetch<Employee[]>("/employees", { query: { includeInactive: true, isAgent: "true" } });
     setAgents(list);
@@ -82,6 +86,16 @@ export default function AgentsPage() {
     }
   }, [month]);
 
+  const loadNewEntries = useCallback(async () => {
+    setLoadingNewEntries(true);
+    try {
+      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/agent-credit/new-entries", { query: { date: newEntriesDate } });
+      setNewEntriesRows(res.rows);
+    } finally {
+      setLoadingNewEntries(false);
+    }
+  }, [newEntriesDate]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -89,6 +103,10 @@ export default function AgentsPage() {
   useEffect(() => {
     loadMonthly();
   }, [loadMonthly]);
+
+  useEffect(() => {
+    loadNewEntries();
+  }, [loadNewEntries]);
 
   function resetForm() {
     setForm(emptyForm);
@@ -725,6 +743,60 @@ export default function AgentsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-6 border border-line bg-white p-5">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNewEntriesDate(addDays(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                ← Prev
+              </button>
+              <input type="date" value={newEntriesDate} onChange={(e) => setNewEntriesDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+              <button onClick={() => setNewEntriesDate(addDays(newEntriesDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                Next →
+              </button>
+              <button onClick={() => setNewEntriesDate(todayStr())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+                Today
+              </button>
+            </div>
+          </div>
+          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+            How many genuinely new consignments each agent got on <b>{newEntriesDate}</b>. Counts an order only
+            on the day it was actually entered — not carried-over or resolved days.
+          </p>
+
+          {loadingNewEntries ? (
+            <p className="text-sm text-ink-soft">Loading…</p>
+          ) : newEntriesRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th className="text-right">New Entries</th>
+                  <th className="text-right">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {newEntriesRows.map((r) => (
+                  <tr key={r.agentId}>
+                    <td>{r.agentName}</td>
+                    <td className="text-right font-mono">{r.count}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td>TOTAL</td>
+                  <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
+                  <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       </div>
     </AuthGate>
