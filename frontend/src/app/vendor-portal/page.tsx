@@ -28,6 +28,9 @@ interface CreditSummary {
   totalDeliveryCharge: number;
   totalPaid: number;
   balance: number;
+  deliveredTotal: number;
+  deliveredCharge: number;
+  deliveredBalance: number;
 }
 
 interface VendorPayment {
@@ -220,6 +223,12 @@ function VendorPortalContent() {
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Balance</div>
               <div className={`font-display text-xl font-semibold ${credit.balance > 0 ? "text-cancelled" : "text-delivered"}`}>
                 {fmtNumber(credit.balance)}
+              </div>
+            </div>
+            <div className="border border-brass/40 bg-brass/10 p-4" title="Total of Delivered items minus their delivery charge, minus what's already been paid">
+              <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Delivered Balance</div>
+              <div className={`font-display text-xl font-semibold ${credit.deliveredBalance > 0 ? "text-cancelled" : "text-delivered"}`}>
+                {fmtNumber(credit.deliveredBalance)}
               </div>
             </div>
           </div>
