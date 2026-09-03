@@ -116,6 +116,12 @@ router.get(
     let todayAmount = 0;
     let todayCancelled = 0;
     let todayCharge = 0;
+    // Delivered-only figures, tracked separately — Balance for just what's actually
+    // Delivered (Total − Delivery Charge), not the overall running Balance above.
+    let openingDeliveredAmount = 0;
+    let openingDeliveredCharge = 0;
+    let todayDeliveredAmount = 0;
+    let todayDeliveredCharge = 0;
 
     for (const o of deduped) {
       // Same rule as the admin Vendor Credit page: "today" means genuinely entered
@@ -131,6 +137,15 @@ router.get(
         openingAmount += o.total;
         if (o.status === "CANCELLED") openingCancelled += o.total;
         else openingCharge += o.deliveryCharge;
+      }
+      if (o.status === "DELIVERED") {
+        if (isToday) {
+          todayDeliveredAmount += o.total;
+          todayDeliveredCharge += o.deliveryCharge;
+        } else {
+          openingDeliveredAmount += o.total;
+          openingDeliveredCharge += o.deliveryCharge;
+        }
       }
     }
 
@@ -155,6 +170,13 @@ router.get(
     const totalPaid = openingPaid + todayPaid;
     const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
 
+    // Delivered-only balance: what's actually been Delivered, minus its own delivery
+    // charge, minus what's already been paid — decreases as payments come in, just
+    // like the overall Balance above.
+    const deliveredTotal = openingDeliveredAmount + todayDeliveredAmount;
+    const deliveredCharge = openingDeliveredCharge + todayDeliveredCharge;
+    const deliveredBalance = deliveredTotal - deliveredCharge - totalPaid;
+
     res.json({
       openingAmount,
       openingCancelled,
@@ -165,6 +187,9 @@ router.get(
       totalDeliveryCharge,
       totalPaid,
       balance,
+      deliveredTotal,
+      deliveredCharge,
+      deliveredBalance,
     });
   })
 );
