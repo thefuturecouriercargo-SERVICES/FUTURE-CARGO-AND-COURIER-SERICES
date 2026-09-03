@@ -38,7 +38,8 @@ function toDubaiDateOnly(d: Date): number {
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
-    const { start, end } = dayRange(req.query.date as string | undefined);
+    const { start } = dayRange(req.query.date as string | undefined);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const orders = await prisma.order.findMany({
       where: { createdAt: { gte: start, lt: end } },
       select: { vendorId: true, vendor: { select: { name: true } }, total: true, createdAt: true, cnNo: true },
