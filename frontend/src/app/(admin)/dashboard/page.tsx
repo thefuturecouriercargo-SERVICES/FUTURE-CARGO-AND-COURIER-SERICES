@@ -64,6 +64,7 @@ interface DailyResponse {
   date: string;
   summary: Summary;
 employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number })[];
+  agentBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number })[];
   vendorBreakdown: ({ vendor: { id: string; name: string } } & Summary)[];
   emirateBreakdown: ({ emirate: string } & Summary)[];
   paymentBreakdown: ({ method: string } & Summary)[];
