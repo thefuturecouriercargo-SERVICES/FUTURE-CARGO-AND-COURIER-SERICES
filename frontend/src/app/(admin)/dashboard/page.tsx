@@ -183,6 +183,14 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
+  // Sum of each driver's own attributed pending (their own carryover included) —
+  // used for the TOTAL row so it matches the sum of the rows actually shown, instead
+  // of the company-wide pending figure (which also includes agents' carryover).
+  const employeePendingTotal = employeeRows.reduce(
+    (s, r) => s + r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length,
+    0
+  );
+
 const sourceOrders =
   search.trim() && globalResults
     ? globalResults
@@ -335,7 +343,7 @@ return (
                     <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
                     <span className="font-mono text-sm font-semibold text-navy">
                       {employeeRows.reduce((s, r) => s + r.delivered, 0) +
-                        data.summary.pending + pendingCarryover.length +
+                        employeePendingTotal +
                         employeeRows.reduce((s, r) => s + r.transferred, 0) +
                         employeeRows.reduce((s, r) => s + r.cancelled, 0)}{" "}
                       total
@@ -356,7 +364,7 @@ return (
                     </div>
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Pending</span>
-                      <span>{data.summary.pending + pendingCarryover.length}</span>
+                      <span>{employeePendingTotal}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Cancelled</span>
@@ -406,12 +414,12 @@ return (
   <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.delivered, 0)}</td>
   <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</td>
   <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</td>
-  <td className="text-right font-mono">{data.summary.pending + pendingCarryover.length}</td>
+  <td className="text-right font-mono">{employeePendingTotal}</td>
   <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</td>
   <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.transferred, 0)}</td>
   <td className="text-right font-mono">
     {employeeRows.reduce((s, r) => s + r.delivered, 0) +
-      data.summary.pending + pendingCarryover.length +
+      employeePendingTotal +
       employeeRows.reduce((s, r) => s + r.transferred, 0) +
       employeeRows.reduce((s, r) => s + r.cancelled, 0)}
   </td>
