@@ -183,6 +183,11 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
+  // Agent IDs, so we can exclude their carryover from every top-level total below —
+  // the Dashboard (including its top summary) intentionally shows drivers only.
+  const agentIdSet = new Set((data?.agentBreakdown ?? []).map((r) => r.employee.id));
+  const nonAgentPendingCarryover = pendingCarryover.filter((o) => !agentIdSet.has(o.employeeId));
+
   // Sum of each driver's own attributed pending (their own carryover included) —
   // used for the TOTAL row so it matches the sum of the rows actually shown, instead
   // of the company-wide pending figure (which also includes agents' carryover).
@@ -261,7 +266,7 @@ return (
               <KpiCard label="Delivered" value={data.summary.delivered} />
             </div>
             <div className="bg-white">
-            <KpiCard label="Pending" value={data.summary.pending + pendingCarryover.length} />
+            <KpiCard label="Pending" value={data.summary.pending + nonAgentPendingCarryover.length} />
             </div>
            <div className="bg-white">
               <KpiCard label="Transfer" value={data.summary.transferred} />
@@ -275,7 +280,7 @@ return (
                 value={
                   data.summary.delivered +
                   data.summary.pending +
-                  pendingCarryover.length +
+                  nonAgentPendingCarryover.length +
                   data.summary.transferred +
                   data.summary.cancelled
                 }
