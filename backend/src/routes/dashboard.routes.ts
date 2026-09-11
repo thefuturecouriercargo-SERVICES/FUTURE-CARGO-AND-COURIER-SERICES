@@ -130,16 +130,21 @@ const expenses = await prisma.expenseEntry.findMany({
       };
     });
 
+    // Everything below this point (top summary, vendor/emirate/payment breakdowns,
+    // and the consignment list itself) intentionally excludes agents entirely —
+    // agent activity is visible only on the dedicated Agents page, never here.
+    const nonAgentOrders = orders.filter((o) => !o.employee.isAgent);
+
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
     const vendorBreakdown = vendors
       .map((v) => {
-        const own = orders.filter((o) => o.vendorId === v.id);
+        const own = nonAgentOrders.filter((o) => o.vendorId === v.id);
         return { vendor: { id: v.id, name: v.name }, ...summarize(own) };
       })
       .filter((v) => v.totalOrders > 0);
 
     const emirateMap = new Map<string, Order[]>();
-    for (const o of orders) {
+    for (const o of nonAgentOrders) {
       const list = emirateMap.get(o.emirate) ?? [];
       list.push(o);
       emirateMap.set(o.emirate, list);
@@ -150,16 +155,16 @@ const expenses = await prisma.expenseEntry.findMany({
     }));
 
     const paymentBreakdown = [
-      { method: "CASH", ...summarize(orders.filter((o) => o.payment === "CASH")) },
-      { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
+      { method: "CASH", ...summarize(nonAgentOrders.filter((o) => o.payment === "CASH")) },
+      { method: "BANK", ...summarize(nonAgentOrders.filter((o) => o.payment === "BANK")) },
     ];
 
  const totalExpensesAll = expenses.filter((e) => e.category !== "OTHER").reduce((s, e) => s + e.amount, 0);
     const totalOtherDeductionAll = expenses.filter((e) => e.category === "OTHER").reduce((s, e) => s + e.amount, 0);
-    const overallSummary = summarize(orders);
+    const overallSummary = summarize(nonAgentOrders);
     // Company revenue excludes delivery charge from agent employees (no delivery
     // charge is actually received on their orders — recorded only for vendor credit calc).
-    const revenueDlCharge = revenueDeliveryCharge(orders);
+    const revenueDlCharge = revenueDeliveryCharge(nonAgentOrders);
 
     res.json({
       date: label,
@@ -214,16 +219,19 @@ router.get(
       return { employee: { id: a.id, name: a.name }, ...summarize(own) };
     });
 
+    // Everything below intentionally excludes agents — same rule as /daily.
+    const nonAgentOrders = orders.filter((o) => !o.employee.isAgent);
+
     const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
     const vendorBreakdown = vendors
       .map((v) => {
-        const own = orders.filter((o) => o.vendorId === v.id);
+        const own = nonAgentOrders.filter((o) => o.vendorId === v.id);
         return { vendor: { id: v.id, name: v.name }, ...summarize(own) };
       })
       .filter((v) => v.totalOrders > 0);
 
     const emirateMap = new Map<string, Order[]>();
-    for (const o of orders) {
+    for (const o of nonAgentOrders) {
       const list = emirateMap.get(o.emirate) ?? [];
       list.push(o);
       emirateMap.set(o.emirate, list);
@@ -234,7 +242,7 @@ router.get(
     }));
 
     const dateMap = new Map<string, Order[]>();
-    for (const o of orders) {
+    for (const o of nonAgentOrders) {
       const key = formatDate(o.date);
       const list = dateMap.get(key) ?? [];
       list.push(o);
@@ -245,12 +253,12 @@ router.get(
       .map(([date, own]) => ({ date, ...summarize(own) }));
 
     const paymentBreakdown = [
-      { method: "CASH", ...summarize(orders.filter((o) => o.payment === "CASH")) },
-      { method: "BANK", ...summarize(orders.filter((o) => o.payment === "BANK")) },
+      { method: "CASH", ...summarize(nonAgentOrders.filter((o) => o.payment === "CASH")) },
+      { method: "BANK", ...summarize(nonAgentOrders.filter((o) => o.payment === "BANK")) },
     ];
 
     const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
-    const overallSummary = { ...summarize(orders), totalDeliveryCharge: revenueDeliveryCharge(orders) };
+    const overallSummary = { ...summarize(nonAgentOrders), totalDeliveryCharge: revenueDeliveryCharge(nonAgentOrders) };
 
     if (req.query.format === "pdf") {
       res.setHeader("Content-Type", "application/pdf");
