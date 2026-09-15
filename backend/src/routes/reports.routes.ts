@@ -40,111 +40,143 @@ function fmtDayMonthYear(d: Date): string {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Shared by both /export (PDF/Excel download) and /preview (JSON, shown on-screen
+// before downloading) — guarantees the preview always matches the real export exactly,
+// since they run the identical query and calculation.
+async function computeConsignmentReport(q: Record<string, unknown>) {
+  const where = buildWhere(q);
+
+  const rangeOrders = await prisma.order.findMany({
+    where,
+    include: { vendor: true, employee: { select: { name: true } } },
+    orderBy: [{ date: "asc" }, { slNo: "asc" }],
+    take: 50000,
+  });
+
+  // Carry forward any still-unresolved Pending/Transfer orders entered before the
+  // "from" date but not yet Delivered/Cancelled — kept as a clearly separate section
+  // below, so it's obvious which rows are the requested date range vs. older backlog
+  // still open. (Never silently blended together — that's what caused a report for
+  // a single day to look dominated by much older dates.)
+  let carriedOrders: typeof rangeOrders = [];
+  if (q.from) {
+    const fromDate = parseDateParam(q.from as string);
+    const carryWhere: Record<string, unknown> = {
+      date: { lt: fromDate },
+      status: { in: ["PENDING", "TRANSFER"] },
+    };
+    if (q.employeeId) carryWhere.employeeId = q.employeeId as string;
+    if (q.vendorId) carryWhere.vendorId = q.vendorId as string;
+    if (q.payment) carryWhere.payment = q.payment as never;
+    if (q.emirate) carryWhere.emirate = (q.emirate as string).toUpperCase();
+    // A status filter that includes neither Pending nor Transfer means the user
+    // explicitly wants only resolved statuses, so skip carryover (nothing would match).
+    const statusFilterList = q.status ? (q.status as string).split(",").filter(Boolean) : [];
+    const skipCarryover = statusFilterList.length > 0 && !statusFilterList.includes("PENDING") && !statusFilterList.includes("TRANSFER");
+
+    if (!skipCarryover) {
+      const raw = await prisma.order.findMany({
+        where: carryWhere,
+        include: { vendor: true, employee: { select: { name: true } } },
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      });
+      // Dedupe by CN No., keeping only the most recent entry per consignment.
+      const seenCn = new Set<number>();
+      carriedOrders = raw
+        .filter((o) => {
+          if (seenCn.has(o.cnNo)) return false;
+          seenCn.add(o.cnNo);
+          return true;
+        })
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+  }
+
+  const orders = [...rangeOrders, ...carriedOrders];
+
+  const columns = [
+    { header: "Date", key: "date", width: 12 },
+    { header: "SL No", key: "slNo", width: 8 },
+    { header: "CN No", key: "cnNo", width: 12 },
+    { header: "Vendor", key: "brand", width: 14 },
+    { header: "Total (AED)", key: "total", width: 12 },
+    { header: "DL Charge", key: "dl", width: 10 },
+    { header: "Payment", key: "payment", width: 10 },
+    { header: "Emirate", key: "emirate", width: 12 },
+    { header: "Employee", key: "employee", width: 14 },
+    { header: "Status", key: "status", width: 12 },
+  ];
+
+  const rows = orders.map((o) => ({
+    date: formatDate(o.date),
+    slNo: o.slNo,
+    cnNo: o.cnNo,
+    brand: o.brandName,
+    total: o.total,
+    dl: o.deliveryCharge,
+    payment: o.payment,
+    emirate: o.emirate,
+    employee: o.employee.name,
+    status: o.status,
+  }));
+
+  // Total excludes still-open orders (Pending/Transfer) — only resolved business
+  // (Delivered + Cancelled) counts toward the report's totals.
+  const sumTotal = rows.filter((r) => r.status === "DELIVERED" || r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
+  // Only count delivery charge on Delivered orders — a Cancelled order's charge
+  // was never actually earned, and its total is already removed via sumCancelled below.
+  const sumDl = rows.filter((r) => r.status === "DELIVERED").reduce((s, r) => s + r.dl, 0);
+  const sumCancelled = rows.filter((r) => r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
+  const balance = sumTotal - sumCancelled - sumDl;
+
+  // A plain-English summary of exactly what was requested, so the report itself
+  // states its own scope — not just when it happened to be generated. Formatted
+  // DD/MM/YYYY to match the "Exported on" line above it.
+  const fromDisplay = q.from ? fmtDayMonthYear(parseDateParam(q.from as string)) : undefined;
+  const toDisplay = q.to ? fmtDayMonthYear(parseDateParam(q.to as string)) : undefined;
+  const filterParts: string[] = [];
+  if (fromDisplay && toDisplay && q.from === q.to) filterParts.push(`Date: ${fromDisplay}`);
+  else if (fromDisplay || toDisplay) filterParts.push(`Date: ${fromDisplay ?? "…"} to ${toDisplay ?? "…"}`);
+  else filterParts.push("Date: All dates");
+  if (q.status) filterParts.push(`Status: ${q.status}`);
+  if (q.payment) filterParts.push(`Payment: ${q.payment}`);
+  if (q.emirate) filterParts.push(`Emirate: ${q.emirate}`);
+  if (q.vendorId) filterParts.push(`Vendor filtered`);
+  if (q.employeeId) filterParts.push(`Employee filtered`);
+  const filterSummary = filterParts.join("  ·  ");
+
+  return { rangeOrders, carriedOrders, columns, rows, sumTotal, sumDl, sumCancelled, balance, filterSummary };
+}
+
+// Preview: same computation as the real export, returned as JSON so the Reports page
+// can show exactly what a download would contain before the user commits to it.
+router.get(
+  "/preview",
+  asyncHandler(async (req, res) => {
+    const { rangeOrders, carriedOrders, rows, sumTotal, sumDl, sumCancelled, balance, filterSummary } = await computeConsignmentReport(
+      req.query as Record<string, unknown>
+    );
+    res.json({
+      filterSummary,
+      rangeCount: rangeOrders.length,
+      carriedCount: carriedOrders.length,
+      rows: rows.slice(0, 500), // cap what's shown on-screen; the real export has no cap
+      truncated: rows.length > 500,
+      totalRows: rows.length,
+      sumTotal,
+      sumDl,
+      sumCancelled,
+      balance,
+    });
+  })
+);
+
 router.get(
   "/export",
   asyncHandler(async (req, res) => {
     const format = (req.query.format as string) ?? "excel";
     const q = req.query as Record<string, unknown>;
-    const where = buildWhere(q);
-
-    const rangeOrders = await prisma.order.findMany({
-      where,
-      include: { vendor: true, employee: { select: { name: true } } },
-      orderBy: [{ date: "asc" }, { slNo: "asc" }],
-      take: 50000,
-    });
-
-    // Carry forward any still-unresolved Pending/Transfer orders entered before the
-    // "from" date but not yet Delivered/Cancelled — kept as a clearly separate section
-    // below, so it's obvious which rows are the requested date range vs. older backlog
-    // still open. (Never silently blended together — that's what caused a report for
-    // a single day to look dominated by much older dates.)
-    let carriedOrders: typeof rangeOrders = [];
-    if (q.from) {
-      const fromDate = parseDateParam(q.from as string);
-      const carryWhere: Record<string, unknown> = {
-        date: { lt: fromDate },
-        status: { in: ["PENDING", "TRANSFER"] },
-      };
-      if (q.employeeId) carryWhere.employeeId = q.employeeId as string;
-      if (q.vendorId) carryWhere.vendorId = q.vendorId as string;
-      if (q.payment) carryWhere.payment = q.payment as never;
-      if (q.emirate) carryWhere.emirate = (q.emirate as string).toUpperCase();
-      // A status filter that includes neither Pending nor Transfer means the user
-      // explicitly wants only resolved statuses, so skip carryover (nothing would match).
-      const statusFilterList = q.status ? (q.status as string).split(",").filter(Boolean) : [];
-      const skipCarryover = statusFilterList.length > 0 && !statusFilterList.includes("PENDING") && !statusFilterList.includes("TRANSFER");
-
-      if (!skipCarryover) {
-        const raw = await prisma.order.findMany({
-          where: carryWhere,
-          include: { vendor: true, employee: { select: { name: true } } },
-          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-        });
-        // Dedupe by CN No., keeping only the most recent entry per consignment.
-        const seenCn = new Set<number>();
-        carriedOrders = raw
-          .filter((o) => {
-            if (seenCn.has(o.cnNo)) return false;
-            seenCn.add(o.cnNo);
-            return true;
-          })
-          .sort((a, b) => a.date.getTime() - b.date.getTime());
-      }
-    }
-
-    const orders = [...rangeOrders, ...carriedOrders];
-
-    const columns = [
-      { header: "Date", key: "date", width: 12 },
-      { header: "SL No", key: "slNo", width: 8 },
-      { header: "CN No", key: "cnNo", width: 12 },
-      { header: "Vendor", key: "brand", width: 14 },
-      { header: "Total (AED)", key: "total", width: 12 },
-      { header: "DL Charge", key: "dl", width: 10 },
-      { header: "Payment", key: "payment", width: 10 },
-      { header: "Emirate", key: "emirate", width: 12 },
-      { header: "Employee", key: "employee", width: 14 },
-      { header: "Status", key: "status", width: 12 },
-    ];
-
-    const rows = orders.map((o) => ({
-      date: formatDate(o.date),
-      slNo: o.slNo,
-      cnNo: o.cnNo,
-      brand: o.brandName,
-      total: o.total,
-      dl: o.deliveryCharge,
-      payment: o.payment,
-      emirate: o.emirate,
-      employee: o.employee.name,
-      status: o.status,
-    }));
-
-    // Total excludes still-open orders (Pending/Transfer) — only resolved business
-    // (Delivered + Cancelled) counts toward the report's totals.
-    const sumTotal = rows.filter((r) => r.status === "DELIVERED" || r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
-    // Only count delivery charge on Delivered orders — a Cancelled order's charge
-    // was never actually earned, and its total is already removed via sumCancelled below.
-    const sumDl = rows.filter((r) => r.status === "DELIVERED").reduce((s, r) => s + r.dl, 0);
-    const sumCancelled = rows.filter((r) => r.status === "CANCELLED").reduce((s, r) => s + r.total, 0);
-    const balance = sumTotal - sumCancelled - sumDl;
-
-    // A plain-English summary of exactly what was requested, so the report itself
-    // states its own scope — not just when it happened to be generated. Formatted
-    // DD/MM/YYYY to match the "Exported on" line above it.
-    const fromDisplay = q.from ? fmtDayMonthYear(parseDateParam(q.from as string)) : undefined;
-    const toDisplay = q.to ? fmtDayMonthYear(parseDateParam(q.to as string)) : undefined;
-    const filterParts: string[] = [];
-    if (fromDisplay && toDisplay && q.from === q.to) filterParts.push(`Date: ${fromDisplay}`);
-    else if (fromDisplay || toDisplay) filterParts.push(`Date: ${fromDisplay ?? "…"} to ${toDisplay ?? "…"}`);
-    else filterParts.push("Date: All dates");
-    if (q.status) filterParts.push(`Status: ${q.status}`);
-    if (q.payment) filterParts.push(`Payment: ${q.payment}`);
-    if (q.emirate) filterParts.push(`Emirate: ${q.emirate}`);
-    if (q.vendorId) filterParts.push(`Vendor filtered`);
-    if (q.employeeId) filterParts.push(`Employee filtered`);
-    const filterSummary = filterParts.join("  ·  ");
+    const { rangeOrders, carriedOrders, columns, rows, sumTotal, sumDl, sumCancelled, balance, filterSummary } = await computeConsignmentReport(q);
 
     if (format === "pdf") {
       res.setHeader("Content-Type", "application/pdf");
