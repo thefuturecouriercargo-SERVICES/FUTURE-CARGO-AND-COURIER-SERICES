@@ -107,9 +107,12 @@ async function computeConsignmentReport(q: Record<string, unknown>) {
     { header: "Status", key: "status", width: 12 },
   ];
 
-  const rows = orders.map((o) => ({
+  // SL No. here is a clean running count for the report itself (1, 2, 3…) — not the
+  // order's actual entry-page slNo, which would look arbitrary once rows from
+  // multiple dates/vendors are combined into a single report.
+  const rows = orders.map((o, i) => ({
     date: formatDate(o.date),
-    slNo: o.slNo,
+    slNo: i + 1,
     cnNo: o.cnNo,
     brand: o.brandName,
     total: o.total,
