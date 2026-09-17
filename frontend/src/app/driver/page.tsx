@@ -70,6 +70,22 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 
 export default function DriverPortalPage() {
   const date = todayStr();
+
+  // Before 10 AM, a driver may still be closing out last night's work — show
+  // yesterday's Cash Closing instead of today's freshly-empty one, so it doesn't
+  // become inaccessible the moment the calendar flips over at midnight.
+  function effectiveCashClosingDate(): string {
+    const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    if (dubaiNow.getUTCHours() < 10) {
+      const yesterday = new Date(dubaiNow);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      return yesterday.toISOString().slice(0, 10);
+    }
+    return dubaiNow.toISOString().slice(0, 10);
+  }
+  const cashClosingDate = effectiveCashClosingDate();
+  const isShowingYesterday = cashClosingDate !== date;
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
@@ -94,6 +110,34 @@ export default function DriverPortalPage() {
   function showToast(msg: string, type: "info" | "milestone" | "reminder" = "info") {
     setToast({ message: msg, type });
     setTimeout(() => setToast(null), type === "milestone" ? 3200 : 2600);
+    if (type === "reminder") playChime();
+  }
+
+  // Generates a short two-note chime directly (no audio file needed) — a gentle
+  // "ding-dong" so the 11:30 PM reminder is noticeable even if the driver isn't
+  // looking at the screen at that exact moment.
+  function playChime() {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      function note(freq: number, startAt: number, duration: number) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + startAt);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + startAt + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startAt + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + startAt);
+        osc.stop(ctx.currentTime + startAt + duration + 0.05);
+      }
+      note(880, 0, 0.35);
+      note(660, 0.18, 0.4);
+    } catch {
+      // Web Audio unsupported/blocked — silently skip, the visual toast still shows.
+    }
   }
 
   // New order assigned — instant ping the moment admin (or a transfer) hands the
@@ -144,6 +188,41 @@ export default function DriverPortalPage() {
     const interval = setInterval(checkReminder, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Achievement unlock — fires at every 100, 200, 300… delivered THIS MONTH (not
+  // today's count, since triple digits in a single day isn't realistic). Checked
+  // every few minutes rather than tied to the daily summary, since it needs the
+  // full month's total.
+  const [achievement, setAchievement] = useState<{ title: string; subtitle: string } | null>(null);
+  const prevMonthlyDeliveredRef = useRef<number | null>(null);
+
+  function showAchievement(title: string, subtitle: string) {
+    setAchievement({ title, subtitle });
+    setTimeout(() => setAchievement(null), 4000);
+    playChime();
+  }
+
+  const checkMonthlyAchievement = useCallback(async () => {
+    const month = date.slice(0, 7);
+    const res = await apiFetch<{ days: { delivered: number }[] }>("/driver/performance", { query: { month } });
+    const total = res.days.reduce((s, d) => s + d.delivered, 0);
+    const prev = prevMonthlyDeliveredRef.current;
+    if (prev !== null) {
+      for (let m = 100; m <= 5000; m += 100) {
+        if (prev < m && total >= m) {
+          showAchievement("Century Club", `${m} deliveries this month`);
+          break;
+        }
+      }
+    }
+    prevMonthlyDeliveredRef.current = total;
+  }, [date]);
+
+  useEffect(() => {
+    checkMonthlyAchievement();
+    const interval = setInterval(checkMonthlyAchievement, 5 * 60000);
+    return () => clearInterval(interval);
+  }, [checkMonthlyAchievement]);
 
   async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string) {
     if (payment !== order.payment) {
@@ -297,7 +376,12 @@ export default function DriverPortalPage() {
         </div>
       )}
 
-      <CashClosingPanel date={date} onSubmitted={() => showToast("Cash closing submitted")} />
+      {isShowingYesterday && (
+        <p className="mb-2 rounded border border-pending bg-pending-bg px-3 py-2 text-xs text-pending">
+          Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
+        </p>
+      )}
+      <CashClosingPanel date={cashClosingDate} onSubmitted={() => showToast("Cash closing submitted")} />
 
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
 
@@ -328,6 +412,18 @@ export default function DriverPortalPage() {
         >
           {toast.type === "milestone" && <span className="mr-1">★</span>}
           {toast.message}
+        </div>
+      )}
+
+      {achievement && (
+        <div className="fixed inset-x-0 top-16 z-50 flex justify-center px-4">
+          <div className="flex animate-[achievement-pop_0.5s_cubic-bezier(0.34,1.56,0.64,1)_forwards] items-center gap-3 bg-navy px-5 py-3.5 text-paper shadow-xl">
+            <span className="text-2xl">🏆</span>
+            <div>
+              <div className="text-sm font-semibold">{achievement.title}</div>
+              <div className="font-mono text-[10px] uppercase tracking-wide text-brass-light">{achievement.subtitle}</div>
+            </div>
+          </div>
         </div>
       )}
     </div>
