@@ -101,3 +101,43 @@ table.data-table th:first-child {
 table.data-table tbody tr:hover td:first-child {
   background: #fbfaf5;
 }
+
+/* Achievement unlock badge — bouncy scale/rotate entrance for the driver portal's
+   monthly milestone celebration (100, 200, 300… deliveries). */
+@keyframes achievement-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Live Flow panel — conveyor-belt dots and progress-bar shimmer, both looping
+   continuously (no trigger needed). */
+@keyframes flow-move {
+  0% {
+    left: -3%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 97%;
+    opacity: 0;
+  }
+}
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
