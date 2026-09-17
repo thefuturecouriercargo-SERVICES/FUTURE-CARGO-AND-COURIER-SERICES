@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, todayStr, isAgingPending } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -76,7 +76,7 @@ export default function DriverPortalPage() {
   const [search, setSearch] = useState("");
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
   const load = useCallback(async () => {
     const [ordersRes, summaryRes] = await Promise.all([
@@ -91,14 +91,59 @@ export default function DriverPortalPage() {
     load();
   }, [load]);
 
-  useSocketEvent("order:assigned", load);
+  function showToast(msg: string, type: "info" | "milestone" | "reminder" = "info") {
+    setToast({ message: msg, type });
+    setTimeout(() => setToast(null), type === "milestone" ? 3200 : 2600);
+  }
+
+  // New order assigned — instant ping the moment admin (or a transfer) hands the
+  // driver a fresh consignment, showing which one so they don't have to go hunting.
+  useSocketEvent("order:assigned", (payload) => {
+    const p = payload as { order?: Order };
+    if (p?.order) {
+      showToast(`New order assigned — CN ${p.order.cnNo}, ${p.order.brandName}`, "info");
+    }
+    load();
+  });
   useSocketEvent("order:removed", load);
   useSocketEvent("order:changed", load);
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
+  // Personal milestone celebration — only fires when the count actually crosses a
+  // threshold during this session (never retroactively on first load), so a driver
+  // who already had 15 deliveries when they opened the app won't suddenly see "10!".
+  const MILESTONES = [10, 20, 25, 30];
+  const prevDeliveredRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!summary) return;
+    const prev = prevDeliveredRef.current;
+    const curr = summary.delivered;
+    if (prev !== null) {
+      for (const m of MILESTONES) {
+        if (prev < m && curr >= m) {
+          showToast(`${m} delivered today!`, "milestone");
+        }
+      }
+    }
+    prevDeliveredRef.current = curr;
+  }, [summary]);
+
+  // End-of-day cash closing reminder — nudges once, the first time the clock passes
+  // 11:30 PM Dubai time, if the driver still has this tab open.
+  const reminderShownRef = useRef(false);
+  useEffect(() => {
+    function checkReminder() {
+      const dubaiNow = new Date(Date.now() + 4 * 60 * 60 * 1000);
+      const hours = dubaiNow.getUTCHours();
+      const mins = dubaiNow.getUTCMinutes();
+      if (!reminderShownRef.current && (hours > 23 || (hours === 23 && mins >= 30))) {
+        reminderShownRef.current = true;
+        showToast("It's getting late — don't forget to submit today's cash closing.", "reminder");
+      }
+    }
+    checkReminder();
+    const interval = setInterval(checkReminder, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string) {
     if (payment !== order.payment) {
@@ -272,7 +317,18 @@ export default function DriverPortalPage() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 border-l-2 border-brass bg-navy px-5 py-3 font-mono text-xs text-paper shadow-lg">{toast}</div>
+        <div
+          className={`fixed bottom-6 right-6 max-w-xs border-l-2 px-5 py-3 font-mono text-xs shadow-lg ${
+            toast.type === "milestone"
+              ? "border-brass bg-brass text-navy"
+              : toast.type === "reminder"
+              ? "border-pending bg-white text-ink"
+              : "border-brass bg-navy text-paper"
+          }`}
+        >
+          {toast.type === "milestone" && <span className="mr-1">★</span>}
+          {toast.message}
+        </div>
       )}
     </div>
   );
