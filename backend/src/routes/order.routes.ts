@@ -6,6 +6,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange, parseDateParam } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
+import { notify } from "../services/notification.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 
 const router = Router();
@@ -128,7 +129,13 @@ if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee n
 
 // CN No. must be globally unique — never reused, regardless of status or date.
 const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo } });
-if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
+if (existingCn) {
+  await notify(
+    `Duplicate CN No. ${data.cnNo} attempt blocked — already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`,
+    "/orders"
+  );
+  throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
+}
 
 const order = await prisma.$transaction(async (tx) => {
       const lastSl = await tx.order.aggregate({
@@ -168,6 +175,7 @@ const updateSchema = z.object({
   cnNo: z.number().int().positive().optional(),
   vendorId: z.string().optional(),
   payment: z.enum(PAYMENTS).optional(),
+  bankPaymentConfirmed: z.boolean().optional(),
   emirate: z.string().min(1).max(30).optional(),
   employeeId: z.string().optional(),
   total: z.number().int().optional(),
@@ -194,7 +202,13 @@ if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
   const existingCn = await prisma.order.findFirst({
     where: { cnNo: data.cnNo, id: { not: existing.id } },
   });
-  if (existingCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
+  if (existingCn) {
+    await notify(
+      `Duplicate CN No. ${data.cnNo} attempt blocked — already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`,
+      "/orders"
+    );
+    throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
+  }
 }
 
 const order = await prisma.order.update({
@@ -203,6 +217,7 @@ const order = await prisma.order.update({
         ...(data.cnNo !== undefined ? { cnNo: data.cnNo } : {}),
         ...vendorFields,
         ...(data.payment ? { payment: data.payment } : {}),
+        ...(data.bankPaymentConfirmed !== undefined ? { bankPaymentConfirmed: data.bankPaymentConfirmed } : {}),
         ...(data.emirate ? { emirate: data.emirate.toUpperCase() } : {}),
         ...(data.employeeId ? { employeeId: data.employeeId } : {}),
         ...(data.total !== undefined ? { total: data.total } : {}),
@@ -358,12 +373,12 @@ router.patch(
     res.json(order);
   })
 );
-const paymentSchema = z.object({ payment: z.enum(PAYMENTS) });
+const paymentSchema = z.object({ payment: z.enum(PAYMENTS), bankPaymentConfirmed: z.boolean().optional() });
 
 router.patch(
   "/:id/payment",
   asyncHandler(async (req, res) => {
-    const { payment } = paymentSchema.parse(req.body);
+    const { payment, bankPaymentConfirmed } = paymentSchema.parse(req.body);
     const existing = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Order not found");
 
@@ -373,7 +388,12 @@ router.patch(
 
     const order = await prisma.order.update({
       where: { id: req.params.id },
-      data: { payment },
+      data: {
+        payment,
+        // Only ever touched when the payment is actually BANK — switching to CASH
+        // leaves this alone (irrelevant for cash) rather than resetting history.
+        ...(payment === "BANK" ? { bankPaymentConfirmed: bankPaymentConfirmed ?? false } : {}),
+      },
       include: { vendor: true, employee: { select: { id: true, name: true } } },
     });
 
@@ -382,7 +402,7 @@ router.patch(
       action: "PAYMENT_UPDATE",
       entity: "Order",
       entityId: order.id,
-      meta: { from: existing.payment, to: payment },
+      meta: { from: existing.payment, to: payment, bankPaymentConfirmed },
     });
     emitGlobal("order:changed", { type: "updated", order });
     res.json(order);
