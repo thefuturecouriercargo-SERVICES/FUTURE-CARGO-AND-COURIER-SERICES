@@ -69,6 +69,39 @@ function useVoiceSearch(onResult: (digits: string) => void) {
   return { listening, supported, start };
 }
 
+// Full-sentence voice assistant — "56678 delivered bank" — parses a whole spoken
+// command instead of just digits. Reuses the same underlying browser API.
+function useVoiceAssistant(onResult: (transcript: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  function start() {
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Recognition = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSupported(false);
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) onResult(transcript);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  }
+
+  return { listening, supported, start };
+}
+
 export default function DriverPortalPage() {
   const date = todayStr();
 
@@ -303,8 +336,64 @@ export default function DriverPortalPage() {
     showToast(`Searching CN ${digits}`);
   });
 
+  // Global voice assistant — parses a full spoken command like "56678 delivered
+  // bank" and automatically updates that order's status and/or payment. Only
+  // handles DELIVERED and PENDING (not Cancelled, which needs a typed reason, or
+  // Transfer, which needs picking a target driver) — kept deliberately safe for a
+  // hands-free command.
+  const [assistantHeard, setAssistantHeard] = useState<string | null>(null);
+  const voiceAssistant = useVoiceAssistant(async (transcript) => {
+    setAssistantHeard(transcript);
+    const lower = transcript.toLowerCase();
+
+    const cnMatch = transcript.match(/\d{3,7}/);
+    const cnNo = cnMatch ? Number(cnMatch[0]) : null;
+
+    let status: OrderStatus | null = null;
+    if (/delivered/.test(lower)) status = "DELIVERED";
+    else if (/pending/.test(lower)) status = "PENDING";
+
+    let payment: "CASH" | "BANK" | null = null;
+    if (/\bbank\b/.test(lower)) payment = "BANK";
+    else if (/\bcash\b/.test(lower)) payment = "CASH";
+
+    if (!cnNo) {
+      showToast(`Didn't catch a CN number in "${transcript}"`, "info");
+      return;
+    }
+    const order = orders.find((o) => o.cnNo === cnNo);
+    if (!order) {
+      showToast(`CN ${cnNo} not found in today's orders`, "info");
+      return;
+    }
+    if (!status && !payment) {
+      showToast(`Heard CN ${cnNo} but no status or payment recognized`, "info");
+      return;
+    }
+
+    await updateStatus(order, status ?? order.status, payment ?? order.payment);
+    setTimeout(() => setAssistantHeard(null), 3000);
+  });
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
+      {voiceAssistant.supported && (
+        <button
+          onClick={voiceAssistant.start}
+          title="Voice assistant — say something like '56678 delivered bank'"
+          className={`fixed right-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
+            voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
+          }`}
+        >
+          🌐
+        </button>
+      )}
+      {assistantHeard && (
+        <div className="fixed right-4 top-20 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
+          <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
+        </div>
+      )}
+
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
 
