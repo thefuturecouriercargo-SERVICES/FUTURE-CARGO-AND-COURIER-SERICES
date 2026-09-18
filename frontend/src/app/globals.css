@@ -141,3 +141,15 @@ table.data-table tbody tr:hover td:first-child {
     transform: translateX(250%);
   }
 }
+
+/* Aging badge blink — draws the eye to overdue pending consignments wherever the
+   badge appears (Dashboard, Orders page, Driver portal). */
+@keyframes badge-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
