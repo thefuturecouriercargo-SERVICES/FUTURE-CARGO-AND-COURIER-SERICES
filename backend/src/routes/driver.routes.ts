@@ -22,11 +22,26 @@ router.get(
   ],
   ...(status ? { status: status as OrderStatus } : {}),
 },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      include: {
+        vendor: true,
+        employee: { select: { id: true, name: true } },
+        // Most recent transfer for this order (if any) — so the driver receiving it
+        // can see who handed it to them, not just that it says TRANSFER.
+        transfers: {
+          orderBy: { transferredAt: "desc" },
+          take: 1,
+          include: { fromEmployee: { select: { name: true } } },
+        },
+      },
       orderBy: { slNo: "asc" },
     });
 
-    res.json({ date: start.toISOString().slice(0, 10), orders });
+    const ordersWithTransferInfo = orders.map((o) => ({
+      ...o,
+      transferredBy: o.transfers[0]?.fromEmployee.name ?? null,
+    }));
+
+    res.json({ date: start.toISOString().slice(0, 10), orders: ordersWithTransferInfo });
   })
 );
 
