@@ -446,7 +446,7 @@ export default function DriverPortalPage() {
           Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
         </p>
       )}
-      <CashClosingPanel date={cashClosingDate} onSubmitted={() => showToast("Cash closing submitted", "success")} />
+      <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onSubmitted={() => showToast("Cash closing submitted", "success")} />
 
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
 
@@ -699,7 +699,7 @@ function StatusModal({
   );
 }
 
-function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: () => void }) {
+function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readOnly?: boolean; onSubmitted: () => void }) {
   interface PurchaseEntry {
     id: string;
     amount: number;
@@ -799,8 +799,13 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
   if (!preview) return null;
 
   return (
-    <div className="mt-10 border border-line bg-white p-6">
+    <div className={`mt-10 border p-6 ${readOnly ? "border-pending bg-pending-bg" : "border-line bg-white"}`}>
       <h2 className="mb-1 font-display text-lg font-semibold text-navy">Day-End Cash Closing</h2>
+      {readOnly && (
+        <p className="mb-3 inline-block rounded border border-pending bg-white px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-pending">
+          🔒 Read-only — yesterday&apos;s closing, locked
+        </p>
+      )}
       <p className="mb-5 text-xs text-ink-soft">
         Totals below are computed automatically from your delivered consignments for {date}. Enter today&apos;s expenses to
         calculate your balance cash.
@@ -845,12 +850,14 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="font-mono">{fmtNumber(entry.amount)} AED</span>
-                  <button
-                    onClick={() => removePurchase(entry.id)}
-                    className="text-xs text-cancelled hover:underline"
-                  >
-                    Remove
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => removePurchase(entry.id)}
+                      className="text-xs text-cancelled hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </span>
               </div>
             ))}
@@ -860,7 +867,8 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
           <select
             value={payVendorId}
             onChange={(e) => setPayVendorId(e.target.value)}
-            className="rounded border border-line px-2.5 py-2 text-sm"
+            disabled={readOnly}
+            className="rounded border border-line px-2.5 py-2 text-sm disabled:bg-paper-2 disabled:opacity-60"
           >
             <option value="">Select vendor…</option>
             {vendors.map((v) => (
@@ -874,17 +882,19 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
             placeholder="Amount"
             value={payAmount}
             onChange={(e) => setPayAmount(e.target.value)}
-            className="rounded border border-line px-2.5 py-2 text-sm"
+            disabled={readOnly}
+            className="rounded border border-line px-2.5 py-2 text-sm disabled:bg-paper-2 disabled:opacity-60"
           />
           <input
             placeholder="Note (optional)"
             value={payNote}
             onChange={(e) => setPayNote(e.target.value)}
-            className="rounded border border-line px-2.5 py-2 text-sm"
+            disabled={readOnly}
+            className="rounded border border-line px-2.5 py-2 text-sm disabled:bg-paper-2 disabled:opacity-60"
           />
           <button
             onClick={payVendor}
-            disabled={payBusy}
+            disabled={payBusy || readOnly}
             className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
           >
             {payBusy ? "Saving…" : "Log Payment"}
@@ -898,13 +908,22 @@ function CashClosingPanel({ date, onSubmitted }: { date: string; onSubmitted: ()
         <span className="font-display text-xl font-semibold text-navy">{fmtNumber(balance)} AED</span>
       </div>
 
-      <button onClick={submit} disabled={busy} className="rounded bg-navy px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
-        {busy ? "Submitting…" : existing ? "Re-submit cash closing" : "Submit cash closing"}
-      </button>
-      {existing && (
-        <span className="ml-3 text-xs text-ink-soft">
-          Last submitted {new Date(existing.submittedAt).toLocaleTimeString()} · status {existing.status}
-        </span>
+      {!readOnly && (
+        <>
+          <button onClick={submit} disabled={busy} className="rounded bg-navy px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
+            {busy ? "Submitting…" : existing ? "Re-submit cash closing" : "Submit cash closing"}
+          </button>
+          {existing && (
+            <span className="ml-3 text-xs text-ink-soft">
+              Last submitted {new Date(existing.submittedAt).toLocaleTimeString()} · status {existing.status}
+            </span>
+          )}
+        </>
+      )}
+      {readOnly && existing && (
+        <p className="text-xs text-ink-soft">
+          Submitted {new Date(existing.submittedAt).toLocaleTimeString()} · status {existing.status}
+        </p>
       )}
     </div>
   );
