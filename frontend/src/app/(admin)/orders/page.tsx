@@ -87,6 +87,7 @@ const [emirateFilter, setEmirateFilter] = useState("");
 const [employeeFilter, setEmployeeFilter] = useState("");
 const [vendorFilter, setVendorFilter] = useState("");
 const [minAmount, setMinAmount] = useState("");
+const [unconfirmedBankOnly, setUnconfirmedBankOnly] = useState(false);
 const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -146,6 +147,7 @@ const filteredOrders = useMemo(() => {
     if (vendorFilter && o.vendorId !== vendorFilter) return false;
     if (minAmount && o.total < Number(minAmount)) return false;
     if (maxAmount && o.total > Number(maxAmount)) return false;
+    if (unconfirmedBankOnly && !(o.payment === "BANK" && !o.bankPaymentConfirmed)) return false;
     return true;
   });
 }, [orders, pendingCarryover, date, search, statusFilter, paymentFilter, emirateFilter, employeeFilter, vendorFilter, minAmount, maxAmount]);
@@ -488,6 +490,10 @@ required
   </select>
   <input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
   <input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
+  <label className="flex items-center gap-1.5 rounded border border-pending bg-pending-bg px-3 py-1.5 text-xs font-semibold text-pending">
+    <input type="checkbox" checked={unconfirmedBankOnly} onChange={(e) => setUnconfirmedBankOnly(e.target.checked)} className="h-4 w-4" />
+    ⚠ Unconfirmed bank payments only
+  </label>
 </div>
 
 {selectedIds.size > 0 && (
@@ -591,7 +597,19 @@ required
                     <td>{o.brandName}</td>
                     <td className="text-right font-mono">{fmtNumber(o.total)}</td>
                     <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
-                    <td>{o.payment}</td>
+                    <td>
+                      <span className="inline-flex items-center gap-1">
+                        {o.payment}
+                        {o.payment === "BANK" && !o.bankPaymentConfirmed && (
+                          <span
+                            className="rounded bg-cancelled px-1 py-0.5 font-mono text-[9px] font-bold uppercase text-white"
+                            title="Driver has not confirmed this bank payment was received"
+                          >
+                            ⚠ Unconfirmed
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td>{o.emirate}</td>
                     <td>{o.employee.name}</td>
                     <td>
