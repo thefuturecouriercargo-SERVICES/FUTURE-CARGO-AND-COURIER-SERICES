@@ -179,6 +179,10 @@ model Order {
   deliveryCharge Int
   total          Int
   payment        PaymentMode @default(CASH)
+  // Only meaningful when payment is BANK — the driver explicitly confirms the
+  // transfer actually landed. Defaults false so an un-ticked confirmation is
+  // visible to admin as "unconfirmed", never silently assumed received.
+  bankPaymentConfirmed Boolean @default(false)
   emirate        String      @default("DUBAI")
   employeeId     String
   employee       User        @relation("OrderEmployee", fields: [employeeId], references: [id])
@@ -304,4 +308,19 @@ model PayrollEntry {
   @@index([month])
   @@index([employeeId])
   @@map("payroll_entries")
+}
+
+// Admin/Manager notification feed — the bell icon. Broadcast, not per-user: any
+// SUPER_ADMIN or MANAGER can see and dismiss the same feed, since these are
+// operational alerts about the business, not personal messages.
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read])
+  @@index([createdAt])
+  @@map("notifications")
 }
