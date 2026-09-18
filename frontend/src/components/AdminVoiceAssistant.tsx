@@ -1,0 +1,489 @@
+"use client";
+
+import { useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { EMIRATES, Employee, Order, OrderStatus, Vendor } from "@/types";
+
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+interface SpeechRecognitionEventLike {
+  results: { [key: number]: { [key: number]: SpeechRecognitionResultLike } };
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function useVoiceAssistant(onResult: (transcript: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  function start() {
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Recognition = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSupported(false);
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      if (transcript) onResult(transcript);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  }
+
+  return { listening, supported, start };
+}
+
+interface DashboardSummary {
+  summary: { pending: number; delivered: number; cashCollected: number; bankCollected: number; totalOrders: number };
+}
+
+type ParsedCommand =
+  | { kind: "update"; order: Order; status?: OrderStatus; payment?: "CASH" | "BANK"; reason?: string; description: string }
+  | { kind: "transfer"; order: Order; toEmployee: Employee; description: string }
+  | { kind: "vendorPayment"; vendor: Vendor; amount: number; description: string }
+  | { kind: "amountEdit"; order: Order; newAmount: number; description: string }
+  | {
+      kind: "addItem";
+      cnNo: number;
+      vendor: Vendor;
+      total: number;
+      payment: "CASH" | "BANK";
+      emirate: string;
+      employee: Employee;
+      description: string;
+    }
+  | { kind: "question"; answer: string }
+  | { kind: "undo" }
+  | { kind: "unrecognized"; raw: string };
+
+/** Global voice assistant for admin/manager — available on every page via
+ * AdminShell. Same shape as the driver portal's assistant, but scoped to admin's
+ * broader access: any order (not just one driver's own), any driver for transfer,
+ * and company-wide questions instead of one person's daily totals. */
+export default function AdminVoiceAssistant() {
+  const [assistantHeard, setAssistantHeard] = useState<string | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
+  const [lastAction, setLastAction] = useState<{ description: string; undo: () => Promise<void> } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function speak(text: string) {
+    try {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.volume = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // unsupported/blocked — silently skip
+    }
+  }
+
+  function getAudioCtx(): AudioContext | null {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") ctx.resume();
+      return ctx;
+    } catch {
+      return null;
+    }
+  }
+  function tone(ctx: AudioContext, freq: number, startAt: number, duration: number, type: OscillatorType = "sine") {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + startAt);
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startAt + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + startAt);
+    osc.stop(ctx.currentTime + startAt + duration + 0.05);
+  }
+  function playChaChing() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    tone(ctx, 1200, 0, 0.08, "square");
+    tone(ctx, 1600, 0.06, 0.15, "square");
+  }
+  function playPop() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.setValueAtTime(300, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.09);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.09);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.14);
+  }
+
+  async function parseVoiceCommand(transcript: string): Promise<ParsedCommand> {
+    const lower = transcript.toLowerCase();
+
+    if (/\bundo\b/.test(lower)) return { kind: "undo" };
+
+    if (/how many pending/.test(lower) || /how many delivered/.test(lower) || /how much cash/.test(lower) || /how much bank/.test(lower) || /how many consignment/.test(lower)) {
+      const res = await apiFetch<DashboardSummary>("/dashboard/daily");
+      if (/pending/.test(lower)) return { kind: "question", answer: `There are ${res.summary.pending} pending orders today.` };
+      if (/delivered/.test(lower)) return { kind: "question", answer: `${res.summary.delivered} orders delivered today.` };
+      if (/cash/.test(lower)) return { kind: "question", answer: `${res.summary.cashCollected} AED collected in cash today.` };
+      if (/bank/.test(lower)) return { kind: "question", answer: `${res.summary.bankCollected} AED collected via bank today.` };
+      return { kind: "question", answer: `${res.summary.totalOrders} total consignments today.` };
+    }
+
+    const payMatch = lower.match(/pay\s+(?:vendor\s+)?(.+?)\s+(\d+)/);
+    if (payMatch) {
+      const spokenName = payMatch[1].trim();
+      const amount = Number(payMatch[2]);
+      const vendors = await apiFetch<Vendor[]>("/vendors");
+      const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenName) || spokenName.includes(v.name.toLowerCase()));
+      if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenName}" not found` };
+      return { kind: "vendorPayment", vendor, amount, description: `Pay ${vendor.name} ${amount} AED` };
+    }
+
+    // "change <cn> to <amount>"
+    const changeMatch = lower.match(/change\s+(\d{3,7})\s+to\s+(\d+)/);
+    if (changeMatch) {
+      const cnNo = Number(changeMatch[1]);
+      const newAmount = Number(changeMatch[2]);
+      const orderRes = await apiFetch<{ orders: Order[] }>("/orders", { query: { cn: cnNo } });
+      const order = orderRes.orders[0];
+      if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found` };
+      return { kind: "amountEdit", order, newAmount, description: `Change CN ${cnNo} amount to ${newAmount} AED` };
+    }
+
+    // "add new item <cn> vendor <name> amount <amount> [cash|bank] [emirate <name>] [driver/for <name>]"
+    if (/\b(add new item|add order|new order|new item)\b/.test(lower)) {
+      const cnMatch2 = transcript.match(/\d{3,7}/);
+      const amountMatch = lower.match(/amount\s+(\d+)/);
+      const vendorMatch = lower.match(/vendor\s+([a-z0-9 ]+?)(?:\s+amount|\s+cash|\s+bank|\s+emirate|\s+driver|\s+for|$)/);
+      if (!cnMatch2) return { kind: "unrecognized", raw: "Heard \"add new item\" but no CN number" };
+      if (!amountMatch) return { kind: "unrecognized", raw: `Heard \"add new item\" but no amount — say "amount <number>"` };
+      if (!vendorMatch) return { kind: "unrecognized", raw: `Heard \"add new item\" but no vendor — say "vendor <name>"` };
+
+      const cnNo = Number(cnMatch2[0]);
+      const total = Number(amountMatch[1]);
+      const spokenVendor = vendorMatch[1].trim();
+      const vendors = await apiFetch<Vendor[]>("/vendors");
+      const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenVendor) || spokenVendor.includes(v.name.toLowerCase()));
+      if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenVendor}" not found` };
+
+      const payment: "CASH" | "BANK" = /\bbank\b/.test(lower) ? "BANK" : "CASH";
+
+      // Reuse the locked Emirate/Employee from the Daily Entry page if it's
+      // currently locked there — otherwise both must be spoken.
+      let emirate: string | undefined;
+      let employee: Employee | undefined;
+      try {
+        const lockRaw = localStorage.getItem("dailyEntryLock");
+        const lock = lockRaw ? JSON.parse(lockRaw) : null;
+        if (lock?.locked) {
+          emirate = lock.emirate;
+          const employees = await apiFetch<Employee[]>("/employees");
+          employee = employees.find((e) => e.id === lock.employeeId);
+        }
+      } catch {
+        // no lock available — fall through to requiring spoken values
+      }
+
+      if (!emirate) {
+        const emirateMatch = EMIRATES.find((em) => lower.includes(em.toLowerCase()));
+        emirate = emirateMatch;
+      }
+      if (!employee) {
+        const driverMatch = lower.match(/(?:driver|for)\s+([a-z]+)/);
+        if (driverMatch) {
+          const employees = await apiFetch<Employee[]>("/employees");
+          employee = employees.find((e) => e.name.toLowerCase().startsWith(driverMatch[1].trim()));
+        }
+      }
+
+      if (!emirate) return { kind: "unrecognized", raw: `Emirate/Employee aren't locked on Daily Entry — say an emirate name too` };
+      if (!employee) return { kind: "unrecognized", raw: `Emirate/Employee aren't locked on Daily Entry — say "driver <name>" too` };
+
+      return {
+        kind: "addItem",
+        cnNo,
+        vendor,
+        total,
+        payment,
+        emirate,
+        employee,
+        description: `New item — CN ${cnNo}, ${vendor.name}, ${total} AED, ${payment}, ${emirate}, ${employee.name}`,
+      };
+    }
+
+    const cnMatch = transcript.match(/\d{3,7}/);
+    const cnNo = cnMatch ? Number(cnMatch[0]) : null;
+    if (!cnNo) return { kind: "unrecognized", raw: transcript };
+
+    const orderRes = await apiFetch<{ orders: Order[] }>("/orders", { query: { cn: cnNo } });
+    const order = orderRes.orders[0];
+    if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found` };
+
+    const transferMatch = lower.match(/transfer\s*(?:to)?\s+([a-z]+)/);
+    if (transferMatch) {
+      const spokenName = transferMatch[1].trim();
+      const employees = await apiFetch<Employee[]>("/employees");
+      const toEmployee = employees.find((e) => e.id !== order.employeeId && e.name.toLowerCase().startsWith(spokenName));
+      if (!toEmployee) return { kind: "unrecognized", raw: `Driver "${spokenName}" not found` };
+      return { kind: "transfer", order, toEmployee, description: `Transfer CN ${cnNo} to ${toEmployee.name}` };
+    }
+
+    let status: OrderStatus | undefined;
+    let reason: string | undefined;
+    const cancelMatch = lower.match(/\bcancel(?:led)?\b/);
+    if (cancelMatch) {
+      status = "CANCELLED";
+      const afterCancel = lower.slice(cancelMatch.index! + cancelMatch[0].length).trim();
+      reason = afterCancel.replace(/^(reason|because|due to|for)\s*[:,]?\s*/i, "").trim();
+    } else if (/delivered/.test(lower)) status = "DELIVERED";
+    else if (/pending/.test(lower)) status = "PENDING";
+
+    let payment: "CASH" | "BANK" | undefined;
+    if (/\bbank\b/.test(lower)) payment = "BANK";
+    else if (/\bcash\b/.test(lower)) payment = "CASH";
+
+    if (!status && !payment) return { kind: "unrecognized", raw: `Heard CN ${cnNo} but no status or payment` };
+    if (status === "CANCELLED" && !reason) return { kind: "unrecognized", raw: `Heard "cancel" for CN ${cnNo} but no reason given` };
+
+    const parts = [`CN ${cnNo}`];
+    if (status) parts.push(status + (reason ? ` (${reason})` : ""));
+    if (payment) parts.push(payment);
+    return { kind: "update", order, status, payment, reason, description: parts.join(" — ") };
+  }
+
+  async function executeCommand(cmd: ParsedCommand) {
+    if (cmd.kind === "update") {
+      const prevStatus = cmd.order.status;
+      const prevPayment = cmd.order.payment;
+      if ((cmd.payment ?? cmd.order.payment) !== cmd.order.payment) {
+        await apiFetch(`/orders/${cmd.order.id}/payment`, { method: "PATCH", body: { payment: cmd.payment } });
+      }
+      await apiFetch(`/orders/${cmd.order.id}/status`, { method: "PATCH", body: { status: cmd.status ?? cmd.order.status, reason: cmd.reason } });
+      showToast(cmd.description);
+      if (cmd.status === "DELIVERED") playChaChing();
+      else playPop();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          if (prevPayment !== cmd.order.payment) await apiFetch(`/orders/${cmd.order.id}/payment`, { method: "PATCH", body: { payment: prevPayment } });
+          await apiFetch(`/orders/${cmd.order.id}/status`, { method: "PATCH", body: { status: prevStatus } });
+          showToast(`Undone — CN ${cmd.order.cnNo} restored`);
+        },
+      });
+    } else if (cmd.kind === "transfer") {
+      await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.toEmployee.id } });
+      showToast(cmd.description);
+      playPop();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.order.employeeId } });
+          showToast(`Undone — CN ${cmd.order.cnNo} transferred back`);
+        },
+      });
+    } else if (cmd.kind === "vendorPayment") {
+      const today = new Date().toISOString().slice(0, 10);
+      const payment = await apiFetch<{ id: string }>(`/vendor-credit/${cmd.vendor.id}/payments`, {
+        method: "POST",
+        body: { date: today, amount: cmd.amount },
+      });
+      showToast(`Logged ${cmd.amount} AED payment to ${cmd.vendor.name}`);
+      playChaChing();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/vendor-credit/payments/${payment.id}`, { method: "DELETE" });
+          showToast(`Undone — payment to ${cmd.vendor.name} removed`);
+        },
+      });
+    } else if (cmd.kind === "amountEdit") {
+      const prevTotal = cmd.order.total;
+      await apiFetch(`/orders/${cmd.order.id}`, { method: "PUT", body: { total: cmd.newAmount } });
+      showToast(cmd.description);
+      playPop();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/orders/${cmd.order.id}`, { method: "PUT", body: { total: prevTotal } });
+          showToast(`Undone — CN ${cmd.order.cnNo} amount restored to ${prevTotal}`);
+        },
+      });
+    } else if (cmd.kind === "addItem") {
+      const today = new Date().toISOString().slice(0, 10);
+      const order = await apiFetch<Order>("/orders", {
+        method: "POST",
+        body: {
+          date: today,
+          cnNo: cmd.cnNo,
+          vendorId: cmd.vendor.id,
+          payment: cmd.payment,
+          emirate: cmd.emirate,
+          employeeId: cmd.employee.id,
+          total: cmd.total,
+        },
+      });
+      showToast(cmd.description);
+      playChaChing();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/orders/${order.id}`, { method: "DELETE" });
+          showToast(`Undone — CN ${cmd.cnNo} removed`);
+        },
+      });
+    }
+  }
+
+  async function confirmPendingCommand() {
+    if (!pendingCommand || pendingCommand.kind === "question" || pendingCommand.kind === "undo" || pendingCommand.kind === "unrecognized") return;
+    await executeCommand(pendingCommand);
+    setPendingCommand(null);
+    setAssistantHeard(null);
+  }
+
+  function cancelPendingCommand() {
+    setPendingCommand(null);
+    setAssistantHeard(null);
+    showToast("Cancelled");
+  }
+
+  const voiceAssistant = useVoiceAssistant(async (transcript) => {
+    setAssistantHeard(transcript);
+    const lower = transcript.toLowerCase();
+
+    if (pendingCommand) {
+      if (/\b(yes|confirm|correct|do it)\b/.test(lower)) {
+        confirmPendingCommand();
+      } else if (/\b(no|cancel|stop)\b/.test(lower)) {
+        cancelPendingCommand();
+      } else {
+        showToast(`Didn't catch a yes or no — tap Confirm or Cancel instead`);
+      }
+      return;
+    }
+
+    const cmd = await parseVoiceCommand(transcript);
+
+    if (cmd.kind === "question") {
+      speak(cmd.answer);
+      showToast(cmd.answer);
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+    if (cmd.kind === "undo") {
+      if (lastAction) {
+        lastAction.undo();
+        setLastAction(null);
+      } else {
+        showToast("Nothing to undo");
+      }
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+    if (cmd.kind === "unrecognized") {
+      showToast(cmd.raw);
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+
+    setPendingCommand(cmd);
+    speak(`${cmd.description}. Confirm?`);
+    setTimeout(() => voiceAssistant.start(), 1800);
+  });
+
+  if (!voiceAssistant.supported) return null;
+
+  return (
+    <>
+      <button
+        onClick={voiceAssistant.start}
+        title='Voice assistant — say something like "56678 delivered bank" or "how many pending"'
+        className={`fixed right-4 top-20 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
+          voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
+        }`}
+      >
+        🌐
+      </button>
+
+      {pendingCommand ? (
+        <div className="fixed right-4 top-36 z-50 w-64 rounded border border-brass bg-white p-4 shadow-xl">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-soft">Confirm action</p>
+          <p className="mb-3 text-sm font-semibold text-navy">
+            {pendingCommand.kind === "update" ||
+            pendingCommand.kind === "transfer" ||
+            pendingCommand.kind === "vendorPayment" ||
+            pendingCommand.kind === "amountEdit" ||
+            pendingCommand.kind === "addItem"
+              ? pendingCommand.description
+              : ""}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={confirmPendingCommand} className="flex-1 rounded bg-delivered px-3 py-2 font-mono text-[10px] uppercase text-white hover:opacity-90">
+              ✓ Confirm
+            </button>
+            <button onClick={cancelPendingCommand} className="flex-1 rounded border border-line px-3 py-2 font-mono text-[10px] uppercase text-ink-soft hover:border-cancelled">
+              ✗ Cancel
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-ink-soft">Or just say &quot;yes&quot; or &quot;confirm&quot;</p>
+        </div>
+      ) : (
+        assistantHeard && (
+          <div className="fixed right-4 top-36 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
+            <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
+          </div>
+        )
+      )}
+
+      {lastAction && !pendingCommand && !assistantHeard && (
+        <button
+          onClick={() => {
+            lastAction.undo();
+            setLastAction(null);
+          }}
+          className="fixed right-4 top-36 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
+        >
+          ↺ Undo: {lastAction.description}
+        </button>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-xs rounded border-l-2 border-brass bg-navy px-5 py-3 font-mono text-xs text-paper shadow-lg">
+          {toast}
+        </div>
+      )}
+    </>
+  );
+}
