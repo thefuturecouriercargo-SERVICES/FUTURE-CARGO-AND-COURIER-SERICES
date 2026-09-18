@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import AdminVoiceAssistant from "@/components/AdminVoiceAssistant";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", short: "Home", roles: ["SUPER_ADMIN", "MANAGER"] },
@@ -28,6 +29,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-paper">
+      <AdminVoiceAssistant />
       <div className="flex h-16 items-center justify-between border-b-[3px] border-brass bg-navy px-4 text-paper md:px-6">
         <div className="flex items-baseline gap-2.5">
           <span className="font-display text-lg font-bold md:text-xl">Future Courier</span>
