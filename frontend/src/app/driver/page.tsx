@@ -123,7 +123,15 @@ export default function DriverPortalPage() {
   function getAudioCtx(): AudioContext | null {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      return new AudioCtx();
+      const ctx = new AudioCtx();
+      // Mobile browsers often start AudioContext in a "suspended" state until
+      // explicitly resumed — without this, oscillator tones silently produce no
+      // sound at all, even though no error is thrown and speechSynthesis (a
+      // different API) works fine.
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+      return ctx;
     } catch {
       return null;
     }
