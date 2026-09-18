@@ -79,6 +79,22 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
 const [saving, setSaving] = useState(false);
   const [lockFields, setLockFields] = useState(false);
+
+  // Mirrors the lock state to localStorage so the global voice assistant (which
+  // lives outside this page, in AdminShell) can reuse the same locked
+  // Emirate/Employee when adding a new consignment by voice — same convenience
+  // the manual form already gives you.
+  useEffect(() => {
+    try {
+      if (lockFields && form.emirate && form.employeeId) {
+        localStorage.setItem("dailyEntryLock", JSON.stringify({ locked: true, emirate: form.emirate, employeeId: form.employeeId }));
+      } else {
+        localStorage.setItem("dailyEntryLock", JSON.stringify({ locked: false }));
+      }
+    } catch {
+      // localStorage unavailable — silently skip, voice assistant will just ask for both.
+    }
+  }, [lockFields, form.emirate, form.employeeId]);
   const [search, setSearch] = useState("");
   const voiceSearch = useVoiceSearch((digits) => setSearch(digits));
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
