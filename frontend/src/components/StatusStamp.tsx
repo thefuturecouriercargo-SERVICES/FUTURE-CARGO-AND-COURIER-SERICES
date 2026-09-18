@@ -1,17 +1,17 @@
 import { OrderStatus } from "@/types";
-import { isAgingPending } from "@/lib/format";
+import { agingDays, agingBadgeClass } from "@/lib/format";
 
 export default function StatusStamp({ status, date }: { status: OrderStatus; date?: string }) {
-  const aging = date ? isAgingPending(status, date) : false;
+  const days = date ? agingDays(status, date) : null;
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`stamp ${status.toLowerCase()}`}>{status}</span>
-      {aging && (
+      {days !== null && (
         <span
-          className="rounded bg-cancelled px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-white"
-          title="Pending more than 2 days"
+          className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide ${agingBadgeClass(days)}`}
+          title={`Pending ${days} day${days === 1 ? "" : "s"}`}
         >
-          Aging
+          {days}d
         </span>
       )}
     </span>
