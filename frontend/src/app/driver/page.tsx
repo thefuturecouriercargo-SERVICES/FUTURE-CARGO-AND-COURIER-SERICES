@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { fmtNumber, todayStr, isAgingPending } from "@/lib/format";
+import { fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
@@ -107,37 +107,86 @@ export default function DriverPortalPage() {
     load();
   }, [load]);
 
-  function showToast(msg: string, type: "info" | "milestone" | "reminder" = "info") {
-    setToast({ message: msg, type });
+  function showToast(msg: string, type: "info" | "milestone" | "reminder" | "success" | "push" = "info") {
+    setToast({ message: msg, type: type === "success" || type === "push" ? "info" : type });
     setTimeout(() => setToast(null), type === "milestone" ? 3200 : 2600);
     if (type === "reminder") playChime();
+    else if (type === "milestone") playCrescendo();
+    else if (type === "push") playWhoosh();
+    else if (type === "success") playChaChing();
+    else playPop();
   }
 
-  // Generates a short two-note chime directly (no audio file needed) — a gentle
-  // "ding-dong" so the 11:30 PM reminder is noticeable even if the driver isn't
-  // looking at the screen at that exact moment.
-  function playChime() {
+  // Shared low-level tone helpers — every sound below is generated live (no audio
+  // files), same technique as the original cash-closing chime.
+  function getAudioCtx(): AudioContext | null {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
-      function note(freq: number, startAt: number, duration: number) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime + startAt);
-        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + startAt + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startAt + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + startAt);
-        osc.stop(ctx.currentTime + startAt + duration + 0.05);
-      }
-      note(880, 0, 0.35);
-      note(660, 0.18, 0.4);
+      return new AudioCtx();
     } catch {
-      // Web Audio unsupported/blocked — silently skip, the visual toast still shows.
+      return null;
     }
+  }
+  function tone(ctx: AudioContext, freq: number, startAt: number, duration: number, type: OscillatorType = "sine") {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime + startAt);
+    gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + startAt + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startAt + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + startAt);
+    osc.stop(ctx.currentTime + startAt + duration + 0.05);
+  }
+  function sweepTone(ctx: AudioContext, freqFrom: number, freqTo: number, startAt: number, duration: number, type: OscillatorType = "sine") {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqFrom, ctx.currentTime + startAt);
+    osc.frequency.exponentialRampToValueAtTime(freqTo, ctx.currentTime + startAt + duration);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime + startAt);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startAt + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + startAt);
+    osc.stop(ctx.currentTime + startAt + duration + 0.05);
+  }
+
+  // 11:30 PM reminder — gentle two-note "ding-dong".
+  function playChime() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    tone(ctx, 880, 0, 0.35);
+    tone(ctx, 660, 0.18, 0.4);
+  }
+  // New order assigned — rising whoosh.
+  function playWhoosh() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    sweepTone(ctx, 200, 900, 0, 0.3, "sawtooth");
+  }
+  // Status marked Delivered / cash closing submitted — quick "cha-ching".
+  function playChaChing() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    tone(ctx, 1200, 0, 0.08, "square");
+    tone(ctx, 1600, 0.06, 0.15, "square");
+  }
+  // Milestone / achievement — three-note rising crescendo.
+  function playCrescendo() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    tone(ctx, 523, 0, 0.25);
+    tone(ctx, 659, 0.15, 0.25);
+    tone(ctx, 784, 0.3, 0.4);
+  }
+  // Search / minor confirmation — short soft pop.
+  function playPop() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    sweepTone(ctx, 300, 700, 0, 0.09);
   }
 
   // New order assigned — instant ping the moment admin (or a transfer) hands the
@@ -145,7 +194,7 @@ export default function DriverPortalPage() {
   useSocketEvent("order:assigned", (payload) => {
     const p = payload as { order?: Order };
     if (p?.order) {
-      showToast(`New order assigned — CN ${p.order.cnNo}, ${p.order.brandName}`, "info");
+      showToast(`New order assigned — CN ${p.order.cnNo}, ${p.order.brandName}`, "push");
     }
     load();
   });
@@ -199,7 +248,7 @@ export default function DriverPortalPage() {
   function showAchievement(title: string, subtitle: string) {
     setAchievement({ title, subtitle });
     setTimeout(() => setAchievement(null), 4000);
-    playChime();
+    playCrescendo();
   }
 
   const checkMonthlyAchievement = useCallback(async () => {
@@ -229,7 +278,7 @@ export default function DriverPortalPage() {
       await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment } });
     }
     await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status, reason } });
-    showToast(`CN ${order.cnNo} marked ${status}`);
+    showToast(`CN ${order.cnNo} marked ${status}`, status === "DELIVERED" ? "success" : "info");
     await load();
   }
   const filtered = useMemo(() => {
@@ -356,12 +405,12 @@ export default function DriverPortalPage() {
                 <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
                   {o.status}
                 </span>
-                {isAgingPending(o.status, o.date) && (
+                {agingDays(o.status, o.date) !== null && (
                   <span
-                    className="rounded bg-cancelled px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-white"
-                    title="Pending more than 2 days"
+                    className={`rounded px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${agingBadgeClass(agingDays(o.status, o.date)!)}`}
+                    title={`Pending ${agingDays(o.status, o.date)} days`}
                   >
-                    Aging
+                    {agingDays(o.status, o.date)}d old
                   </span>
                 )}
                 <button
@@ -381,7 +430,7 @@ export default function DriverPortalPage() {
           Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
         </p>
       )}
-      <CashClosingPanel date={cashClosingDate} onSubmitted={() => showToast("Cash closing submitted")} />
+      <CashClosingPanel date={cashClosingDate} onSubmitted={() => showToast("Cash closing submitted", "success")} />
 
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
 
