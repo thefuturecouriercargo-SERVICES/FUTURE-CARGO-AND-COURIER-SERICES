@@ -57,6 +57,7 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 import KpiCard from "@/components/KpiCard";
 import StatusStamp from "@/components/StatusStamp";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
+import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
 import { Order, OrderStatus, Summary, Vendor } from "@/types";
 
@@ -258,10 +259,10 @@ return (
         <>
          <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-3 lg:grid-cols-7">
             <div className="bg-white">
-              <KpiCard label="Total Sales" value={fmtNumber(data.summary.totalSales)} unit="AED" />
+              <KpiCard label="Total Sales" value={data.summary.totalSales} unit="AED" />
             </div>
             <div className="bg-white">
-              <KpiCard label="DL Charge" value={fmtNumber(data.summary.totalDeliveryCharge)} unit="AED" />
+              <KpiCard label="DL Charge" value={data.summary.totalDeliveryCharge} unit="AED" />
             </div>
             <div className="bg-white">
               <KpiCard label="Delivered" value={data.summary.delivered} />
@@ -438,6 +439,17 @@ return (
               <StatusDoughnut summary={data.summary} />
             </div>
           </div>
+
+          <LiveFlowPanel
+            pending={data.summary.pending + nonAgentPendingCarryover.length}
+            transferred={data.summary.transferred}
+            delivered={data.summary.delivered}
+            cancelled={data.summary.cancelled}
+            totalConsignments={
+              data.summary.delivered + data.summary.pending + nonAgentPendingCarryover.length + data.summary.transferred + data.summary.cancelled
+            }
+          />
+
 <div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
               Cash Closing Summary — {data.date}
