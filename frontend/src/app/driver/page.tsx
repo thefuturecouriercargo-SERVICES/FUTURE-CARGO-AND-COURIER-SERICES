@@ -603,6 +603,21 @@ function StatusModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Speaks the payment method out loud so the driver can confirm by ear without
+  // needing to look at the screen — uses the browser's built-in text-to-speech.
+  function speak(text: string) {
+    try {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.volume = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Speech synthesis unsupported/blocked — silently skip.
+    }
+  }
+
   async function confirm() {
     if (!selected) {
       setError("Choose a status.");
@@ -658,7 +673,10 @@ function StatusModal({
             {(["CASH", "BANK"] as const).map((p) => (
               <button
                 key={p}
-                onClick={() => setPayment(p)}
+                onClick={() => {
+                  setPayment(p);
+                  speak(p === "CASH" ? "Cash" : "Bank");
+                }}
                 className={`rounded border px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide ${
                   payment === p ? "border-navy bg-navy text-paper" : "border-line text-ink-soft hover:border-brass"
                 }`}
