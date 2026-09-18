@@ -128,6 +128,27 @@ export default function DriverPortalPage() {
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
+  // Data the voice assistant needs beyond what's already loaded — fetched once.
+  const [assistantEmployees, setAssistantEmployees] = useState<Employee[]>([]);
+  const [assistantVendors, setAssistantVendors] = useState<Vendor[]>([]);
+  useEffect(() => {
+    apiFetch<Employee[]>("/employees").then(setAssistantEmployees);
+    apiFetch<Vendor[]>("/vendors").then(setAssistantVendors);
+  }, []);
+
+  function speak(text: string) {
+    try {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.volume = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Speech synthesis unsupported/blocked — silently skip.
+    }
+  }
+
   const load = useCallback(async () => {
     const [ordersRes, summaryRes] = await Promise.all([
       apiFetch<{ date: string; orders: Order[] }>("/driver/orders", { query: { date } }),
@@ -315,9 +336,11 @@ export default function DriverPortalPage() {
     return () => clearInterval(interval);
   }, [checkMonthlyAchievement]);
 
-  async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string) {
-    if (payment !== order.payment) {
-      await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment } });
+  async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string, bankPaymentConfirmed?: boolean) {
+    // Also re-hits the payment endpoint if only the confirmation checkbox changed
+    // (payment method itself staying BANK), not just on an actual CASH/BANK switch.
+    if (payment !== order.payment || (payment === "BANK" && bankPaymentConfirmed !== order.bankPaymentConfirmed)) {
+      await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment, bankPaymentConfirmed } });
     }
     await apiFetch(`/orders/${order.id}/status`, { method: "PATCH", body: { status, reason } });
     showToast(`CN ${order.cnNo} marked ${status}`, status === "DELIVERED" ? "success" : "info");
@@ -336,44 +359,198 @@ export default function DriverPortalPage() {
     showToast(`Searching CN ${digits}`);
   });
 
-  // Global voice assistant — parses a full spoken command like "56678 delivered
-  // bank" and automatically updates that order's status and/or payment. Only
-  // handles DELIVERED and PENDING (not Cancelled, which needs a typed reason, or
-  // Transfer, which needs picking a target driver) — kept deliberately safe for a
-  // hands-free command.
+  // ── Global voice assistant ──────────────────────────────────────────────────
+  // Parses a full spoken command and either answers immediately (questions), or
+  // stages a Confirm/Cancel step before touching any data (updates, transfers,
+  // vendor payments) — reduces risk from a misheard word or number. A single
+  // "undo last" reverses whichever confirmed action ran most recently.
+  type ParsedCommand =
+    | { kind: "update"; order: Order; status?: OrderStatus; payment?: "CASH" | "BANK"; reason?: string; description: string }
+    | { kind: "transfer"; order: Order; toEmployee: Employee; description: string }
+    | { kind: "vendorPayment"; vendor: Vendor; amount: number; description: string }
+    | { kind: "question"; answer: string }
+    | { kind: "undo" }
+    | { kind: "unrecognized"; raw: string };
+
   const [assistantHeard, setAssistantHeard] = useState<string | null>(null);
-  const voiceAssistant = useVoiceAssistant(async (transcript) => {
-    setAssistantHeard(transcript);
+  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
+  const [lastAction, setLastAction] = useState<{ description: string; undo: () => Promise<void> } | null>(null);
+
+  function parseVoiceCommand(transcript: string): ParsedCommand {
     const lower = transcript.toLowerCase();
 
+    // "undo last" — checked first, doesn't need a CN number.
+    if (/\bundo\b/.test(lower)) return { kind: "undo" };
+
+    // Questions — answered immediately via speech, nothing gets changed.
+    if (/how many pending/.test(lower)) {
+      const n = orders.filter((o) => o.status === "PENDING").length;
+      return { kind: "question", answer: `You have ${n} pending order${n === 1 ? "" : "s"}.` };
+    }
+    if (/how many delivered/.test(lower)) {
+      const n = orders.filter((o) => o.status === "DELIVERED").length;
+      return { kind: "question", answer: `You have delivered ${n} order${n === 1 ? "" : "s"} today.` };
+    }
+    if (/how much cash/.test(lower)) {
+      const n = summary?.cashCollected ?? 0;
+      return { kind: "question", answer: `You have collected ${n} AED in cash today.` };
+    }
+    if (/how much bank/.test(lower)) {
+      const n = summary?.bankCollected ?? 0;
+      return { kind: "question", answer: `You have collected ${n} AED via bank today.` };
+    }
+
+    // "pay vendor <name> <amount>"
+    const payMatch = lower.match(/pay\s+(?:vendor\s+)?(.+?)\s+(\d+)/);
+    if (payMatch) {
+      const spokenName = payMatch[1].trim();
+      const amount = Number(payMatch[2]);
+      const vendor = assistantVendors.find((v) => v.name.toLowerCase().includes(spokenName) || spokenName.includes(v.name.toLowerCase()));
+      if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenName}" not found` };
+      return { kind: "vendorPayment", vendor, amount, description: `Pay ${vendor.name} ${amount} AED` };
+    }
+
+    // "<cn> transfer to <name>"
     const cnMatch = transcript.match(/\d{3,7}/);
     const cnNo = cnMatch ? Number(cnMatch[0]) : null;
+    const transferMatch = lower.match(/transfer\s*(?:to)?\s+([a-z]+)/);
+    if (cnNo && transferMatch) {
+      const order = orders.find((o) => o.cnNo === cnNo);
+      if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found` };
+      const spokenName = transferMatch[1].trim();
+      const toEmployee = assistantEmployees.find((e) => e.id !== order.employeeId && e.name.toLowerCase().startsWith(spokenName));
+      if (!toEmployee) return { kind: "unrecognized", raw: `Driver "${spokenName}" not found` };
+      return { kind: "transfer", order, toEmployee, description: `Transfer CN ${cnNo} to ${toEmployee.name}` };
+    }
 
-    let status: OrderStatus | null = null;
-    if (/delivered/.test(lower)) status = "DELIVERED";
+    // "<cn> delivered/pending/cancelled [reason], [cash/bank]"
+    if (!cnNo) return { kind: "unrecognized", raw: transcript };
+    const order = orders.find((o) => o.cnNo === cnNo);
+    if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found in today's orders` };
+
+    let status: OrderStatus | undefined;
+    let reason: string | undefined;
+    const cancelMatch = lower.match(/\bcancel(?:led)?\b/);
+    if (cancelMatch) {
+      status = "CANCELLED";
+      const afterCancel = lower.slice(cancelMatch.index! + cancelMatch[0].length).trim();
+      reason = afterCancel.replace(/^(reason|because|due to|for)\s*[:,]?\s*/i, "").trim();
+    } else if (/delivered/.test(lower)) status = "DELIVERED";
     else if (/pending/.test(lower)) status = "PENDING";
 
-    let payment: "CASH" | "BANK" | null = null;
+    let payment: "CASH" | "BANK" | undefined;
     if (/\bbank\b/.test(lower)) payment = "BANK";
     else if (/\bcash\b/.test(lower)) payment = "CASH";
 
-    if (!cnNo) {
-      showToast(`Didn't catch a CN number in "${transcript}"`, "info");
-      return;
+    if (!status && !payment) return { kind: "unrecognized", raw: `Heard CN ${cnNo} but no status or payment` };
+    if (status === "CANCELLED" && !reason) return { kind: "unrecognized", raw: `Heard "cancel" for CN ${cnNo} but no reason given` };
+
+    const parts = [`CN ${cnNo}`];
+    if (status) parts.push(status + (reason ? ` (${reason})` : ""));
+    if (payment) parts.push(payment);
+    return { kind: "update", order, status, payment, reason, description: parts.join(" — ") };
+  }
+
+  async function executeCommand(cmd: ParsedCommand) {
+    if (cmd.kind === "update") {
+      const prevStatus = cmd.order.status;
+      const prevPayment = cmd.order.payment;
+      await updateStatus(cmd.order, cmd.status ?? cmd.order.status, cmd.payment ?? cmd.order.payment, cmd.reason);
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await updateStatus(cmd.order, prevStatus, prevPayment);
+          showToast(`Undone — CN ${cmd.order.cnNo} restored`, "info");
+        },
+      });
+    } else if (cmd.kind === "transfer") {
+      await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.toEmployee.id } });
+      showToast(`CN ${cmd.order.cnNo} transferred to ${cmd.toEmployee.name}`, "info");
+      await load();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.order.employeeId } });
+          showToast(`Undone — CN ${cmd.order.cnNo} transferred back`, "info");
+          await load();
+        },
+      });
+    } else if (cmd.kind === "vendorPayment") {
+      const payment = await apiFetch<{ id: string }>("/purchases", {
+        method: "POST",
+        body: { date: cashClosingDate, amount: cmd.amount, vendorId: cmd.vendor.id },
+      });
+      showToast(`Logged ${cmd.amount} AED payment to ${cmd.vendor.name}`, "success");
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/purchases/${payment.id}`, { method: "DELETE" });
+          showToast(`Undone — payment to ${cmd.vendor.name} removed`, "info");
+        },
+      });
     }
-    const order = orders.find((o) => o.cnNo === cnNo);
-    if (!order) {
-      showToast(`CN ${cnNo} not found in today's orders`, "info");
-      return;
-    }
-    if (!status && !payment) {
-      showToast(`Heard CN ${cnNo} but no status or payment recognized`, "info");
+  }
+
+  const voiceAssistant = useVoiceAssistant((transcript) => {
+    setAssistantHeard(transcript);
+    const lower = transcript.toLowerCase();
+
+    // If a command is already staged, this next utterance is a yes/no response,
+    // not a new command.
+    if (pendingCommand) {
+      if (/\b(yes|confirm|correct|do it)\b/.test(lower)) {
+        confirmPendingCommand();
+      } else if (/\b(no|cancel|stop)\b/.test(lower)) {
+        cancelPendingCommand();
+      } else {
+        showToast(`Didn't catch a yes or no — tap Confirm or Cancel instead`, "info");
+      }
       return;
     }
 
-    await updateStatus(order, status ?? order.status, payment ?? order.payment);
-    setTimeout(() => setAssistantHeard(null), 3000);
+    const cmd = parseVoiceCommand(transcript);
+
+    if (cmd.kind === "question") {
+      speak(cmd.answer);
+      showToast(cmd.answer, "info");
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+    if (cmd.kind === "undo") {
+      if (lastAction) {
+        lastAction.undo();
+        setLastAction(null);
+      } else {
+        showToast("Nothing to undo", "info");
+      }
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+    if (cmd.kind === "unrecognized") {
+      showToast(cmd.raw, "info");
+      setTimeout(() => setAssistantHeard(null), 3000);
+      return;
+    }
+    // update / transfer / vendorPayment — stage for confirmation, don't execute yet.
+    setPendingCommand(cmd);
+    speak(`${cmd.description}. Confirm?`);
+    // Auto-listen for the yes/no reply so the whole exchange stays hands-free —
+    // timed to start just after the confirmation is spoken.
+    setTimeout(() => voiceAssistant.start(), 1800);
   });
+
+  async function confirmPendingCommand() {
+    if (!pendingCommand || pendingCommand.kind === "question" || pendingCommand.kind === "undo" || pendingCommand.kind === "unrecognized") return;
+    await executeCommand(pendingCommand);
+    setPendingCommand(null);
+    setAssistantHeard(null);
+  }
+
+  function cancelPendingCommand() {
+    setPendingCommand(null);
+    setAssistantHeard(null);
+    showToast("Cancelled", "info");
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -388,10 +565,42 @@ export default function DriverPortalPage() {
           🌐
         </button>
       )}
-      {assistantHeard && (
-        <div className="fixed right-4 top-20 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
-          <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
+      {pendingCommand ? (
+        <div className="fixed right-4 top-20 z-50 w-64 rounded border border-brass bg-white p-4 shadow-xl">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-soft">Confirm action</p>
+          <p className="mb-3 text-sm font-semibold text-navy">
+            {pendingCommand.kind === "update" || pendingCommand.kind === "transfer" || pendingCommand.kind === "vendorPayment"
+              ? pendingCommand.description
+              : ""}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={confirmPendingCommand} className="flex-1 rounded bg-delivered px-3 py-2 font-mono text-[10px] uppercase text-white hover:opacity-90">
+              ✓ Confirm
+            </button>
+            <button onClick={cancelPendingCommand} className="flex-1 rounded border border-line px-3 py-2 font-mono text-[10px] uppercase text-ink-soft hover:border-cancelled">
+              ✗ Cancel
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-ink-soft">Or just say &quot;yes&quot; or &quot;confirm&quot;</p>
         </div>
+      ) : (
+        assistantHeard && (
+          <div className="fixed right-4 top-20 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
+            <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
+          </div>
+        )
+      )}
+      {lastAction && !pendingCommand && (
+        <button
+          onClick={() => {
+            lastAction.undo();
+            setLastAction(null);
+          }}
+          className="fixed right-4 top-20 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
+          style={{ display: assistantHeard ? "none" : undefined }}
+        >
+          ↺ Undo: {lastAction.description}
+        </button>
       )}
 
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
@@ -555,8 +764,8 @@ export default function DriverPortalPage() {
             setTransferOrder(statusOrder);
             setStatusOrder(null);
           }}
-          onConfirm={async (status, payment, reason) => {
-            await updateStatus(statusOrder, status, payment, reason);
+          onConfirm={async (status, payment, reason, bankPaymentConfirmed) => {
+            await updateStatus(statusOrder, status, payment, reason, bankPaymentConfirmed);
             setStatusOrder(null);
           }}
         />
@@ -691,11 +900,12 @@ function StatusModal({
 }: {
   order: Order;
   onClose: () => void;
-  onConfirm: (status: OrderStatus, payment: "CASH" | "BANK", reason?: string) => Promise<void>;
+  onConfirm: (status: OrderStatus, payment: "CASH" | "BANK", reason?: string, bankPaymentConfirmed?: boolean) => Promise<void>;
   onTransfer: () => void;
 }) {
   const [selected, setSelected] = useState<OrderStatus | null>(null);
   const [payment, setPayment] = useState<"CASH" | "BANK">(order.payment);
+  const [bankPaymentConfirmed, setBankPaymentConfirmed] = useState(order.bankPaymentConfirmed ?? false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -727,7 +937,7 @@ function StatusModal({
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(selected, payment, selected === "CANCELLED" ? reason.trim() : undefined);
+      await onConfirm(selected, payment, selected === "CANCELLED" ? reason.trim() : undefined, payment === "BANK" ? bankPaymentConfirmed : undefined);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to update status");
       setBusy(false);
@@ -782,6 +992,14 @@ function StatusModal({
               </button>
             ))}
           </div>
+          {payment === "BANK" && (
+            <label className="mt-2 flex items-center gap-2 rounded border border-pending bg-pending-bg px-3 py-2 text-xs">
+              <input type="checkbox" checked={bankPaymentConfirmed} onChange={(e) => setBankPaymentConfirmed(e.target.checked)} className="h-4 w-4" />
+              <span className={bankPaymentConfirmed ? "text-ink" : "font-semibold text-pending"}>
+                {bankPaymentConfirmed ? "✓ Payment received" : "Payment not yet confirmed received"}
+              </span>
+            </label>
+          )}
         </div>
 
         {selected === "CANCELLED" && (
