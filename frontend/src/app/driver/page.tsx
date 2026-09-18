@@ -6,6 +6,7 @@ import { fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
+import LiveFlowPanel from "@/components/LiveFlowPanel";
 
 interface Summary {
   assigned: number;
@@ -298,6 +299,16 @@ export default function DriverPortalPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
+
+      {orders.length > 0 && (
+        <LiveFlowPanel
+          pending={orders.filter((o) => o.status === "PENDING").length}
+          transferred={orders.filter((o) => o.status === "TRANSFER").length}
+          delivered={orders.filter((o) => o.status === "DELIVERED").length}
+          cancelled={orders.filter((o) => o.status === "CANCELLED").length}
+          totalConsignments={orders.length}
+        />
+      )}
 
       {summary && (
         <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-6">
