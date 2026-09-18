@@ -393,6 +393,11 @@ export default function DriverPortalPage() {
                     Reason: {o.remarks}
                   </div>
                 )}
+                {o.status === "TRANSFER" && o.transferredBy && (
+                  <div className="mt-1 text-xs text-transferred">
+                    Transferred by {o.transferredBy}
+                  </div>
+                )}
                 {o.vendor.phone && (
                   <div className="mt-2 flex gap-2">
                     <a
