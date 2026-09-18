@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { addDays, fmtNumber, todayStr, isAgingPending } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
@@ -607,12 +607,12 @@ required
                             </option>
                           ))}
                         </select>
-                        {isAgingPending(o.status, o.date) && (
+                        {agingDays(o.status, o.date) !== null && (
                           <span
-                            className="rounded bg-cancelled px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-white"
-                            title="Pending more than 2 days"
+                            className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide ${agingBadgeClass(agingDays(o.status, o.date)!)}`}
+                            title={`Pending ${agingDays(o.status, o.date)} days`}
                           >
-                            Aging
+                            {agingDays(o.status, o.date)}d
                           </span>
                         )}
                       </div>
