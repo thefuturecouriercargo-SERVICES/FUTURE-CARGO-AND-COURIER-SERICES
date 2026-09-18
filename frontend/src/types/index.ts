@@ -48,6 +48,7 @@ export interface Order {
   employee: { id: string; name: string };
   status: OrderStatus;
   remarks?: string | null;
+  transferredBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
