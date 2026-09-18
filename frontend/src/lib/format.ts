@@ -23,12 +23,29 @@ export function currentMonthStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// True if an order has sat PENDING for more than 2 days — used to flag aging
+// True if an order has sat PENDING for 2 or more days — used to flag aging
 // consignments wherever their status is shown.
 export function isAgingPending(status: string, dateStr: string): boolean {
   if (status !== "PENDING") return false;
   const orderDate = new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
   const today = new Date(`${todayStr()}T00:00:00Z`);
   const diffDays = (today.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays > 2;
+  return diffDays >= 2;
+}
+
+// Exact number of days an order has been sitting PENDING, or null if it's not aging
+// yet (under 2 days, or not Pending). Used to color-grade the badge by severity
+// instead of a flat red — 2-4 days reads amber, 5+ reads red.
+export function agingDays(status: string, dateStr: string): number | null {
+  if (!isAgingPending(status, dateStr)) return null;
+  const orderDate = new Date(`${dateStr.slice(0, 10)}T00:00:00Z`);
+  const today = new Date(`${todayStr()}T00:00:00Z`);
+  return Math.floor((today.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Tailwind classes for the aging badge, graded by how many days old it is —
+ * both tiers blink to draw the eye, red blinks faster since it's more urgent. */
+export function agingBadgeClass(days: number): string {
+  if (days >= 5) return "bg-cancelled text-white animate-[badge-blink_0.8s_ease-in-out_infinite]";
+  return "bg-pending text-white animate-[badge-blink_1.6s_ease-in-out_infinite]";
 }
