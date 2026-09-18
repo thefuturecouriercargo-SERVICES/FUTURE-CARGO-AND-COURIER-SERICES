@@ -43,6 +43,7 @@ export interface Order {
   deliveryCharge: number;
   total: number;
   payment: PaymentMode;
+  bankPaymentConfirmed?: boolean;
   emirate: string;
   employeeId: string;
   employee: { id: string; name: string };
