@@ -6,7 +6,6 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange, parseDateParam } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
-import { notify } from "../services/notification.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 
 const router = Router();
@@ -130,10 +129,6 @@ if (!employee || employee.role !== "DRIVER") throw new ApiError(404, "Employee n
 // CN No. must be globally unique — never reused, regardless of status or date.
 const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo } });
 if (existingCn) {
-  await notify(
-    `Duplicate CN No. ${data.cnNo} attempt blocked — already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`,
-    "/orders"
-  );
   throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
 }
 
@@ -203,10 +198,6 @@ if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
     where: { cnNo: data.cnNo, id: { not: existing.id } },
   });
   if (existingCn) {
-    await notify(
-      `Duplicate CN No. ${data.cnNo} attempt blocked — already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`,
-      "/orders"
-    );
     throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
   }
 }
