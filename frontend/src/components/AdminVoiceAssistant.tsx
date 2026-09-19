@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { EMIRATES, Employee, Order, OrderStatus, Vendor } from "@/types";
 
@@ -536,19 +538,33 @@ export default function AdminVoiceAssistant() {
     setTimeout(() => voiceAssistant.start(), 1800);
   });
 
+  // If the current page has an #assistant-anchor element (right now, only the
+  // Dashboard page does, next to its "Operations Dashboard" heading), render the
+  // button there via a portal instead of the floating corner position. Re-checked
+  // on every route change since the anchor only exists on some pages.
+  const pathname = usePathname();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setAnchorEl(document.getElementById("assistant-anchor"));
+  }, [pathname]);
+
   if (!voiceAssistant.supported) return null;
+
+  const triggerButton = (
+    <button
+      onClick={voiceAssistant.start}
+      title='Voice assistant — say something like "56678 delivered bank" or "how many pending"'
+      className={`flex items-center justify-center rounded-full text-2xl shadow-lg transition ${
+        anchorEl ? "h-9 w-9 text-xl" : "fixed right-4 top-20 z-40 h-12 w-12"
+      } ${voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"}`}
+    >
+      🌐
+    </button>
+  );
 
   return (
     <>
-      <button
-        onClick={voiceAssistant.start}
-        title='Voice assistant — say something like "56678 delivered bank" or "how many pending"'
-        className={`fixed right-4 top-20 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
-          voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
-        }`}
-      >
-        🌐
-      </button>
+      {anchorEl ? createPortal(triggerButton, anchorEl) : triggerButton}
 
       {/* Live listening / heard panel — separate from the confirm card, always in
           the same spot so it's easy to glance at. Animates a "waveform" while
