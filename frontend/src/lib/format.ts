@@ -23,6 +23,15 @@ export function currentMonthStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Previous calendar month — Payroll defaults to this rather than the current
+// month, since a driver's/employee's full month isn't finalized until it's over.
+export function previousMonthStr(): string {
+  const d = new Date();
+  d.setDate(1); // avoid month-end overflow issues (e.g. March 31 - 1 month)
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 // True if an order has sat PENDING for 2 or more days — used to flag aging
 // consignments wherever their status is shown.
 export function isAgingPending(status: string, dateStr: string): boolean {
