@@ -3,29 +3,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { Employee, EMIRATES, Order, STATUSES, Vendor } from "@/types";
 
-type SortKey = "date" | "cnNo" | "total" | "confirmed";
+type SortKey = "cnNo" | "total" | "confirmed";
 type SortDir = "asc" | "desc";
 
 export default function BankLedgerPage() {
+  const [date, setDate] = useState(todayStr());
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [emirateFilter, setEmirateFilter] = useState("");
   const [confirmedFilter, setConfirmedFilter] = useState<"" | "yes" | "no">("");
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("confirmed");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,21 +33,21 @@ export default function BankLedgerPage() {
       const res = await apiFetch<{ orders: Order[] }>("/orders", {
         query: {
           payment: "BANK",
-          ...(fromDate ? { from: fromDate } : {}),
-          ...(toDate ? { to: toDate } : {}),
+          date,
           ...(statusFilter ? { status: statusFilter } : {}),
           ...(vendorFilter ? { vendorId: vendorFilter } : {}),
           ...(employeeFilter ? { employeeId: employeeFilter } : {}),
           ...(emirateFilter ? { emirate: emirateFilter } : {}),
           ...(confirmedFilter ? { bankPaymentConfirmed: confirmedFilter === "yes" ? "true" : "false" } : {}),
-          limit: 1000,
+          limit: 500,
         },
       });
       setOrders(res.orders);
+      setSelectedIds(new Set());
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate, statusFilter, vendorFilter, employeeFilter, emirateFilter, confirmedFilter]);
+  }, [date, statusFilter, vendorFilter, employeeFilter, emirateFilter, confirmedFilter]);
 
   useEffect(() => {
     apiFetch<Vendor[]>("/vendors").then(setVendors);
@@ -64,8 +64,7 @@ export default function BankLedgerPage() {
     const copy = [...orders];
     copy.sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "date") cmp = a.date.localeCompare(b.date);
-      else if (sortKey === "cnNo") cmp = a.cnNo - b.cnNo;
+      if (sortKey === "cnNo") cmp = a.cnNo - b.cnNo;
       else if (sortKey === "total") cmp = a.total - b.total;
       else if (sortKey === "confirmed") cmp = Number(a.bankPaymentConfirmed ?? false) - Number(b.bankPaymentConfirmed ?? false);
       return sortDir === "asc" ? cmp : -cmp;
@@ -88,19 +87,41 @@ export default function BankLedgerPage() {
   }
 
   async function toggleConfirmed(order: Order) {
-    setSavingId(order.id);
+    const next = !order.bankPaymentConfirmed;
+    await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: next } });
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, bankPaymentConfirmed: next } : o)));
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === sorted.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sorted.map((o) => o.id)));
+    }
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkSetConfirmed(confirmed: boolean) {
+    setBulkSaving(true);
     try {
-      const next = !order.bankPaymentConfirmed;
-      await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: next } });
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, bankPaymentConfirmed: next } : o)));
+      await Promise.all(
+        Array.from(selectedIds).map((id) => apiFetch(`/orders/${id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: confirmed } }))
+      );
+      await load();
     } finally {
-      setSavingId(null);
+      setBulkSaving(false);
     }
   }
 
   function clearFilters() {
-    setFromDate("");
-    setToDate("");
     setStatusFilter("");
     setVendorFilter("");
     setEmployeeFilter("");
@@ -122,21 +143,33 @@ export default function BankLedgerPage() {
     };
   }, [sorted]);
 
-  const activeFilterCount = [fromDate, toDate, statusFilter, vendorFilter, employeeFilter, emirateFilter, confirmedFilter].filter(Boolean).length;
+  const activeFilterCount = [statusFilter, vendorFilter, employeeFilter, emirateFilter, confirmedFilter].filter(Boolean).length;
 
   return (
     <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
       <div>
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Bank Payments Only</p>
-        <h1 className="mb-2 font-display text-3xl font-semibold text-navy">Bank Ledger</h1>
-        <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-          Every consignment paid via Bank, in one place — sort, filter, and track which ones still need the driver
-          or admin to confirm the transfer actually landed.
-        </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Bank Payments Only</p>
+            <h1 className="font-display text-3xl font-semibold text-navy">Bank Ledger</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+              ← Prev
+            </button>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+            <button onClick={() => setDate(addDays(date, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+              Next →
+            </button>
+            <button onClick={() => setDate(todayStr())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+              Today
+            </button>
+          </div>
+        </div>
 
         <div className="mb-6 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
           <div className="bg-white p-4">
-            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Total Bank Orders</div>
+            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Bank Orders — {date}</div>
             <div className="font-display text-xl font-semibold text-navy">{totals.count}</div>
           </div>
           <div className="bg-white p-4">
@@ -159,14 +192,6 @@ export default function BankLedgerPage() {
 
         <div className="mb-6 border border-line bg-white p-5">
           <div className="flex flex-wrap items-center gap-3">
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">From</label>
-              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">To</label>
-              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
-            </div>
             <div>
               <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Status</label>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm">
@@ -231,22 +256,48 @@ export default function BankLedgerPage() {
           </div>
         </div>
 
+        {selectedIds.size > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2.5 border border-brass bg-brass/10 px-3 py-2.5">
+            <span className="font-mono text-xs uppercase text-ink">{selectedIds.size} selected</span>
+            <button
+              onClick={() => bulkSetConfirmed(true)}
+              disabled={bulkSaving}
+              className="rounded bg-delivered px-4 py-2 font-mono text-xs uppercase tracking-wide text-white hover:opacity-90 disabled:opacity-60"
+            >
+              {bulkSaving ? "Saving…" : "✓ Confirm Selected"}
+            </button>
+            <button
+              onClick={() => bulkSetConfirmed(false)}
+              disabled={bulkSaving}
+              className="rounded border border-cancelled px-4 py-2 font-mono text-xs uppercase tracking-wide text-cancelled hover:bg-cancelled-bg disabled:opacity-60"
+            >
+              ⚠ Mark Unconfirmed
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded border border-line px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
+
         <div className="border border-line bg-white p-5">
           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
-            {sorted.length} bank consignment{sorted.length === 1 ? "" : "s"}
+            {sorted.length} bank consignment{sorted.length === 1 ? "" : "s"} on {date}
           </h2>
 
           {loading ? (
             <p className="py-8 text-center text-sm text-ink-soft">Loading…</p>
           ) : sorted.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No bank consignments match these filters.</p>
+            <p className="py-8 text-center text-sm text-ink-soft">No bank consignments for this date.</p>
           ) : (
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="cursor-pointer select-none" onClick={() => toggleSort("date")}>
-                      Date{sortArrow("date")}
+                    <th className="w-8">
+                      <input type="checkbox" checked={selectedIds.size === sorted.length && sorted.length > 0} onChange={toggleSelectAll} />
                     </th>
                     <th className="cursor-pointer select-none" onClick={() => toggleSort("cnNo")}>
                       CN No.{sortArrow("cnNo")}
@@ -265,8 +316,10 @@ export default function BankLedgerPage() {
                 </thead>
                 <tbody>
                   {sorted.map((o) => (
-                    <tr key={o.id}>
-                      <td>{o.date.slice(0, 10)}</td>
+                    <tr key={o.id} className={selectedIds.has(o.id) ? "bg-brass/5" : ""}>
+                      <td>
+                        <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelectOne(o.id)} />
+                      </td>
                       <td className="font-mono">{o.cnNo}</td>
                       <td>{o.brandName}</td>
                       <td className="text-right font-mono">{fmtNumber(o.total)}</td>
@@ -278,12 +331,11 @@ export default function BankLedgerPage() {
                       <td>
                         <button
                           onClick={() => toggleConfirmed(o)}
-                          disabled={savingId === o.id}
-                          className={`rounded px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide disabled:opacity-50 ${
-                            o.bankPaymentConfirmed ? "bg-delivered text-white hover:opacity-90" : "bg-cancelled text-white hover:opacity-90"
+                          className={`rounded px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide hover:opacity-90 ${
+                            o.bankPaymentConfirmed ? "bg-delivered text-white" : "bg-cancelled text-white"
                           }`}
                         >
-                          {savingId === o.id ? "…" : o.bankPaymentConfirmed ? "✓ Confirmed" : "⚠ Unconfirmed"}
+                          {o.bankPaymentConfirmed ? "✓ Confirmed" : "⚠ Unconfirmed"}
                         </button>
                       </td>
                     </tr>
