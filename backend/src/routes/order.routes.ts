@@ -34,6 +34,7 @@ function buildWhere(query: Record<string, unknown>): Prisma.OrderWhereInput {
   if (query.vendorId) where.vendorId = query.vendorId as string;
   if (query.status) where.status = query.status as (typeof STATUSES)[number];
   if (query.payment) where.payment = query.payment as (typeof PAYMENTS)[number];
+  if (query.bankPaymentConfirmed !== undefined) where.bankPaymentConfirmed = query.bankPaymentConfirmed === "true";
   if (query.emirate) where.emirate = (query.emirate as string).toUpperCase();
   if (query.cn) {
     const cnNum = Number(query.cn);
