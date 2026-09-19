@@ -26,6 +26,8 @@ export default function BankLedgerPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [carryover, setCarryover] = useState<Order[]>([]);
+  const [bulkConfirmBusy, setBulkConfirmBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,7 +60,36 @@ export default function BankLedgerPage() {
     load();
   }, [load]);
 
+  const loadCarryover = useCallback(async () => {
+    const res = await apiFetch<{ orders: Order[] }>("/orders/unconfirmed-bank-carryover", { query: { date } });
+    setCarryover(res.orders);
+  }, [date]);
+
+  useEffect(() => {
+    loadCarryover();
+  }, [loadCarryover]);
+
+  async function confirmCarryoverOrder(order: Order) {
+    await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: true } });
+    await loadCarryover();
+    await load();
+  }
+
+  async function bulkConfirmBeforeToday() {
+    if (!confirm(`Mark every BANK payment dated before ${date} as confirmed? This is meant as a one-time cleanup — use carefully.`)) return;
+    setBulkConfirmBusy(true);
+    try {
+      const res = await apiFetch<{ updated: number }>("/orders/bulk-confirm-bank", { method: "PATCH", body: { beforeDate: date } });
+      await loadCarryover();
+      await load();
+      alert(`${res.updated} bank payment(s) marked confirmed.`);
+    } finally {
+      setBulkConfirmBusy(false);
+    }
+  }
+
   useSocketEvent("order:changed", load);
+  useSocketEvent("order:changed", loadCarryover);
 
   const sorted = useMemo(() => {
     const copy = [...orders];
@@ -164,8 +195,62 @@ export default function BankLedgerPage() {
             <button onClick={() => setDate(todayStr())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
               Today
             </button>
+            <button
+              onClick={bulkConfirmBeforeToday}
+              disabled={bulkConfirmBusy}
+              className="rounded border border-pending px-2.5 py-1.5 font-mono text-xs uppercase text-pending hover:bg-pending-bg disabled:opacity-60"
+              title="One-time cleanup — marks everything before this date as confirmed"
+            >
+              {bulkConfirmBusy ? "Working…" : "Mark confirmed before this date"}
+            </button>
           </div>
         </div>
+
+        {carryover.length > 0 && (
+          <div className="mb-6 border border-pending bg-pending-bg p-5">
+            <h2 className="mb-1 font-display text-[17px] font-semibold text-pending">
+              ⚠ Carried Forward — Still Unconfirmed ({carryover.length})
+            </h2>
+            <p className="mb-4 max-w-2xl text-sm text-pending">
+              Bank payments from previous days that still haven&apos;t been confirmed received. These stay here,
+              with their original date, until someone confirms them — they don&apos;t disappear on their own.
+            </p>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>CN No.</th>
+                    <th>Vendor</th>
+                    <th className="text-right">Total</th>
+                    <th>Employee</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carryover.map((o) => (
+                    <tr key={o.id}>
+                      <td className="font-semibold text-pending">{o.date.slice(0, 10)}</td>
+                      <td className="font-mono">{o.cnNo}</td>
+                      <td>{o.brandName}</td>
+                      <td className="text-right font-mono">{fmtNumber(o.total)}</td>
+                      <td>{o.employee.name}</td>
+                      <td>
+                        <span className={`stamp ${o.status.toLowerCase()}`}>{o.status}</span>
+                      </td>
+                      <td>
+                        <button onClick={() => confirmCarryoverOrder(o)} className="rounded bg-delivered px-2.5 py-1 font-mono text-[10px] font-bold uppercase text-white hover:opacity-90">
+                          ✓ Confirm Now
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
           <div className="bg-white p-4">
