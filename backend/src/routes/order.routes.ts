@@ -529,7 +529,7 @@ const bulkConfirmSchema = z.object({ beforeDate: z.string() });
 // new carryover view the moment this feature goes live.
 router.patch(
   "/bulk-confirm-bank",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const { beforeDate } = bulkConfirmSchema.parse(req.body);
     const { start } = dayRange(beforeDate);
