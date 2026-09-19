@@ -93,6 +93,43 @@ export default function AdminVoiceAssistant() {
   const [lastAction, setLastAction] = useState<{ description: string; undo: () => Promise<void> } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // "Add new item" as a step-by-step conversation instead of one long sentence —
+  // whatever's said at each step fills in the next missing field, in order:
+  // CN number → vendor → amount → payment → (emirate → driver, only if not locked
+  // on the Daily Entry page).
+  type AddItemDraft = {
+    cnNo?: number;
+    vendor?: Vendor;
+    total?: number;
+    payment?: "CASH" | "BANK";
+    emirate?: string;
+    employee?: Employee;
+  };
+  type AddItemStep = "cn" | "vendor" | "amount" | "payment" | "emirate" | "driver";
+  const [addItemDraft, setAddItemDraft] = useState<AddItemDraft | null>(null);
+  const [addItemStep, setAddItemStep] = useState<AddItemStep | null>(null);
+
+  function nextMissingStep(draft: AddItemDraft, locked: boolean): AddItemStep | null {
+    if (!draft.cnNo) return "cn";
+    if (!draft.vendor) return "vendor";
+    if (draft.total === undefined) return "amount";
+    if (!draft.payment) return "payment";
+    if (!locked) {
+      if (!draft.emirate) return "emirate";
+      if (!draft.employee) return "driver";
+    }
+    return null;
+  }
+
+  const STEP_PROMPTS: Record<AddItemStep, string> = {
+    cn: "What's the CN number?",
+    vendor: "Which vendor?",
+    amount: "What's the amount?",
+    payment: "Cash or bank?",
+    emirate: "Which emirate?",
+    driver: "Which driver?",
+  };
+
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -214,10 +251,15 @@ export default function AdminVoiceAssistant() {
       return { kind: "question", answer: `${res.summary.totalOrders} total consignments today.` };
     }
 
-    const payMatch = lower.match(/pay\s+(?:vendor\s+)?(.+?)\s+(\d+)/);
+    // Vendor name captured non-greedily up to the first digit, then everything from
+    // there onward is treated as the amount and stripped to digits — same fix as
+    // above, for numbers speech-to-text splits apart (e.g. "200" -> "2 00").
+    const payMatch = lower.match(/pay\s+(?:vendor\s+)?(.+?)\s+(\d.*)/);
     if (payMatch) {
       const spokenName = payMatch[1].trim();
-      const amount = Number(payMatch[2]);
+      const amountDigits3 = payMatch[2].replace(/[^\d]/g, "");
+      if (!amountDigits3) return { kind: "unrecognized", raw: `Heard "pay ${spokenName}" but no amount` };
+      const amount = Number(amountDigits3);
       const vendors = await apiFetch<Vendor[]>("/vendors");
       const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenName) || spokenName.includes(v.name.toLowerCase()));
       if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenName}" not found` };
@@ -246,10 +288,15 @@ export default function AdminVoiceAssistant() {
         { spoken: "other", value: "OTHER" },
       ];
       const category = CATEGORY_WORDS.find((c) => lower.includes(c.spoken))?.value;
-      const amountMatch2 = lower.match(/(\d+)/);
       if (!category) return { kind: "unrecognized", raw: `Heard "expense" but no known category — try fuel, salary, parking, etc.` };
-      if (!amountMatch2) return { kind: "unrecognized", raw: `Heard "${category}" expense but no amount` };
-      const amount = Number(amountMatch2[1]);
+      // Capture everything after the category word up to "for" (or end), then strip
+      // to just digits — handles split/garbled numbers from speech-to-text.
+      const categoryWord = CATEGORY_WORDS.find((c) => lower.includes(c.spoken))!.spoken;
+      const afterCategory = lower.slice(lower.indexOf(categoryWord) + categoryWord.length);
+      const amountSection = afterCategory.split(/\s+for\s+/)[0];
+      const amountDigits2 = amountSection.replace(/[^\d]/g, "");
+      if (!amountDigits2) return { kind: "unrecognized", raw: `Heard "${category}" expense but no amount` };
+      const amount = Number(amountDigits2);
 
       let employee: Employee | undefined;
       const driverMatch2 = lower.match(/for\s+(?:driver\s+)?([a-z]+)/);
@@ -272,76 +319,26 @@ export default function AdminVoiceAssistant() {
     }
 
     // "change <cn> to <amount>"
-    const changeMatch = lower.match(/change\s+(\d{3,7})\s+to\s+(\d+)/);
+    // Everything after "to" is captured raw, then stripped down to just its digits
+    // — handles speech-to-text quirks like "change 66774 to becomes 2 500" (a stray
+    // word and a split-up number), correctly reading it as amount 2500.
+    // Say the CN number first, then "change amount to <amount>" — e.g.
+    // "77664 change amount to 500". Amount is stripped to just digits, so a
+    // split/garbled number (speech-to-text quirk) still reads correctly.
+    const changeMatch = lower.match(/(\d{3,7}).*?change\s+amount\s+to\s+(.+)/);
     if (changeMatch) {
       const cnNo = Number(changeMatch[1]);
-      const newAmount = Number(changeMatch[2]);
+      const amountDigits = changeMatch[2].replace(/[^\d]/g, "");
+      if (!amountDigits) return { kind: "unrecognized", raw: `Heard "change amount" for CN ${cnNo} but no amount number` };
+      const newAmount = Number(amountDigits);
       const orderRes = await apiFetch<{ orders: Order[] }>("/orders", { query: { cn: cnNo } });
       const order = orderRes.orders[0];
       if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found` };
       return { kind: "amountEdit", order, newAmount, description: `Change CN ${cnNo} amount to ${newAmount} AED` };
     }
 
-    // "add new item <cn> vendor <name> amount <amount> [cash|bank] [emirate <name>] [driver/for <name>]"
-    if (/\b(add new item|add order|new order|new item)\b/.test(lower)) {
-      const cnMatch2 = transcript.match(/\d{3,7}/);
-      const amountMatch = lower.match(/amount\s+(\d+)/);
-      const vendorMatch = lower.match(/vendor\s+([a-z0-9 ]+?)(?:\s+amount|\s+cash|\s+bank|\s+emirate|\s+driver|\s+for|$)/);
-      if (!cnMatch2) return { kind: "unrecognized", raw: "Heard \"add new item\" but no CN number" };
-      if (!amountMatch) return { kind: "unrecognized", raw: `Heard \"add new item\" but no amount — say "amount <number>"` };
-      if (!vendorMatch) return { kind: "unrecognized", raw: `Heard \"add new item\" but no vendor — say "vendor <name>"` };
-
-      const cnNo = Number(cnMatch2[0]);
-      const total = Number(amountMatch[1]);
-      const spokenVendor = vendorMatch[1].trim();
-      const vendors = await apiFetch<Vendor[]>("/vendors");
-      const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenVendor) || spokenVendor.includes(v.name.toLowerCase()));
-      if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenVendor}" not found` };
-
-      const payment: "CASH" | "BANK" = /\bbank\b/.test(lower) ? "BANK" : "CASH";
-
-      // Reuse the locked Emirate/Employee from the Daily Entry page if it's
-      // currently locked there — otherwise both must be spoken.
-      let emirate: string | undefined;
-      let employee: Employee | undefined;
-      try {
-        const lockRaw = localStorage.getItem("dailyEntryLock");
-        const lock = lockRaw ? JSON.parse(lockRaw) : null;
-        if (lock?.locked) {
-          emirate = lock.emirate;
-          const employees = await apiFetch<Employee[]>("/employees");
-          employee = employees.find((e) => e.id === lock.employeeId);
-        }
-      } catch {
-        // no lock available — fall through to requiring spoken values
-      }
-
-      if (!emirate) {
-        const emirateMatch = EMIRATES.find((em) => lower.includes(em.toLowerCase()));
-        emirate = emirateMatch;
-      }
-      if (!employee) {
-        const driverMatch = lower.match(/(?:driver|for)\s+([a-z]+)/);
-        if (driverMatch) {
-          const employees = await apiFetch<Employee[]>("/employees");
-          employee = employees.find((e) => e.name.toLowerCase().startsWith(driverMatch[1].trim()));
-        }
-      }
-
-      if (!emirate) return { kind: "unrecognized", raw: `Emirate/Employee aren't locked on Daily Entry — say an emirate name too` };
-      if (!employee) return { kind: "unrecognized", raw: `Emirate/Employee aren't locked on Daily Entry — say "driver <name>" too` };
-
-      return {
-        kind: "addItem",
-        cnNo,
-        vendor,
-        total,
-        payment,
-        emirate,
-        employee,
-        description: `New item — CN ${cnNo}, ${vendor.name}, ${total} AED, ${payment}, ${emirate}, ${employee.name}`,
-      };
-    }
+    // "add new item" is handled separately as a multi-step conversation (see
+    // addItemDraft state below) rather than parsed here as a single sentence.
 
     const cnMatch = transcript.match(/\d{3,7}/);
     const cnNo = cnMatch ? Number(cnMatch[0]) : null;
@@ -498,6 +495,136 @@ export default function AdminVoiceAssistant() {
     setAssistantHeard(transcript);
     const lower = transcript.toLowerCase();
 
+    // Shared by both the initial trigger and every follow-up step: apply the
+    // Daily Entry lock (if any), figure out what's still missing, and either ask
+    // for the next field or finalize into a Confirm card once everything's filled.
+    async function advanceAddItem(draft: AddItemDraft) {
+      let locked = false;
+      try {
+        const lockRaw = localStorage.getItem("dailyEntryLock");
+        const lock = lockRaw ? JSON.parse(lockRaw) : null;
+        if (lock?.locked) {
+          locked = true;
+          if (!draft.emirate) draft.emirate = lock.emirate;
+          if (!draft.employee) {
+            const employees = await apiFetch<Employee[]>("/employees");
+            draft.employee = employees.find((e) => e.id === lock.employeeId);
+          }
+        }
+      } catch {
+        // no lock available — fall through, will ask for emirate/driver directly
+      }
+
+      const next = nextMissingStep(draft, locked);
+      if (next) {
+        setAddItemDraft(draft);
+        setAddItemStep(next);
+        speak(STEP_PROMPTS[next]);
+        setTimeout(() => voiceAssistant.start(), 1500);
+        return;
+      }
+
+      setAddItemDraft(null);
+      setAddItemStep(null);
+      const finalCmd: ParsedCommand = {
+        kind: "addItem",
+        cnNo: draft.cnNo!,
+        vendor: draft.vendor!,
+        total: draft.total!,
+        payment: draft.payment!,
+        emirate: draft.emirate!,
+        employee: draft.employee!,
+        description: `New item — CN ${draft.cnNo}, ${draft.vendor!.name}, ${draft.total} AED, ${draft.payment}, ${draft.emirate}, ${draft.employee!.name}`,
+      };
+      setPendingCommand(finalCmd);
+      speak(`${finalCmd.description}. Confirm?`);
+      setTimeout(() => voiceAssistant.start(), 1800);
+    }
+
+    // Mid-conversation: this utterance answers whichever field we just asked for.
+    if (addItemDraft && addItemStep) {
+      const draft = { ...addItemDraft };
+      if (addItemStep === "cn") {
+        const m = transcript.match(/\d{3,7}/);
+        if (!m) {
+          showToast("Didn't catch a CN number — try again");
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+        draft.cnNo = Number(m[0]);
+      } else if (addItemStep === "vendor") {
+        const spoken = lower.trim();
+        const vendors = await apiFetch<Vendor[]>("/vendors");
+        const vendor = vendors.find((v) => v.name.toLowerCase().includes(spoken) || spoken.includes(v.name.toLowerCase()));
+        if (!vendor) {
+          showToast(`Vendor "${transcript}" not found — try again`);
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+        draft.vendor = vendor;
+      } else if (addItemStep === "amount") {
+        const digits = transcript.replace(/[^\d]/g, "");
+        if (!digits) {
+          showToast("Didn't catch an amount — try again");
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+        draft.total = Number(digits);
+      } else if (addItemStep === "payment") {
+        if (/\bbank\b/.test(lower)) draft.payment = "BANK";
+        else if (/\bcash\b/.test(lower)) draft.payment = "CASH";
+        else {
+          showToast('Say "cash" or "bank"');
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+      } else if (addItemStep === "emirate") {
+        const match = EMIRATES.find((em) => lower.includes(em.toLowerCase()));
+        if (!match) {
+          showToast(`Emirate "${transcript}" not recognized — try again`);
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+        draft.emirate = match;
+      } else if (addItemStep === "driver") {
+        const spoken = lower.trim();
+        const employees = await apiFetch<Employee[]>("/employees");
+        const employee = employees.find((e) => e.name.toLowerCase().startsWith(spoken));
+        if (!employee) {
+          showToast(`Driver "${transcript}" not found — try again`);
+          setTimeout(() => voiceAssistant.start(), 1200);
+          return;
+        }
+        draft.employee = employee;
+      }
+      await advanceAddItem(draft);
+      return;
+    }
+
+    // First utterance of a new "add new item" — grab whatever's already said in
+    // this same sentence (e.g. "add new item 56999 vendor Inspired"), then ask
+    // for only what's still missing, one field at a time from here on. Checked
+    // after pendingCommand so an in-progress yes/no confirmation always wins.
+    if (!pendingCommand && /\b(add new item|add order|new order|new item)\b/.test(lower)) {
+      const draft: AddItemDraft = {};
+      const cnMatch2 = transcript.match(/\d{3,7}/);
+      if (cnMatch2) draft.cnNo = Number(cnMatch2[0]);
+      const vendorMatch = lower.match(/vendor\s+([a-z0-9 ]+?)(?:\s+amount|\s+cash|\s+bank|\s+emirate|\s+driver|\s+for|$)/);
+      if (vendorMatch) {
+        const vendors = await apiFetch<Vendor[]>("/vendors");
+        const spoken = vendorMatch[1].trim();
+        draft.vendor = vendors.find((v) => v.name.toLowerCase().includes(spoken) || spoken.includes(v.name.toLowerCase()));
+      }
+      const amountMatch = lower.match(/amount\s+(.+?)(?:\s+cash|\s+bank|\s+emirate|\s+driver|\s+for|$)/);
+      const amountDigits = amountMatch?.[1]?.replace(/[^\d]/g, "");
+      if (amountDigits) draft.total = Number(amountDigits);
+      if (/\bbank\b/.test(lower)) draft.payment = "BANK";
+      else if (/\bcash\b/.test(lower)) draft.payment = "CASH";
+
+      await advanceAddItem(draft);
+      return;
+    }
+
     if (pendingCommand) {
       if (/\b(yes|confirm|correct|do it)\b/.test(lower)) {
         confirmPendingCommand();
@@ -620,6 +747,31 @@ export default function AdminVoiceAssistant() {
             </button>
           </div>
           <p className="mt-2 text-[10px] text-ink-soft">Or just say &quot;yes&quot; or &quot;confirm&quot;</p>
+        </div>
+      )}
+
+      {addItemStep && (
+        <div className="fixed left-1/2 top-4 z-50 w-72 -translate-x-1/2 rounded border border-brass bg-navy p-4 text-paper shadow-xl">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-brass-light">New Item — Step by Step</p>
+          <p className="mb-2 text-sm font-semibold">{STEP_PROMPTS[addItemStep]}</p>
+          <div className="space-y-0.5 font-mono text-[10px] text-line">
+            {addItemDraft?.cnNo && <p>CN: {addItemDraft.cnNo}</p>}
+            {addItemDraft?.vendor && <p>Vendor: {addItemDraft.vendor.name}</p>}
+            {addItemDraft?.total !== undefined && <p>Amount: {addItemDraft.total} AED</p>}
+            {addItemDraft?.payment && <p>Payment: {addItemDraft.payment}</p>}
+            {addItemDraft?.emirate && <p>Emirate: {addItemDraft.emirate}</p>}
+            {addItemDraft?.employee && <p>Driver: {addItemDraft.employee.name}</p>}
+          </div>
+          <button
+            onClick={() => {
+              setAddItemDraft(null);
+              setAddItemStep(null);
+              showToast("New item cancelled");
+            }}
+            className="mt-3 w-full rounded border border-white/25 px-3 py-1.5 font-mono text-[10px] uppercase text-line hover:border-brass-light hover:text-white"
+          >
+            ✗ Cancel
+          </button>
         </div>
       )}
 
