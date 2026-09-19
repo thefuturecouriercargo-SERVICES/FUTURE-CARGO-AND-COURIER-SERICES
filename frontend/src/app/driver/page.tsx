@@ -162,6 +162,24 @@ export default function DriverPortalPage() {
     load();
   }, [load]);
 
+  // Own unconfirmed bank payments carried forward from previous days — a driver
+  // gets a warning until they actually confirm the money landed, no matter how
+  // many days pass.
+  const [unconfirmedBankCarryover, setUnconfirmedBankCarryover] = useState<Order[]>([]);
+  const loadUnconfirmedBank = useCallback(async () => {
+    const res = await apiFetch<{ orders: Order[] }>("/orders/unconfirmed-bank-carryover", { query: { date } });
+    setUnconfirmedBankCarryover(res.orders);
+  }, [date]);
+  useEffect(() => {
+    loadUnconfirmedBank();
+  }, [loadUnconfirmedBank]);
+
+  async function confirmCarriedOverBankPayment(order: Order) {
+    await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: true } });
+    await loadUnconfirmedBank();
+    showToast(`CN ${order.cnNo} payment confirmed`, "success");
+  }
+
   function showToast(msg: string, type: "info" | "milestone" | "reminder" | "success" | "push" = "info") {
     setToast({ message: msg, type: type === "success" || type === "push" ? "info" : type });
     setTimeout(() => setToast(null), type === "milestone" ? 3200 : 2600);
@@ -373,7 +391,6 @@ export default function DriverPortalPage() {
     | { kind: "unrecognized"; raw: string };
 
   const [assistantHeard, setAssistantHeard] = useState<string | null>(null);
-  const [pendingCommand, setPendingCommand] = useState<ParsedCommand | null>(null);
   const [lastAction, setLastAction] = useState<{ description: string; undo: () => Promise<void> } | null>(null);
 
   function parseVoiceCommand(transcript: string): ParsedCommand {
@@ -451,15 +468,16 @@ export default function DriverPortalPage() {
     return { kind: "update", order, status, payment, reason, description: parts.join(" — ") };
   }
 
-  async function executeCommand(cmd: ParsedCommand) {
+  async function executeCommand(cmd: ParsedCommand, bankPaymentConfirmed?: boolean) {
     if (cmd.kind === "update") {
       const prevStatus = cmd.order.status;
       const prevPayment = cmd.order.payment;
-      await updateStatus(cmd.order, cmd.status ?? cmd.order.status, cmd.payment ?? cmd.order.payment, cmd.reason);
+      const prevBankConfirmed = cmd.order.bankPaymentConfirmed;
+      await updateStatus(cmd.order, cmd.status ?? cmd.order.status, cmd.payment ?? cmd.order.payment, cmd.reason, bankPaymentConfirmed);
       setLastAction({
         description: cmd.description,
         undo: async () => {
-          await updateStatus(cmd.order, prevStatus, prevPayment);
+          await updateStatus(cmd.order, prevStatus, prevPayment, undefined, prevBankConfirmed);
           showToast(`Undone — CN ${cmd.order.cnNo} restored`, "info");
         },
       });
@@ -491,20 +509,21 @@ export default function DriverPortalPage() {
     }
   }
 
-  const voiceAssistant = useVoiceAssistant((transcript) => {
+  // Awaiting a spoken yes/no specifically for "was the bank payment received" —
+  // separate from a general confirmation step (driver doesn't need one for
+  // anything else, commands execute immediately).
+  const [awaitingBankConfirm, setAwaitingBankConfirm] = useState<Extract<ParsedCommand, { kind: "update" }> | null>(null);
+
+  const voiceAssistant = useVoiceAssistant(async (transcript) => {
     setAssistantHeard(transcript);
     const lower = transcript.toLowerCase();
 
-    // If a command is already staged, this next utterance is a yes/no response,
-    // not a new command.
-    if (pendingCommand) {
-      if (/\b(yes|confirm|correct|do it)\b/.test(lower)) {
-        confirmPendingCommand();
-      } else if (/\b(no|cancel|stop)\b/.test(lower)) {
-        cancelPendingCommand();
-      } else {
-        showToast(`Didn't catch a yes or no — tap Confirm or Cancel instead`, "info");
-      }
+    if (awaitingBankConfirm) {
+      const cmd = awaitingBankConfirm;
+      setAwaitingBankConfirm(null);
+      const received = /\b(yes|received|got it|confirm)\b/.test(lower);
+      await executeCommand(cmd, received);
+      setTimeout(() => setAssistantHeard(null), 2000);
       return;
     }
 
@@ -531,26 +550,20 @@ export default function DriverPortalPage() {
       setTimeout(() => setAssistantHeard(null), 3000);
       return;
     }
-    // update / transfer / vendorPayment — stage for confirmation, don't execute yet.
-    setPendingCommand(cmd);
-    speak(`${cmd.description}. Confirm?`);
-    // Auto-listen for the yes/no reply so the whole exchange stays hands-free —
-    // timed to start just after the confirmation is spoken.
-    setTimeout(() => voiceAssistant.start(), 1800);
+
+    // Only "update" commands with BANK payment need the extra spoken check —
+    // everything else (Cash, Pending, Cancel, Transfer, vendor payment) runs
+    // immediately with no confirmation step at all.
+    if (cmd.kind === "update" && cmd.payment === "BANK") {
+      setAwaitingBankConfirm(cmd);
+      speak("Is the payment received?");
+      setTimeout(() => voiceAssistant.start(), 1500);
+      return;
+    }
+
+    await executeCommand(cmd);
+    setTimeout(() => setAssistantHeard(null), 2000);
   });
-
-  async function confirmPendingCommand() {
-    if (!pendingCommand || pendingCommand.kind === "question" || pendingCommand.kind === "undo" || pendingCommand.kind === "unrecognized") return;
-    await executeCommand(pendingCommand);
-    setPendingCommand(null);
-    setAssistantHeard(null);
-  }
-
-  function cancelPendingCommand() {
-    setPendingCommand(null);
-    setAssistantHeard(null);
-    showToast("Cancelled", "info");
-  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -565,23 +578,9 @@ export default function DriverPortalPage() {
           🌐
         </button>
       )}
-      {pendingCommand ? (
-        <div className="fixed right-4 top-20 z-50 w-64 rounded border border-brass bg-white p-4 shadow-xl">
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-soft">Confirm action</p>
-          <p className="mb-3 text-sm font-semibold text-navy">
-            {pendingCommand.kind === "update" || pendingCommand.kind === "transfer" || pendingCommand.kind === "vendorPayment"
-              ? pendingCommand.description
-              : ""}
-          </p>
-          <div className="flex gap-2">
-            <button onClick={confirmPendingCommand} className="flex-1 rounded bg-delivered px-3 py-2 font-mono text-[10px] uppercase text-white hover:opacity-90">
-              ✓ Confirm
-            </button>
-            <button onClick={cancelPendingCommand} className="flex-1 rounded border border-line px-3 py-2 font-mono text-[10px] uppercase text-ink-soft hover:border-cancelled">
-              ✗ Cancel
-            </button>
-          </div>
-          <p className="mt-2 text-[10px] text-ink-soft">Or just say &quot;yes&quot; or &quot;confirm&quot;</p>
+      {awaitingBankConfirm ? (
+        <div className="fixed right-4 top-20 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
+          <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
         </div>
       ) : (
         assistantHeard && (
@@ -590,7 +589,7 @@ export default function DriverPortalPage() {
           </div>
         )
       )}
-      {lastAction && !pendingCommand && (
+      {lastAction && !awaitingBankConfirm && (
         <button
           onClick={() => {
             lastAction.undo();
@@ -605,6 +604,33 @@ export default function DriverPortalPage() {
 
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
+
+      {unconfirmedBankCarryover.length > 0 && (
+        <div className="mb-6 border border-pending bg-pending-bg p-4">
+          <h2 className="mb-1 font-display text-base font-semibold text-pending">
+            ⚠ {unconfirmedBankCarryover.length} bank payment{unconfirmedBankCarryover.length === 1 ? "" : "s"} still unconfirmed
+          </h2>
+          <p className="mb-3 text-xs text-pending">
+            From previous days — please confirm whether the money actually landed. This stays here until you do.
+          </p>
+          <div className="space-y-2">
+            {unconfirmedBankCarryover.map((o) => (
+              <div key={o.id} className="flex items-center justify-between rounded border border-pending bg-white px-3 py-2">
+                <div className="text-xs">
+                  <span className="font-mono font-semibold">CN {o.cnNo}</span> · {o.brandName} · {fmtNumber(o.total)} AED
+                  <span className="ml-1 text-ink-soft">({o.date.slice(0, 10)})</span>
+                </div>
+                <button
+                  onClick={() => confirmCarriedOverBankPayment(o)}
+                  className="rounded bg-delivered px-2.5 py-1 font-mono text-[10px] font-bold uppercase text-white hover:opacity-90"
+                >
+                  ✓ Confirm
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {orders.length > 0 && (
         <LiveFlowPanel
