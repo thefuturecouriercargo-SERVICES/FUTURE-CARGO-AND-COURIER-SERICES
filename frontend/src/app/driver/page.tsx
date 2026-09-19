@@ -366,11 +366,6 @@ export default function DriverPortalPage() {
     });
   }, [orders, statusTab, search]);
 
-  const voiceSearch = useVoiceSearch((digits) => {
-    setSearch(digits);
-    showToast(`Searching CN ${digits}`);
-  });
-
   // ── Global voice assistant ──────────────────────────────────────────────────
   // Parses a full spoken command and either answers immediately (questions), or
   // stages a Confirm/Cancel step before touching any data (updates, transfers,
@@ -380,6 +375,8 @@ export default function DriverPortalPage() {
     | { kind: "update"; order: Order; status?: OrderStatus; payment?: "CASH" | "BANK"; reason?: string; description: string }
     | { kind: "transfer"; order: Order; toEmployee: Employee; description: string }
     | { kind: "vendorPayment"; vendor: Vendor; amount: number; description: string }
+    | { kind: "search"; cnNo: number }
+    | { kind: "needsCancelReason"; order: Order }
     | { kind: "question"; answer: string }
     | { kind: "undo" }
     | { kind: "unrecognized"; raw: string };
@@ -434,10 +431,9 @@ export default function DriverPortalPage() {
       return { kind: "transfer", order, toEmployee, description: `Transfer CN ${cnNo} to ${toEmployee.name}` };
     }
 
-    // "<cn> delivered/pending/cancelled [reason], [cash/bank]"
+    // "<cn> delivered/pending/cancelled [reason], [cash/bank]" — or just a plain
+    // number, which is treated as a search (same as the old mic-search button).
     if (!cnNo) return { kind: "unrecognized", raw: transcript };
-    const order = orders.find((o) => o.cnNo === cnNo);
-    if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found in today's orders` };
 
     let status: OrderStatus | undefined;
     let reason: string | undefined;
@@ -453,8 +449,15 @@ export default function DriverPortalPage() {
     if (/\bbank\b/.test(lower)) payment = "BANK";
     else if (/\bcash\b/.test(lower)) payment = "CASH";
 
-    if (!status && !payment) return { kind: "unrecognized", raw: `Heard CN ${cnNo} but no status or payment` };
-    if (status === "CANCELLED" && !reason) return { kind: "unrecognized", raw: `Heard "cancel" for CN ${cnNo} but no reason given` };
+    // No recognized action keyword — plain CN number, so just search for it.
+    if (!status && !payment) return { kind: "search", cnNo };
+
+    const order = orders.find((o) => o.cnNo === cnNo);
+    if (!order) return { kind: "unrecognized", raw: `CN ${cnNo} not found in today's orders` };
+
+    // Said "cancel" with no reason attached — ask for it via a follow-up listen,
+    // instead of failing outright.
+    if (status === "CANCELLED" && !reason) return { kind: "needsCancelReason", order };
 
     const parts = [`CN ${cnNo}`];
     if (status) parts.push(status + (reason ? ` (${reason})` : ""));
@@ -507,10 +510,21 @@ export default function DriverPortalPage() {
   // separate from a general confirmation step (driver doesn't need one for
   // anything else, commands execute immediately).
   const [awaitingBankConfirm, setAwaitingBankConfirm] = useState<Extract<ParsedCommand, { kind: "update" }> | null>(null);
+  // Awaiting a spoken reason after "cancel" was said with nothing following it.
+  const [awaitingCancelReason, setAwaitingCancelReason] = useState<Order | null>(null);
 
   const voiceAssistant = useVoiceAssistant(async (transcript) => {
     setAssistantHeard(transcript);
     const lower = transcript.toLowerCase();
+
+    if (awaitingCancelReason) {
+      const order = awaitingCancelReason;
+      setAwaitingCancelReason(null);
+      const reason = transcript.trim();
+      await executeCommand({ kind: "update", order, status: "CANCELLED", reason, description: `CN ${order.cnNo} — CANCELLED (${reason})` });
+      setTimeout(() => setAssistantHeard(null), 2000);
+      return;
+    }
 
     if (awaitingBankConfirm) {
       const cmd = awaitingBankConfirm;
@@ -544,6 +558,18 @@ export default function DriverPortalPage() {
       setTimeout(() => setAssistantHeard(null), 3000);
       return;
     }
+    if (cmd.kind === "search") {
+      setSearch(String(cmd.cnNo));
+      showToast(`Searching CN ${cmd.cnNo}`, "info");
+      setTimeout(() => setAssistantHeard(null), 2000);
+      return;
+    }
+    if (cmd.kind === "needsCancelReason") {
+      setAwaitingCancelReason(cmd.order);
+      speak("What's the reason?");
+      setTimeout(() => voiceAssistant.start(), 1500);
+      return;
+    }
 
     // Only "update" commands with BANK payment need the extra spoken check —
     // everything else (Cash, Pending, Cancel, Transfer, vendor payment) runs
@@ -561,35 +587,28 @@ export default function DriverPortalPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      {voiceAssistant.supported && (
-        <button
-          onClick={voiceAssistant.start}
-          title="Voice assistant — say something like '56678 delivered bank'"
-          className={`fixed right-4 top-24 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
-            voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
-          }`}
-        >
-          🌐
-        </button>
-      )}
       {awaitingBankConfirm ? (
-        <div className="fixed right-4 top-40 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
+        <div className="fixed bottom-24 right-4 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
           <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
+        </div>
+      ) : awaitingCancelReason ? (
+        <div className="fixed bottom-24 right-4 z-50 max-w-[220px] rounded border border-cancelled bg-cancelled-bg px-3 py-2.5 text-xs shadow-lg">
+          <span className="font-semibold text-cancelled">What&apos;s the reason?</span> Just say it now.
         </div>
       ) : (
         assistantHeard && (
-          <div className="fixed right-4 top-40 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
+          <div className="fixed bottom-24 right-4 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
             <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
           </div>
         )
       )}
-      {lastAction && !awaitingBankConfirm && (
+      {lastAction && !awaitingBankConfirm && !awaitingCancelReason && (
         <button
           onClick={() => {
             lastAction.undo();
             setLastAction(null);
           }}
-          className="fixed right-4 top-40 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
+          className="fixed bottom-24 right-4 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
           style={{ display: assistantHeard ? "none" : undefined }}
         >
           ↺ Undo: {lastAction.description}
@@ -676,15 +695,15 @@ export default function DriverPortalPage() {
             placeholder="Search CN No…"
             className="rounded border border-line px-3 py-1.5 text-sm"
           />
-          {voiceSearch.supported && (
+          {voiceAssistant.supported && (
             <button
-              onClick={voiceSearch.start}
-              title="Search by voice"
-              className={`rounded border px-2.5 py-1.5 text-sm ${
-                voiceSearch.listening ? "border-cancelled bg-cancelled text-white animate-pulse" : "border-line bg-white text-ink-soft hover:border-brass"
+              onClick={voiceAssistant.start}
+              title="Voice assistant — say a CN number to search, or add a command like 'delivered bank'"
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-lg shadow transition ${
+                voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
               }`}
             >
-              🎤
+              🌐
             </button>
           )}
         </div>
