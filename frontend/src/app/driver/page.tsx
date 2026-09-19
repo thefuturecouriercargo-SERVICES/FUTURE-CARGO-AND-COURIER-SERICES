@@ -565,7 +565,7 @@ export default function DriverPortalPage() {
         <button
           onClick={voiceAssistant.start}
           title="Voice assistant — say something like '56678 delivered bank'"
-          className={`fixed right-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
+          className={`fixed right-4 top-24 z-40 flex h-12 w-12 items-center justify-center rounded-full text-2xl shadow-lg transition ${
             voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
           }`}
         >
@@ -573,12 +573,12 @@ export default function DriverPortalPage() {
         </button>
       )}
       {awaitingBankConfirm ? (
-        <div className="fixed right-4 top-20 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
+        <div className="fixed right-4 top-40 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
           <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
         </div>
       ) : (
         assistantHeard && (
-          <div className="fixed right-4 top-20 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
+          <div className="fixed right-4 top-40 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
             <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
           </div>
         )
@@ -589,7 +589,7 @@ export default function DriverPortalPage() {
             lastAction.undo();
             setLastAction(null);
           }}
-          className="fixed right-4 top-20 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
+          className="fixed right-4 top-40 z-30 rounded border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase text-ink-soft shadow hover:border-cancelled"
           style={{ display: assistantHeard ? "none" : undefined }}
         >
           ↺ Undo: {lastAction.description}
