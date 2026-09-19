@@ -483,6 +483,75 @@ router.get(
   })
 );
 
+// Unconfirmed bank-payment carryover — mirrors pending-carryover above, but tracks
+// a DIFFERENT thing: not order status, but whether a BANK payment's receipt has
+// been confirmed. An order can be Delivered and still show up here if its bank
+// payment was never ticked as received — persists indefinitely across days until
+// someone confirms it. Drivers only ever see their own; admin/manager see everyone's.
+router.get(
+  "/unconfirmed-bank-carryover",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange(req.query.date as string | undefined);
+
+    const where: Prisma.OrderWhereInput = {
+      date: { lt: start },
+      payment: "BANK",
+      bankPaymentConfirmed: false,
+    };
+    if (req.user!.role === "DRIVER") {
+      where.employeeId = req.user!.sub;
+    } else if (req.query.employeeId) {
+      where.employeeId = req.query.employeeId as string;
+    }
+
+    const pastOrders = await prisma.order.findMany({
+      where,
+      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    });
+
+    // Dedupe by CN — only the most recent entry per consignment.
+    const seenCn = new Set<number>();
+    const orders = pastOrders.filter((o) => {
+      if (seenCn.has(o.cnNo)) return false;
+      seenCn.add(o.cnNo);
+      return true;
+    });
+
+    res.json({ orders });
+  })
+);
+
+const bulkConfirmSchema = z.object({ beforeDate: z.string() });
+
+// One-time cleanup action — marks every BANK order dated before the given date as
+// confirmed, so a backlog of historically-unconfirmed payments doesn't flood the
+// new carryover view the moment this feature goes live.
+router.patch(
+  "/bulk-confirm-bank",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const { beforeDate } = bulkConfirmSchema.parse(req.body);
+    const { start } = dayRange(beforeDate);
+
+    const result = await prisma.order.updateMany({
+      where: { date: { lt: start }, payment: "BANK", bankPaymentConfirmed: false },
+      data: { bankPaymentConfirmed: true },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "BULK_CONFIRM_BANK",
+      entity: "Order",
+      entityId: "bulk",
+      meta: { beforeDate, count: result.count },
+    });
+
+    emitGlobal("order:changed", { type: "bulk-confirmed-bank" });
+    res.json({ updated: result.count });
+  })
+);
+
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
