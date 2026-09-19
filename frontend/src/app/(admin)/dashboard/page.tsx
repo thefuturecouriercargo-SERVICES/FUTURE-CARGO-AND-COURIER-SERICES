@@ -219,7 +219,10 @@ return (
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Manifest Summary</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">Operations Dashboard</h1>
+          <h1 className="inline-flex items-center gap-2 font-display text-3xl font-semibold text-navy">
+            Operations Dashboard
+            <span id="assistant-anchor" className="inline-flex" />
+          </h1>
        </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
@@ -289,6 +292,16 @@ return (
               />
             </div>
           </div>
+
+          <LiveFlowPanel
+            pending={data.summary.pending + nonAgentPendingCarryover.length}
+            transferred={data.summary.transferred}
+            delivered={data.summary.delivered}
+            cancelled={data.summary.cancelled}
+            totalConsignments={
+              data.summary.delivered + data.summary.pending + nonAgentPendingCarryover.length + data.summary.transferred + data.summary.cancelled
+            }
+          />
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
            <div className="border border-line bg-white p-5">
@@ -439,16 +452,6 @@ return (
               <StatusDoughnut summary={data.summary} />
             </div>
           </div>
-
-          <LiveFlowPanel
-            pending={data.summary.pending + nonAgentPendingCarryover.length}
-            transferred={data.summary.transferred}
-            delivered={data.summary.delivered}
-            cancelled={data.summary.cancelled}
-            totalConsignments={
-              data.summary.delivered + data.summary.pending + nonAgentPendingCarryover.length + data.summary.transferred + data.summary.cancelled
-            }
-          />
 
 <div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
