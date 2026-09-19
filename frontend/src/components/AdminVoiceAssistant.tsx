@@ -53,7 +53,12 @@ function useVoiceAssistant(onResult: (transcript: string) => void) {
 }
 
 interface DashboardSummary {
-  summary: { pending: number; delivered: number; cashCollected: number; bankCollected: number; totalOrders: number };
+  summary: { pending: number; delivered: number; transferred: number; cancelled: number; cashCollected: number; bankCollected: number; totalOrders: number };
+  employeeBreakdown: { employee: { id: string; name: string }; cashBalance: number; delivered: number; pending: number }[];
+  agentBreakdown: { employee: { id: string; name: string }; cashBalance: number }[];
+}
+interface PendingCarryoverOrder {
+  employeeId: string;
 }
 
 type ParsedCommand =
@@ -153,10 +158,55 @@ export default function AdminVoiceAssistant() {
 
     if (/\bundo\b/.test(lower)) return { kind: "undo" };
 
-    if (/how many pending/.test(lower) || /how many delivered/.test(lower) || /how much cash/.test(lower) || /how much bank/.test(lower) || /how many consignment/.test(lower)) {
+    // "balance of <name>" / "final balance of <name>" / "cash closing of <name>" —
+    // checked before the general question block since it needs a name, not just a
+    // keyword. Checks drivers first, then agents.
+    const balanceMatch = lower.match(/(?:final\s+)?(?:balance|cash closing)\s+of\s+([a-z]+)/);
+    if (balanceMatch) {
+      const spokenName = balanceMatch[1].trim();
       const res = await apiFetch<DashboardSummary>("/dashboard/daily");
-      if (/pending/.test(lower)) return { kind: "question", answer: `There are ${res.summary.pending} pending orders today.` };
+      const driverRow = res.employeeBreakdown.find((r) => r.employee.name.toLowerCase().startsWith(spokenName));
+      if (driverRow) return { kind: "question", answer: `${driverRow.employee.name}'s cash closing balance is ${driverRow.cashBalance} AED.` };
+      const agentRow = res.agentBreakdown.find((r) => r.employee.name.toLowerCase().startsWith(spokenName));
+      if (agentRow) return { kind: "question", answer: `${agentRow.employee.name}'s balance is ${agentRow.cashBalance} AED.` };
+      return { kind: "unrecognized", raw: `No driver or agent found matching "${spokenName}"` };
+    }
+
+    // "new entries of <agent>" / "agent balance of <agent>" — today's new
+    // consignments for that specific agent.
+    const agentEntryMatch = lower.match(/(?:new entr(?:y|ies)|agent)\s+(?:of|for)?\s*([a-z]+)/);
+    if (agentEntryMatch && /agent|new entr/.test(lower)) {
+      const spokenName = agentEntryMatch[1].trim();
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await apiFetch<{ rows: { agentName: string; count: number; totalAmount: number }[] }>("/agent-credit/new-entries", { query: { date: today } });
+      const row = res.rows.find((r) => r.agentName.toLowerCase().startsWith(spokenName));
+      if (!row) return { kind: "question", answer: `No new entries for ${spokenName} today.` };
+      return { kind: "question", answer: `${row.agentName} has ${row.count} new entries today, totaling ${row.totalAmount} AED.` };
+    }
+
+    if (
+      /how many pending/.test(lower) ||
+      /how many delivered/.test(lower) ||
+      /how many transferred/.test(lower) ||
+      /how many cancelled/.test(lower) ||
+      /how much cash/.test(lower) ||
+      /how much bank/.test(lower) ||
+      /how many consignment/.test(lower)
+    ) {
+      const res = await apiFetch<DashboardSummary>("/dashboard/daily");
+      if (/pending/.test(lower)) {
+        // Matches exactly what's shown on screen: summary.pending PLUS carried-over
+        // backlog from previous days, excluding agents (same rule the Dashboard
+        // itself uses) — a plain summary.pending alone undercounts what's visible.
+        const carryover = await apiFetch<{ orders: PendingCarryoverOrder[] }>("/orders/pending-carryover");
+        const agentIds = new Set(res.agentBreakdown.map((r) => r.employee.id));
+        const nonAgentCarryover = carryover.orders.filter((o) => !agentIds.has(o.employeeId));
+        const total = res.summary.pending + nonAgentCarryover.length;
+        return { kind: "question", answer: `There are ${total} pending orders today.` };
+      }
       if (/delivered/.test(lower)) return { kind: "question", answer: `${res.summary.delivered} orders delivered today.` };
+      if (/transferred/.test(lower)) return { kind: "question", answer: `${res.summary.transferred} orders transferred today.` };
+      if (/cancelled/.test(lower)) return { kind: "question", answer: `${res.summary.cancelled} orders cancelled today.` };
       if (/cash/.test(lower)) return { kind: "question", answer: `${res.summary.cashCollected} AED collected in cash today.` };
       if (/bank/.test(lower)) return { kind: "question", answer: `${res.summary.bankCollected} AED collected via bank today.` };
       return { kind: "question", answer: `${res.summary.totalOrders} total consignments today.` };
@@ -200,10 +250,14 @@ export default function AdminVoiceAssistant() {
       const amount = Number(amountMatch2[1]);
 
       let employee: Employee | undefined;
-      const driverMatch2 = lower.match(/for\s+([a-z]+)/);
+      const driverMatch2 = lower.match(/for\s+(?:driver\s+)?([a-z]+)/);
       if (driverMatch2) {
+        const spokenDriver = driverMatch2[1].trim();
         const employees = await apiFetch<Employee[]>("/employees");
-        employee = employees.find((e) => e.name.toLowerCase().startsWith(driverMatch2[1].trim()));
+        employee = employees.find((e) => e.name.toLowerCase().startsWith(spokenDriver));
+        // Silently dropping a driver name that didn't match would log the expense
+        // with no attribution at all — tell the admin exactly what went wrong instead.
+        if (!employee) return { kind: "unrecognized", raw: `Heard "for ${spokenDriver}" but no matching driver found` };
       }
 
       return {
