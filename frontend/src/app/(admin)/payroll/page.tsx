@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, currentMonthStr } from "@/lib/format";
+import { fmtNumber, previousMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
 interface PayrollRow {
@@ -28,7 +28,7 @@ interface PayrollEntry {
 export default function PayrollPage() {
   const { user } = useAuth();
   const isReadOnly = user?.role === "MANAGER";
-  const [month, setMonth] = useState(currentMonthStr());
+  const [month, setMonth] = useState(previousMonthStr());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payrollRows, setPayrollRows] = useState<PayrollRow[]>([]);
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
