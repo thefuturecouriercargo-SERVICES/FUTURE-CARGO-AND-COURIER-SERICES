@@ -465,13 +465,22 @@ export default function DriverPortalPage() {
     return { kind: "update", order, status, payment, reason, description: parts.join(" — ") };
   }
 
+  // Undo stays available for only 5 seconds after an action, then auto-clears —
+  // a brief safety window, not a persistent button sitting on screen.
+  function setLastActionWithExpiry(action: { description: string; undo: () => Promise<void> }) {
+    setLastAction(action);
+    setTimeout(() => {
+      setLastAction((curr) => (curr === action ? null : curr));
+    }, 5000);
+  }
+
   async function executeCommand(cmd: ParsedCommand, bankPaymentConfirmed?: boolean) {
     if (cmd.kind === "update") {
       const prevStatus = cmd.order.status;
       const prevPayment = cmd.order.payment;
       const prevBankConfirmed = cmd.order.bankPaymentConfirmed;
       await updateStatus(cmd.order, cmd.status ?? cmd.order.status, cmd.payment ?? cmd.order.payment, cmd.reason, bankPaymentConfirmed);
-      setLastAction({
+      setLastActionWithExpiry({
         description: cmd.description,
         undo: async () => {
           await updateStatus(cmd.order, prevStatus, prevPayment, undefined, prevBankConfirmed);
@@ -482,7 +491,7 @@ export default function DriverPortalPage() {
       await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.toEmployee.id } });
       showToast(`CN ${cmd.order.cnNo} transferred to ${cmd.toEmployee.name}`, "info");
       await load();
-      setLastAction({
+      setLastActionWithExpiry({
         description: cmd.description,
         undo: async () => {
           await apiFetch(`/orders/${cmd.order.id}/transfer`, { method: "POST", body: { toEmployeeId: cmd.order.employeeId } });
@@ -496,7 +505,7 @@ export default function DriverPortalPage() {
         body: { date: cashClosingDate, amount: cmd.amount, vendorId: cmd.vendor.id },
       });
       showToast(`Logged ${cmd.amount} AED payment to ${cmd.vendor.name}`, "success");
-      setLastAction({
+      setLastActionWithExpiry({
         description: cmd.description,
         undo: async () => {
           await apiFetch(`/purchases/${payment.id}`, { method: "DELETE" });
@@ -647,35 +656,6 @@ export default function DriverPortalPage() {
         />
       )}
 
-      {summary && (
-        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-6">
-          <Kpi label="Assigned" value={summary.assigned} />
-          <Kpi label="Delivered" value={summary.delivered} />
-          <Kpi label="Pending" value={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length} />
-          <Kpi label="DL Charge (AED)" value={fmtNumber(summary.deliveryChargeEarned)} />
-          <Kpi label="Bank Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "BANK").length} />
-          <Kpi label="Cash Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "CASH").length} />
-        </div>
-      )}
-
-      {summary && summary.assigned > 0 && (
-        <div className="mb-7 border border-line bg-white p-4">
-          <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Today&apos;s Breakdown</h2>
-          <div className="mx-auto max-w-xs">
-            <StatusDoughnut
-              summary={
-                {
-                  delivered: summary.delivered,
-                  pending: orders.filter((o) => o.status === "PENDING").length,
-                  transferred: orders.filter((o) => o.status === "TRANSFER").length,
-                  cancelled: summary.cancelled,
-                } as unknown as SharedSummary
-              }
-            />
-          </div>
-        </div>
-      )}
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
@@ -775,6 +755,35 @@ export default function DriverPortalPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {summary && summary.assigned > 0 && (
+        <div className="mb-7 border border-line bg-white p-4">
+          <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Today&apos;s Breakdown</h2>
+          <div className="mx-auto max-w-xs">
+            <StatusDoughnut
+              summary={
+                {
+                  delivered: summary.delivered,
+                  pending: orders.filter((o) => o.status === "PENDING").length,
+                  transferred: orders.filter((o) => o.status === "TRANSFER").length,
+                  cancelled: summary.cancelled,
+                } as unknown as SharedSummary
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {summary && (
+        <div className="mb-7 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-6">
+          <Kpi label="Assigned" value={summary.assigned} />
+          <Kpi label="Delivered" value={summary.delivered} />
+          <Kpi label="Pending" value={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length} />
+          <Kpi label="DL Charge (AED)" value={fmtNumber(summary.deliveryChargeEarned)} />
+          <Kpi label="Bank Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "BANK").length} />
+          <Kpi label="Cash Deliveries" value={orders.filter((o) => o.status === "DELIVERED" && o.payment === "CASH").length} />
         </div>
       )}
 
@@ -934,10 +943,10 @@ function StatusModal({
   onConfirm: (status: OrderStatus, payment: "CASH" | "BANK", reason?: string, bankPaymentConfirmed?: boolean) => Promise<void>;
   onTransfer: () => void;
 }) {
-  const [selected, setSelected] = useState<OrderStatus | null>(null);
+  const [selected, setSelected] = useState<OrderStatus | null>(order.status);
   const [payment, setPayment] = useState<"CASH" | "BANK">(order.payment);
   const [bankPaymentConfirmed, setBankPaymentConfirmed] = useState(order.bankPaymentConfirmed ?? false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(order.status === "CANCELLED" ? order.remarks ?? "" : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
