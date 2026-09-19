@@ -174,12 +174,6 @@ export default function DriverPortalPage() {
     loadUnconfirmedBank();
   }, [loadUnconfirmedBank]);
 
-  async function confirmCarriedOverBankPayment(order: Order) {
-    await apiFetch(`/orders/${order.id}/payment`, { method: "PATCH", body: { payment: "BANK", bankPaymentConfirmed: true } });
-    await loadUnconfirmedBank();
-    showToast(`CN ${order.cnNo} payment confirmed`, "success");
-  }
-
   function showToast(msg: string, type: "info" | "milestone" | "reminder" | "success" | "push" = "info") {
     setToast({ message: msg, type: type === "success" || type === "push" ? "info" : type });
     setTimeout(() => setToast(null), type === "milestone" ? 3200 : 2600);
@@ -611,21 +605,13 @@ export default function DriverPortalPage() {
             ⚠ {unconfirmedBankCarryover.length} bank payment{unconfirmedBankCarryover.length === 1 ? "" : "s"} still unconfirmed
           </h2>
           <p className="mb-3 text-xs text-pending">
-            From previous days — please confirm whether the money actually landed. This stays here until you do.
+            From previous days — admin or manager will confirm these once the money is verified received.
           </p>
           <div className="space-y-2">
             {unconfirmedBankCarryover.map((o) => (
-              <div key={o.id} className="flex items-center justify-between rounded border border-pending bg-white px-3 py-2">
-                <div className="text-xs">
-                  <span className="font-mono font-semibold">CN {o.cnNo}</span> · {o.brandName} · {fmtNumber(o.total)} AED
-                  <span className="ml-1 text-ink-soft">({o.date.slice(0, 10)})</span>
-                </div>
-                <button
-                  onClick={() => confirmCarriedOverBankPayment(o)}
-                  className="rounded bg-delivered px-2.5 py-1 font-mono text-[10px] font-bold uppercase text-white hover:opacity-90"
-                >
-                  ✓ Confirm
-                </button>
+              <div key={o.id} className="rounded border border-pending bg-white px-3 py-2 text-xs">
+                <span className="font-mono font-semibold">CN {o.cnNo}</span> · {o.brandName} · {fmtNumber(o.total)} AED
+                <span className="ml-1 text-ink-soft">({o.date.slice(0, 10)})</span>
               </div>
             ))}
           </div>
