@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, currentMonthStr } from "@/lib/format";
+import { fmtNumber, previousMonthStr } from "@/lib/format";
 
 interface PayrollEntry {
   id: string;
@@ -19,7 +19,7 @@ interface DriverPayrollResponse {
 }
 
 export default function DriverPayrollPage() {
-  const [month, setMonth] = useState(currentMonthStr());
+  const [month, setMonth] = useState(previousMonthStr());
   const [data, setData] = useState<DriverPayrollResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
