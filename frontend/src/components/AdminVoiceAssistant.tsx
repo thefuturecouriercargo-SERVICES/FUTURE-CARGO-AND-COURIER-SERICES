@@ -60,6 +60,7 @@ type ParsedCommand =
   | { kind: "update"; order: Order; status?: OrderStatus; payment?: "CASH" | "BANK"; reason?: string; description: string }
   | { kind: "transfer"; order: Order; toEmployee: Employee; description: string }
   | { kind: "vendorPayment"; vendor: Vendor; amount: number; description: string }
+  | { kind: "expense"; category: string; amount: number; employee?: Employee; description: string }
   | { kind: "amountEdit"; order: Order; newAmount: number; description: string }
   | {
       kind: "addItem";
@@ -169,6 +170,49 @@ export default function AdminVoiceAssistant() {
       const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenName) || spokenName.includes(v.name.toLowerCase()));
       if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenName}" not found` };
       return { kind: "vendorPayment", vendor, amount, description: `Pay ${vendor.name} ${amount} AED` };
+    }
+
+    // "log expense <category> <amount> [for <driver name>]"
+    if (/\b(log|add)\s+expense\b/.test(lower)) {
+      const CATEGORY_WORDS: { spoken: string; value: string }[] = [
+        { spoken: "fuel", value: "FUEL" },
+        { spoken: "insurance", value: "INSURANCE" },
+        { spoken: "salary", value: "SALARY" },
+        { spoken: "workshop", value: "WORKSHOP" },
+        { spoken: "car wash", value: "CAR_WASH" },
+        { spoken: "room rent", value: "ROOM_RENT" },
+        { spoken: "car rent", value: "CAR_RENT" },
+        { spoken: "stationary", value: "STATIONARY" },
+        { spoken: "parking", value: "PARKING" },
+        { spoken: "visa", value: "VISA" },
+        { spoken: "medical", value: "MEDICAL" },
+        { spoken: "commission", value: "COMMISSION" },
+        { spoken: "darb", value: "DARB" },
+        { spoken: "salik", value: "SALIK" },
+        { spoken: "internet", value: "INTERNET" },
+        { spoken: "license", value: "LICENSE" },
+        { spoken: "other", value: "OTHER" },
+      ];
+      const category = CATEGORY_WORDS.find((c) => lower.includes(c.spoken))?.value;
+      const amountMatch2 = lower.match(/(\d+)/);
+      if (!category) return { kind: "unrecognized", raw: `Heard "expense" but no known category — try fuel, salary, parking, etc.` };
+      if (!amountMatch2) return { kind: "unrecognized", raw: `Heard "${category}" expense but no amount` };
+      const amount = Number(amountMatch2[1]);
+
+      let employee: Employee | undefined;
+      const driverMatch2 = lower.match(/for\s+([a-z]+)/);
+      if (driverMatch2) {
+        const employees = await apiFetch<Employee[]>("/employees");
+        employee = employees.find((e) => e.name.toLowerCase().startsWith(driverMatch2[1].trim()));
+      }
+
+      return {
+        kind: "expense",
+        category,
+        amount,
+        employee,
+        description: `Expense — ${category.replace("_", " ")}, ${amount} AED${employee ? `, ${employee.name}` : ""}`,
+      };
     }
 
     // "change <cn> to <amount>"
@@ -328,6 +372,21 @@ export default function AdminVoiceAssistant() {
           showToast(`Undone — payment to ${cmd.vendor.name} removed`);
         },
       });
+    } else if (cmd.kind === "expense") {
+      const today = new Date().toISOString().slice(0, 10);
+      const entry = await apiFetch<{ id: string }>("/expenses", {
+        method: "POST",
+        body: { date: today, category: cmd.category, amount: cmd.amount, employeeId: cmd.employee?.id },
+      });
+      showToast(cmd.description);
+      playChaChing();
+      setLastAction({
+        description: cmd.description,
+        undo: async () => {
+          await apiFetch(`/expenses/${entry.id}`, { method: "DELETE" });
+          showToast(`Undone — expense removed`);
+        },
+      });
     } else if (cmd.kind === "amountEdit") {
       const prevTotal = cmd.order.total;
       await apiFetch(`/orders/${cmd.order.id}`, { method: "PUT", body: { total: cmd.newAmount } });
@@ -437,13 +496,46 @@ export default function AdminVoiceAssistant() {
         🌐
       </button>
 
-      {pendingCommand ? (
-        <div className="fixed right-4 top-36 z-50 w-64 rounded border border-brass bg-white p-4 shadow-xl">
+      {/* Live listening / heard panel — separate from the confirm card, always in
+          the same spot so it's easy to glance at. Animates a "waveform" while
+          actively listening, then fades into showing the transcript once heard. */}
+      {(voiceAssistant.listening || assistantHeard) && !pendingCommand && (
+        <div className="fixed left-1/2 top-4 z-50 w-72 -translate-x-1/2 rounded-lg border-2 border-brass bg-navy px-4 py-3 text-paper shadow-2xl">
+          {voiceAssistant.listening ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-end gap-0.5 h-5">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1 rounded-full bg-brass"
+                    style={{
+                      animation: `voice-wave 0.9s ease-in-out infinite`,
+                      animationDelay: `${i * 0.12}s`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="font-mono text-xs uppercase tracking-wide text-brass-light">Listening…</span>
+            </div>
+          ) : (
+            assistantHeard && (
+              <div style={{ animation: "assistant-reveal 0.35s ease-out" }}>
+                <p className="mb-0.5 font-mono text-[9px] uppercase tracking-wide text-brass-light">Heard</p>
+                <p className="text-sm">&quot;{assistantHeard}&quot;</p>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {pendingCommand && (
+        <div className="fixed left-1/2 top-4 z-50 w-72 -translate-x-1/2 rounded border border-brass bg-white p-4 shadow-xl">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-ink-soft">Confirm action</p>
           <p className="mb-3 text-sm font-semibold text-navy">
             {pendingCommand.kind === "update" ||
             pendingCommand.kind === "transfer" ||
             pendingCommand.kind === "vendorPayment" ||
+            pendingCommand.kind === "expense" ||
             pendingCommand.kind === "amountEdit" ||
             pendingCommand.kind === "addItem"
               ? pendingCommand.description
@@ -459,12 +551,6 @@ export default function AdminVoiceAssistant() {
           </div>
           <p className="mt-2 text-[10px] text-ink-soft">Or just say &quot;yes&quot; or &quot;confirm&quot;</p>
         </div>
-      ) : (
-        assistantHeard && (
-          <div className="fixed right-4 top-36 z-40 max-w-[200px] rounded border border-brass bg-white px-3 py-2 text-xs shadow-lg">
-            <span className="font-mono text-[10px] uppercase text-ink-soft">Heard:</span> &quot;{assistantHeard}&quot;
-          </div>
-        )
       )}
 
       {lastAction && !pendingCommand && !assistantHeard && (
