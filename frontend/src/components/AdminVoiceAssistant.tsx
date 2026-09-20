@@ -23,6 +23,53 @@ interface SpeechRecognitionLike {
   stop: () => void;
 }
 
+// Edit distance between two strings — used to catch phonetic mishearings from
+// speech-to-text (e.g. "Anas" transcribed as "Anus") that plain substring
+// matching would never catch, since neither word contains the other.
+function levenshtein(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+/** Finds the best-matching item by name for a spoken word. Tries an exact
+ * substring match first (fast, safe); if nothing matches, falls back to
+ * whichever name is phonetically closest by edit distance — catching
+ * mishearings like "Anas" -> "Anus" that substring matching misses entirely,
+ * while a distance threshold keeps it from matching something wildly different. */
+function fuzzyFindByName<T>(items: T[], spoken: string, getName: (item: T) => string): T | undefined {
+  const spokenLower = spoken.toLowerCase().trim();
+  if (!spokenLower) return undefined;
+
+  const exact = items.find((item) => {
+    const name = getName(item).toLowerCase();
+    return name.includes(spokenLower) || spokenLower.includes(name);
+  });
+  if (exact) return exact;
+
+  let best: T | undefined;
+  let bestDist = Infinity;
+  for (const item of items) {
+    const name = getName(item).toLowerCase();
+    // Compare against just the first word of the name (e.g. "Anas" not
+    // "Anas Khan"), since that's usually all that's spoken.
+    const firstWord = name.split(" ")[0];
+    const dist = levenshtein(firstWord, spokenLower);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = item;
+    }
+  }
+  const threshold = Math.max(2, Math.floor(Math.min(spokenLower.length, 6) * 0.4));
+  return bestDist <= threshold ? best : undefined;
+}
+
 function useVoiceAssistant(onResult: (transcript: string) => void) {
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(true);
@@ -204,9 +251,9 @@ export default function AdminVoiceAssistant() {
     if (balanceMatch) {
       const spokenName = balanceMatch[1].trim();
       const res = await apiFetch<DashboardSummary>("/dashboard/daily");
-      const driverRow = res.employeeBreakdown.find((r) => r.employee.name.toLowerCase().startsWith(spokenName));
+      const driverRow = fuzzyFindByName(res.employeeBreakdown, spokenName, (r) => r.employee.name);
       if (driverRow) return { kind: "question", answer: `${driverRow.employee.name}'s cash closing balance is ${driverRow.cashBalance} AED.` };
-      const agentRow = res.agentBreakdown.find((r) => r.employee.name.toLowerCase().startsWith(spokenName));
+      const agentRow = fuzzyFindByName(res.agentBreakdown, spokenName, (r) => r.employee.name);
       if (agentRow) return { kind: "question", answer: `${agentRow.employee.name}'s balance is ${agentRow.cashBalance} AED.` };
       return { kind: "unrecognized", raw: `No driver or agent found matching "${spokenName}"` };
     }
@@ -218,7 +265,7 @@ export default function AdminVoiceAssistant() {
       const spokenName = agentEntryMatch[1].trim();
       const today = new Date().toISOString().slice(0, 10);
       const res = await apiFetch<{ rows: { agentName: string; count: number; totalAmount: number }[] }>("/agent-credit/new-entries", { query: { date: today } });
-      const row = res.rows.find((r) => r.agentName.toLowerCase().startsWith(spokenName));
+      const row = fuzzyFindByName(res.rows, spokenName, (r) => r.agentName);
       if (!row) return { kind: "question", answer: `No new entries for ${spokenName} today.` };
       return { kind: "question", answer: `${row.agentName} has ${row.count} new entries today, totaling ${row.totalAmount} AED.` };
     }
@@ -261,7 +308,7 @@ export default function AdminVoiceAssistant() {
       if (!amountDigits3) return { kind: "unrecognized", raw: `Heard "pay ${spokenName}" but no amount` };
       const amount = Number(amountDigits3);
       const vendors = await apiFetch<Vendor[]>("/vendors");
-      const vendor = vendors.find((v) => v.name.toLowerCase().includes(spokenName) || spokenName.includes(v.name.toLowerCase()));
+      const vendor = fuzzyFindByName(vendors, spokenName, (v) => v.name);
       if (!vendor) return { kind: "unrecognized", raw: `Vendor "${spokenName}" not found` };
       return { kind: "vendorPayment", vendor, amount, description: `Pay ${vendor.name} ${amount} AED` };
     }
@@ -303,7 +350,7 @@ export default function AdminVoiceAssistant() {
       if (driverMatch2) {
         const spokenDriver = driverMatch2[1].trim();
         const employees = await apiFetch<Employee[]>("/employees");
-        employee = employees.find((e) => e.name.toLowerCase().startsWith(spokenDriver));
+        employee = fuzzyFindByName(employees, spokenDriver, (e) => e.name);
         // Silently dropping a driver name that didn't match would log the expense
         // with no attribution at all — tell the admin exactly what went wrong instead.
         if (!employee) return { kind: "unrecognized", raw: `Heard "for ${spokenDriver}" but no matching driver found` };
@@ -322,10 +369,9 @@ export default function AdminVoiceAssistant() {
     // Everything after "to" is captured raw, then stripped down to just its digits
     // — handles speech-to-text quirks like "change 66774 to becomes 2 500" (a stray
     // word and a split-up number), correctly reading it as amount 2500.
-    // Say the CN number first, then "change amount to <amount>" — e.g.
-    // "77664 change amount to 500". Amount is stripped to just digits, so a
-    // split/garbled number (speech-to-text quirk) still reads correctly.
-    const changeMatch = lower.match(/(\d{3,7}).*?change\s+amount\s+to\s+(.+)/);
+    // Very loose matching between the key words — tolerates filler like "the",
+    // "please", etc. that speech-to-text often inserts (e.g. "change the amount to").
+    const changeMatch = lower.match(/(\d{3,7}).*?change.*?amount.*?to\s+(.+)/);
     if (changeMatch) {
       const cnNo = Number(changeMatch[1]);
       const amountDigits = changeMatch[2].replace(/[^\d]/g, "");
@@ -352,7 +398,7 @@ export default function AdminVoiceAssistant() {
     if (transferMatch) {
       const spokenName = transferMatch[1].trim();
       const employees = await apiFetch<Employee[]>("/employees");
-      const toEmployee = employees.find((e) => e.id !== order.employeeId && e.name.toLowerCase().startsWith(spokenName));
+      const toEmployee = fuzzyFindByName(employees.filter((e) => e.id !== order.employeeId), spokenName, (e) => e.name);
       if (!toEmployee) return { kind: "unrecognized", raw: `Driver "${spokenName}" not found` };
       return { kind: "transfer", order, toEmployee, description: `Transfer CN ${cnNo} to ${toEmployee.name}` };
     }
@@ -555,7 +601,7 @@ export default function AdminVoiceAssistant() {
       } else if (addItemStep === "vendor") {
         const spoken = lower.trim();
         const vendors = await apiFetch<Vendor[]>("/vendors");
-        const vendor = vendors.find((v) => v.name.toLowerCase().includes(spoken) || spoken.includes(v.name.toLowerCase()));
+        const vendor = fuzzyFindByName(vendors, spoken, (v) => v.name);
         if (!vendor) {
           showToast(`Vendor "${transcript}" not found — try again`);
           setTimeout(() => voiceAssistant.start(), 1200);
@@ -589,7 +635,7 @@ export default function AdminVoiceAssistant() {
       } else if (addItemStep === "driver") {
         const spoken = lower.trim();
         const employees = await apiFetch<Employee[]>("/employees");
-        const employee = employees.find((e) => e.name.toLowerCase().startsWith(spoken));
+        const employee = fuzzyFindByName(employees, spoken, (e) => e.name);
         if (!employee) {
           showToast(`Driver "${transcript}" not found — try again`);
           setTimeout(() => voiceAssistant.start(), 1200);
@@ -613,7 +659,7 @@ export default function AdminVoiceAssistant() {
       if (vendorMatch) {
         const vendors = await apiFetch<Vendor[]>("/vendors");
         const spoken = vendorMatch[1].trim();
-        draft.vendor = vendors.find((v) => v.name.toLowerCase().includes(spoken) || spoken.includes(v.name.toLowerCase()));
+        draft.vendor = fuzzyFindByName(vendors, spoken, (v) => v.name);
       }
       const amountMatch = lower.match(/amount\s+(.+?)(?:\s+cash|\s+bank|\s+emirate|\s+driver|\s+for|$)/);
       const amountDigits = amountMatch?.[1]?.replace(/[^\d]/g, "");
