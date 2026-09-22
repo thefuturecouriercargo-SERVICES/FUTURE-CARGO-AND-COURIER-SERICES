@@ -38,14 +38,30 @@ function levenshtein(a: string, b: string): number {
   return dp[a.length][b.length];
 }
 
-/** Finds the best-matching item by name for a spoken word. Tries an exact
- * substring match first (fast, safe); if nothing matches, falls back to
- * whichever name is phonetically closest by edit distance — catching
- * mishearings like "Anas" -> "Anus" that substring matching misses entirely,
- * while a distance threshold keeps it from matching something wildly different. */
+/** First+last letter of a name, e.g. "MASOOD" -> "MD" — a short code drivers/admin
+ * can say instead of a full name, which speech recognition handles far more
+ * reliably than multi-syllable names. */
+function nameCode(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  return (trimmed[0] + trimmed[trimmed.length - 1]).toUpperCase();
+}
+
+/** Finds the best-matching item by name for a spoken word. Checks, in order:
+ * (1) an exact 2-letter code match (first+last letter of the name, e.g. "MD" for
+ * "Masood") — the most precise signal when used; (2) an exact substring match
+ * either direction; (3) falls back to whichever name is phonetically closest by
+ * edit distance, catching mishearings like "Anas" -> "Anus" that substring
+ * matching misses entirely, with a distance threshold to avoid wild mismatches. */
 function fuzzyFindByName<T>(items: T[], spoken: string, getName: (item: T) => string): T | undefined {
   const spokenLower = spoken.toLowerCase().trim();
   if (!spokenLower) return undefined;
+
+  const spokenCode = spoken.replace(/[^a-zA-Z]/g, "").toUpperCase();
+  if (spokenCode.length === 2) {
+    const codeMatch = items.find((item) => nameCode(getName(item)) === spokenCode);
+    if (codeMatch) return codeMatch;
+  }
 
   const exact = items.find((item) => {
     const name = getName(item).toLowerCase();
