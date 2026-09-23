@@ -183,6 +183,75 @@ export default function PnlPage() {
             </div>
           )}
 
+          <div className="border border-line bg-white p-5">
+            <h2 className="mb-1 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              Expense Breakdown by Category
+            </h2>
+            <p className="mb-3 text-xs text-ink-soft">Click any category to see the individual entries behind its total.</p>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th className="text-right">Amount (AED)</th>
+                  <th className="text-right">% of Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.categoryBreakdown.map((c) => (
+                  <Fragment key={c.category}>
+                    <tr
+                      onClick={() => toggleCategory(c.category)}
+                      className={`cursor-pointer hover:bg-paper-2 ${expandedCategory === c.category ? "bg-brass/5" : ""}`}
+                    >
+                      <td>
+                        <span className="mr-1.5 inline-block w-3 text-brass">{expandedCategory === c.category ? "▾" : "▸"}</span>
+                        {c.category}
+                      </td>
+                      <td className="text-right font-mono">{c.amount}</td>
+                      <td className="text-right font-mono">
+                        {data.totalExpenses > 0 ? ((c.amount / data.totalExpenses) * 100).toFixed(1) : "0.0"}%
+                      </td>
+                    </tr>
+                    {expandedCategory === c.category && (
+                      <tr>
+                        <td colSpan={3} className="bg-paper-2 p-0">
+                          {loadingDetails ? (
+                            <p className="px-4 py-3 text-sm text-ink-soft">Loading…</p>
+                          ) : expenseDetails.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-ink-soft">No individual entries found.</p>
+                          ) : (
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Date</th>
+                                  <th className="text-right">Amount</th>
+                                  <th>Employee</th>
+                                  <th>Source</th>
+                                  <th>Note</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {expenseDetails.map((d) => (
+                                  <tr key={d.id}>
+                                    <td>{d.date}</td>
+                                    <td className="text-right font-mono">{d.amount}</td>
+                                    <td>{d.employeeName ?? "—"}</td>
+                                    <td className="font-mono text-xs">{d.source}</td>
+                                    <td className="text-ink-soft">{d.remarks ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {thisMonthData && lastMonthData && (
             <div className="mb-6 border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
@@ -257,75 +326,6 @@ export default function PnlPage() {
               </table>
             </div>
           )}
-
-          <div className="border border-line bg-white p-5">
-            <h2 className="mb-1 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
-              Expense Breakdown by Category
-            </h2>
-            <p className="mb-3 text-xs text-ink-soft">Click any category to see the individual entries behind its total.</p>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th className="text-right">Amount (AED)</th>
-                  <th className="text-right">% of Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.categoryBreakdown.map((c) => (
-                  <Fragment key={c.category}>
-                    <tr
-                      onClick={() => toggleCategory(c.category)}
-                      className={`cursor-pointer hover:bg-paper-2 ${expandedCategory === c.category ? "bg-brass/5" : ""}`}
-                    >
-                      <td>
-                        <span className="mr-1.5 inline-block w-3 text-brass">{expandedCategory === c.category ? "▾" : "▸"}</span>
-                        {c.category}
-                      </td>
-                      <td className="text-right font-mono">{c.amount}</td>
-                      <td className="text-right font-mono">
-                        {data.totalExpenses > 0 ? ((c.amount / data.totalExpenses) * 100).toFixed(1) : "0.0"}%
-                      </td>
-                    </tr>
-                    {expandedCategory === c.category && (
-                      <tr>
-                        <td colSpan={3} className="bg-paper-2 p-0">
-                          {loadingDetails ? (
-                            <p className="px-4 py-3 text-sm text-ink-soft">Loading…</p>
-                          ) : expenseDetails.length === 0 ? (
-                            <p className="px-4 py-3 text-sm text-ink-soft">No individual entries found.</p>
-                          ) : (
-                            <table className="data-table">
-                              <thead>
-                                <tr>
-                                  <th>Date</th>
-                                  <th className="text-right">Amount</th>
-                                  <th>Employee</th>
-                                  <th>Source</th>
-                                  <th>Note</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {expenseDetails.map((d) => (
-                                  <tr key={d.id}>
-                                    <td>{d.date}</td>
-                                    <td className="text-right font-mono">{d.amount}</td>
-                                    <td>{d.employeeName ?? "—"}</td>
-                                    <td className="font-mono text-xs">{d.source}</td>
-                                    <td className="text-ink-soft">{d.remarks ?? "—"}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </div>
