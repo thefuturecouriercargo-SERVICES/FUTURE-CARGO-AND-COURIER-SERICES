@@ -291,6 +291,41 @@ router.get(
     res.end();
   })
 );
+
+// Individual expense entries behind one category's total on the P&L page — shown
+// when a category row is clicked, so the total can be traced back to what
+// actually makes it up.
+router.get(
+  "/pnl/expenses",
+  asyncHandler(async (req, res) => {
+    const expenseWhere: Record<string, unknown> = {};
+    if (req.query.from || req.query.to) {
+      expenseWhere.date = {
+        ...(req.query.from ? { gte: parseDateParam(req.query.from as string) } : {}),
+        ...(req.query.to ? { lte: parseDateParam(req.query.to as string) } : {}),
+      };
+    }
+    if (req.query.category) expenseWhere.category = req.query.category as string;
+
+    const expenses = await prisma.expenseEntry.findMany({
+      where: expenseWhere,
+      include: { employee: { select: { name: true } } },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    });
+
+    res.json({
+      expenses: expenses.map((e) => ({
+        id: e.id,
+        date: e.date.toISOString().slice(0, 10),
+        amount: e.amount,
+        remarks: e.remarks,
+        employeeName: e.employee?.name ?? null,
+        source: e.source,
+      })),
+    });
+  })
+);
+
 router.get(
   "/pnl",
   asyncHandler(async (req, res) => {
