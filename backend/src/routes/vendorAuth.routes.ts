@@ -16,7 +16,8 @@ const loginSchema = z.object({
 
 const cookieOptions = {
   httpOnly: true,
-  secure: env.isProduction,
+  // Always true — see the matching note in auth.routes.ts.
+  secure: true,
   sameSite: "none" as const,
   maxAge: 1000 * 60 * 60 * 12, // 12h
   path: "/",
