@@ -17,7 +17,12 @@ const loginSchema = z.object({
 
 const cookieOptions = {
   httpOnly: true,
-  secure: env.isProduction,
+  // Always true, not tied to NODE_ENV — Railway serves everything over HTTPS
+  // regardless, and SameSite=None cookies are silently rejected by every
+  // modern browser (Safari especially strict about this) unless Secure is
+  // also true. Making this depend on an environment variable that might not
+  // be set correctly was a real risk; hardcoding it removes that risk entirely.
+  secure: true,
   sameSite: "none" as const,
   maxAge: 1000 * 60 * 60 * 12, // 12h
   path: "/",
