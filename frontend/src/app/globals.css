@@ -175,3 +175,39 @@ table.data-table tbody tr:hover td:first-child {
     transform: translateY(0);
   }
 }
+
+/* iPhone notch / home-indicator support — reserves space so content and fixed
+   elements never sit underneath the notch, status bar, or the swipe-up bar at
+   the bottom. env() falls back to 0px on devices without a notch, so this is
+   harmless everywhere else (Android, desktop). */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+body {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+/* A sticky/fixed header at the very top needs its own top inset added on top
+   of its normal padding, since body's padding-top only pushes normal content
+   flow down — fixed-position elements ignore that entirely. */
+.safe-top-header {
+  padding-top: calc(var(--safe-top) + 0.75rem);
+}
+/* Anything pinned to the bottom of the screen (toasts, floating buttons) needs
+   the same treatment so it clears the home-indicator swipe bar. */
+.safe-bottom-fixed {
+  bottom: calc(1rem + var(--safe-bottom));
+}
+
+/* Apple's Human Interface Guidelines recommend a 44x44pt minimum touch target
+   — smaller buttons are easy to mis-tap on a phone. Anything with this class
+   is guaranteed at least that size without changing its visual padding. */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
