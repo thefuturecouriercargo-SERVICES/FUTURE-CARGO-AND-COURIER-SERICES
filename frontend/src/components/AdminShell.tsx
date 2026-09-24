@@ -73,15 +73,20 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <main className="min-w-0 flex-1 p-4 pb-24 md:p-8 md:pb-8">{children}</main>
       </div>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-line bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.06)] md:hidden">
+      {/* Mobile bottom tab bar — padded for the iPhone home-indicator swipe area,
+          so nav items never sit underneath it or get accidentally triggered by
+          the system's edge-swipe gesture. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-line bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.06)] md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
         {visibleNav.map((item) => {
           const active = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-w-[72px] flex-1 flex-col items-center gap-1 px-2 py-2.5 font-mono text-[9px] uppercase tracking-wide ${
+              className={`flex min-h-[44px] min-w-[72px] flex-1 flex-col items-center justify-center gap-1 px-2 py-2.5 font-mono text-[9px] uppercase tracking-wide ${
                 active ? "text-navy" : "text-ink-soft"
               }`}
             >
