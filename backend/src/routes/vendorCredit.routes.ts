@@ -11,192 +11,363 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
+// Vendor credit = what's left to pay each vendor, shown date-wise like a ledger:
+//   Opening Amount   = running Total Amount from everything BEFORE the selected date
+//   Opening Cancelled = running Cancelled Total from before the selected date
+//   Today Amount / Today Cancelled = just the selected date's own activity
+//   Total Amount (running through selected date) = Opening Amount + Today Amount
+//   Balance = Total Amount - Cancelled Total - Delivery Charge Total - Paid Amount
+// Pending/Transfer orders stay counted in Total Amount as-is (expected to convert to
+// Delivered soon); once they do, their delivery charge gets deducted automatically.
+//
+// Safeguard: the same consignment (CN No) must never be counted twice for a vendor,
+// even if it was accidentally entered more than once. Before totalling anything, orders
+// are deduplicated by (vendorId, cnNo) — keeping only the most recent entry (up to the
+// selected date) for each consignment number.
+// Converts a timestamp to its Dubai calendar date (midnight UTC of that day), so we
+// can compare "was this order genuinely created today" regardless of time-of-day.
+function toDubaiDateOnly(d: Date): number {
+  const dubaiOffsetMs = 4 * 60 * 60 * 1000;
+  const shifted = new Date(d.getTime() + dubaiOffsetMs);
+  return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+}
+
 // New-entries report: for a given day, how many genuinely new consignments each
-// agent got. "New" means created that day — not orders merely carried over or
-// resolved that day. Same rule used on the Vendor Credit page's equivalent report.
+// vendor got. "New" means created that day (same rule as Today/Opening elsewhere) —
+// not orders merely carried over or resolved that day.
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
     const { start } = dayRange(req.query.date as string | undefined);
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-    const agents = await prisma.user.findMany({ where: { isAgent: true }, select: { id: true, name: true } });
-    const agentIds = agents.map((a) => a.id);
+    const orders = await prisma.order.findMany({
+      where: { createdAt: { gte: start, lt: end } },
+      select: { vendorId: true, vendor: { select: { name: true } }, total: true, createdAt: true, cnNo: true },
+    });
 
-    // Includes both (a) genuinely new consignments created for an agent today, and
-    // (b) any consignment a driver transferred TO an agent today — from the agent's
-    // point of view, that's new work landing on their desk that day too, even though
-    // the order itself may have originally been created earlier by someone else.
-    const [createdOrders, transfersIn] = await Promise.all([
-      prisma.order.findMany({
-        where: { employeeId: { in: agentIds }, createdAt: { gte: start, lt: end } },
-        select: { employeeId: true, total: true, cnNo: true },
-      }),
-      prisma.orderTransfer.findMany({
-        where: { toEmployeeId: { in: agentIds }, transferredAt: { gte: start, lt: end } },
-        select: { toEmployeeId: true, order: { select: { total: true, cnNo: true } } },
-      }),
-    ]);
-
-    const combined = [
-      ...createdOrders.map((o) => ({ employeeId: o.employeeId, total: o.total, cnNo: o.cnNo })),
-      ...transfersIn.map((t) => ({ employeeId: t.toEmployeeId, total: t.order.total, cnNo: t.order.cnNo })),
-    ];
-
+    // Only count each CN once even if somehow entered more than once.
     const seenCn = new Set<number>();
-    const grouped = new Map<string, { agentId: string; agentName: string; count: number; totalAmount: number }>();
+    const grouped = new Map<string, { vendorId: string; vendorName: string; count: number; totalAmount: number }>();
 
-    for (const o of combined) {
+    for (const o of orders) {
       if (seenCn.has(o.cnNo)) continue;
       seenCn.add(o.cnNo);
-      const agent = agents.find((a) => a.id === o.employeeId);
-      if (!agent) continue;
-      const existing = grouped.get(o.employeeId) ?? { agentId: o.employeeId, agentName: agent.name, count: 0, totalAmount: 0 };
+      const existing = grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0 };
       existing.count += 1;
       existing.totalAmount += o.total;
-      grouped.set(o.employeeId, existing);
+      grouped.set(o.vendorId, existing);
     }
 
-    const rows = Array.from(grouped.values()).sort((a, b) => a.agentName.localeCompare(b.agentName));
+    const rows = Array.from(grouped.values()).sort((a, b) => a.vendorName.localeCompare(b.vendorName));
 
     res.json({ rows });
   })
 );
 
-// Agent credit = what each agent still owes us.
-//   Balance = Total Amount (every consignment/order the agent has taken, any status)
-//           - Cancelled Total (orders that never got delivered — no money involved)
-//           - Delivery Charge Total (the agent's own fee, only counted once Delivered —
-//             this is money the agent keeps for themselves, not money owed to us)
-//           - Paid Back (amount the agent has already handed back to us)
-// This mirrors Vendor Credit, but the direction of the debt is reversed: here the
-// agent owes the company, rather than the company owing a vendor.
+// Delivered report: for a given day, how many consignments each vendor had actually
+// Delivered (grouped by the order's effective date, which reflects the day it was
+// resolved — not necessarily when it was first entered).
 router.get(
-  "/",
-  asyncHandler(async (_req, res) => {
-    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
-
-    const allOrders = await prisma.order.findMany({
-      where: { employeeId: { in: agents.map((a) => a.id) } },
-      select: { employeeId: true, status: true, total: true, deliveryCharge: true },
+  "/delivered-daily",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange(req.query.date as string | undefined);
+    const orders = await prisma.order.findMany({
+      where: { date: start, status: "DELIVERED" },
+      select: { vendorId: true, vendor: { select: { name: true } }, total: true, deliveryCharge: true, cnNo: true },
     });
 
-    const totalMap = new Map<string, number>();
-    const cancelledMap = new Map<string, number>();
-    const chargeMap = new Map<string, number>();
+    const seenCn = new Set<number>();
+    const grouped = new Map<
+      string,
+      { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number }
+    >();
 
-    for (const o of allOrders) {
-      totalMap.set(o.employeeId, (totalMap.get(o.employeeId) ?? 0) + o.total);
-      if (o.status === "CANCELLED") {
-        cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
-      } else {
-        // Same rule as Vendor Credit: deduct delivery charge for anything not
-        // Cancelled (Pending/Transfer included), not just once actually Delivered.
-        chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
-      }
+    for (const o of orders) {
+      if (seenCn.has(o.cnNo)) continue;
+      seenCn.add(o.cnNo);
+      const existing = grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0 };
+      existing.count += 1;
+      existing.totalAmount += o.total;
+      existing.deliveryCharge += o.deliveryCharge;
+      grouped.set(o.vendorId, existing);
     }
 
-    const paymentTotals = await prisma.agentPayment.groupBy({
-      by: ["employeeId"],
-      _sum: { amount: true },
-    });
-    const paymentMap = new Map(paymentTotals.map((p) => [p.employeeId, p._sum.amount ?? 0]));
+    const rows = Array.from(grouped.values())
+      .map((r) => ({ ...r, payable: r.totalAmount - r.deliveryCharge }))
+      .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
 
-    const rows = agents.map((a) => {
-      const totalAmount = totalMap.get(a.id) ?? 0;
-      const cancelledTotal = cancelledMap.get(a.id) ?? 0;
-      const totalDeliveryCharge = chargeMap.get(a.id) ?? 0;
-      const totalPaid = paymentMap.get(a.id) ?? 0;
-      const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
-      return {
-        agent: { id: a.id, name: a.name, active: a.active },
-        totalAmount,
-        cancelledTotal,
-        totalDeliveryCharge,
-        totalPaid,
-        balance,
-      };
-    });
-
-    res.json(rows);
+    res.json({ rows });
   })
 );
 
-// Excel statement of the agent credit ledger shown on screen.
+async function computeVendorCreditRows(selectedDate: Date) {
+  const vendors = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+
+  const allOrders = await prisma.order.findMany({
+    where: { date: { lte: selectedDate } },
+    select: { vendorId: true, cnNo: true, status: true, total: true, deliveryCharge: true, date: true, createdAt: true },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+  });
+
+  const seenKeys = new Set<string>();
+  const dedupedOrders = allOrders.filter((o) => {
+    const key = `${o.vendorId}::${o.cnNo}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+
+  const openingAmountMap = new Map<string, number>();
+  const openingCancelledMap = new Map<string, number>();
+  const openingChargeMap = new Map<string, number>();
+  const todayAmountMap = new Map<string, number>();
+  const todayCancelledMap = new Map<string, number>();
+  const todayChargeMap = new Map<string, number>();
+  // Separate, view-only figures for a standalone "Pending Consignments" table below
+  // the main ledger — never fed into the Balance calculation above.
+  const pendingTotalMap = new Map<string, number>();
+  const pendingDeliveryChargeMap = new Map<string, number>();
+  // Same idea, but for a "Delivered Consignments" table — Opening/Today split just
+  // like the main ledger, scoped to Delivered orders only.
+  const deliveredOpeningAmountMap = new Map<string, number>();
+  const deliveredOpeningChargeMap = new Map<string, number>();
+  const deliveredTodayAmountMap = new Map<string, number>();
+  const deliveredTodayChargeMap = new Map<string, number>();
+
+  for (const o of dedupedOrders) {
+    // "Today" means genuinely entered today — NOT just resolved today. An order
+    // created days ago that only just got Delivered/Cancelled today has its `date`
+    // field bumped forward to today for reporting purposes, but that's backlog being
+    // cleared, not new business — so it belongs in Opening, not Today.
+    const isToday = toDubaiDateOnly(o.createdAt) === selectedDate.getTime();
+    const amountMap = isToday ? todayAmountMap : openingAmountMap;
+    const cancelledMap = isToday ? todayCancelledMap : openingCancelledMap;
+    const chargeMap = isToday ? todayChargeMap : openingChargeMap;
+
+    amountMap.set(o.vendorId, (amountMap.get(o.vendorId) ?? 0) + o.total);
+    if (o.status === "CANCELLED") {
+      cancelledMap.set(o.vendorId, (cancelledMap.get(o.vendorId) ?? 0) + o.total);
+    } else {
+      // Delivery charge is deducted as soon as an order isn't Cancelled — Pending and
+      // Transfer orders are still expected to complete, so their charge is counted
+      // right away instead of waiting until they're actually marked Delivered.
+      chargeMap.set(o.vendorId, (chargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+    if (o.status === "PENDING") {
+      pendingTotalMap.set(o.vendorId, (pendingTotalMap.get(o.vendorId) ?? 0) + o.total);
+      pendingDeliveryChargeMap.set(o.vendorId, (pendingDeliveryChargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+    if (o.status === "DELIVERED") {
+      const deliveredAmountMap = isToday ? deliveredTodayAmountMap : deliveredOpeningAmountMap;
+      const deliveredChargeMap = isToday ? deliveredTodayChargeMap : deliveredOpeningChargeMap;
+      deliveredAmountMap.set(o.vendorId, (deliveredAmountMap.get(o.vendorId) ?? 0) + o.total);
+      deliveredChargeMap.set(o.vendorId, (deliveredChargeMap.get(o.vendorId) ?? 0) + o.deliveryCharge);
+    }
+  }
+
+  function toMap(list: { vendorId: string | null; _sum: { amount: number | null } }[]) {
+    const m = new Map<string, number>();
+    for (const item of list) {
+      if (!item.vendorId) continue;
+      m.set(item.vendorId, (m.get(item.vendorId) ?? 0) + (item._sum.amount ?? 0));
+    }
+    return m;
+  }
+
+  const [
+    openingPayments,
+    todayPayments,
+    openingDriverPayments,
+    todayDriverPayments,
+    openingAdjustments,
+    todayAdjustments,
+  ] = await Promise.all([
+    prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+    prisma.vendorPayment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+    prisma.purchase.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null }, date: { lt: selectedDate } },
+      _sum: { amount: true },
+    }),
+    prisma.purchase.groupBy({
+      by: ["vendorId"],
+      where: { vendorId: { not: null }, date: selectedDate },
+      _sum: { amount: true },
+    }),
+    prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: { lt: selectedDate } }, _sum: { amount: true } }),
+    prisma.vendorAdjustment.groupBy({ by: ["vendorId"], where: { date: selectedDate }, _sum: { amount: true } }),
+  ]);
+
+  const openingPaidMap = toMap(openingPayments);
+  for (const p of openingDriverPayments) {
+    if (p.vendorId) openingPaidMap.set(p.vendorId, (openingPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+  }
+  const todayPaidMap = toMap(todayPayments);
+  for (const p of todayDriverPayments) {
+    if (p.vendorId) todayPaidMap.set(p.vendorId, (todayPaidMap.get(p.vendorId) ?? 0) + (p._sum.amount ?? 0));
+  }
+  const openingAdjMap = toMap(openingAdjustments);
+  const todayAdjMap = toMap(todayAdjustments);
+
+  return vendors.map((v) => {
+    const openingAmount = (openingAmountMap.get(v.id) ?? 0) + (openingAdjMap.get(v.id) ?? 0);
+    const openingCancelled = openingCancelledMap.get(v.id) ?? 0;
+    const openingCharge = openingChargeMap.get(v.id) ?? 0;
+    const openingPaid = openingPaidMap.get(v.id) ?? 0;
+
+    const todayAmount = (todayAmountMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
+    const todayCancelled = todayCancelledMap.get(v.id) ?? 0;
+    const todayCharge = todayChargeMap.get(v.id) ?? 0;
+    const todayPaid = todayPaidMap.get(v.id) ?? 0;
+
+    const totalAmount = openingAmount + todayAmount;
+    const cancelledTotal = openingCancelled + todayCancelled;
+    const totalDeliveryCharge = openingCharge + todayCharge;
+    const totalPaid = openingPaid + todayPaid;
+    const adjustmentTotal = (openingAdjMap.get(v.id) ?? 0) + (todayAdjMap.get(v.id) ?? 0);
+    const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
+    const pendingTotal = pendingTotalMap.get(v.id) ?? 0;
+    const pendingDeliveryCharge = pendingDeliveryChargeMap.get(v.id) ?? 0;
+    const pendingPayable = pendingTotal - pendingDeliveryCharge;
+
+    const deliveredOpening = deliveredOpeningAmountMap.get(v.id) ?? 0;
+    const deliveredOpeningCharge = deliveredOpeningChargeMap.get(v.id) ?? 0;
+    const deliveredToday = deliveredTodayAmountMap.get(v.id) ?? 0;
+    const deliveredTodayCharge = deliveredTodayChargeMap.get(v.id) ?? 0;
+    const deliveredTotal = deliveredOpening + deliveredToday;
+    const deliveredCharge = deliveredOpeningCharge + deliveredTodayCharge;
+    const deliveredPayable = deliveredTotal - deliveredCharge;
+
+    return {
+      vendor: { id: v.id, name: v.name, active: v.active },
+      openingAmount,
+      openingCancelled,
+      todayAmount,
+      todayCancelled,
+      totalAmount,
+      adjustmentTotal,
+      cancelledTotal,
+      totalDeliveryCharge,
+      totalPaid,
+      balance,
+      pendingTotal,
+      pendingDeliveryCharge,
+      pendingPayable,
+      deliveredOpening,
+      deliveredToday,
+      deliveredTotal,
+      deliveredCharge,
+      deliveredPayable,
+    };
+  });
+}
+
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const { start: selectedDate } = dayRange(req.query.date as string | undefined);
+    res.json(await computeVendorCreditRows(selectedDate));
+  })
+);
+
+// Excel statement of the same ledger shown on screen, for a given date.
 router.get(
   "/export",
-  asyncHandler(async (_req, res) => {
-    const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
-    const allOrders = await prisma.order.findMany({
-      where: { employeeId: { in: agents.map((a) => a.id) } },
-      select: { employeeId: true, status: true, total: true, deliveryCharge: true },
-    });
-
-    const totalMap = new Map<string, number>();
-    const cancelledMap = new Map<string, number>();
-    const chargeMap = new Map<string, number>();
-    for (const o of allOrders) {
-      totalMap.set(o.employeeId, (totalMap.get(o.employeeId) ?? 0) + o.total);
-      if (o.status === "CANCELLED") {
-        cancelledMap.set(o.employeeId, (cancelledMap.get(o.employeeId) ?? 0) + o.total);
-      } else {
-        chargeMap.set(o.employeeId, (chargeMap.get(o.employeeId) ?? 0) + o.deliveryCharge);
-      }
-    }
-    const paymentTotals = await prisma.agentPayment.groupBy({ by: ["employeeId"], _sum: { amount: true } });
-    const paymentMap = new Map(paymentTotals.map((p) => [p.employeeId, p._sum.amount ?? 0]));
-
-    const rows = agents.map((a) => {
-      const totalAmount = totalMap.get(a.id) ?? 0;
-      const cancelledTotal = cancelledMap.get(a.id) ?? 0;
-      const totalDeliveryCharge = chargeMap.get(a.id) ?? 0;
-      const totalPaid = paymentMap.get(a.id) ?? 0;
-      const balance = totalAmount - cancelledTotal - totalDeliveryCharge - totalPaid;
-      return { agent: a.name, totalAmount, cancelledTotal, totalDeliveryCharge, totalPaid, balance };
-    });
+  asyncHandler(async (req, res) => {
+    const { start: selectedDate } = dayRange(req.query.date as string | undefined);
+    const rows = await computeVendorCreditRows(selectedDate);
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Future Courier Operations";
     workbook.created = new Date();
-    const sheet = workbook.addWorksheet("Agent Credit Statement");
+    const sheet = workbook.addWorksheet("Vendor Credit Statement");
     sheet.columns = [
-      { header: "Agent", key: "agent", width: 20 },
-      { header: "Total Amount", key: "totalAmount", width: 15 },
-      { header: "Cancelled", key: "cancelledTotal", width: 14 },
-      { header: "DL Charge (Kept)", key: "totalDeliveryCharge", width: 16 },
-      { header: "Paid Back", key: "totalPaid", width: 14 },
-      { header: "Balance Owed", key: "balance", width: 14 },
+      { header: "Vendor", key: "vendor", width: 20 },
+      { header: "Opening Amount", key: "openingAmount", width: 15 },
+      { header: "Opening Cancelled", key: "openingCancelled", width: 16 },
+      { header: "Today's Amount", key: "todayAmount", width: 14 },
+      { header: "Today's Cancelled", key: "todayCancelled", width: 15 },
+      { header: "Total Amount", key: "totalAmount", width: 14 },
+      { header: "Adjustment", key: "adjustmentTotal", width: 12 },
+      { header: "Cancelled (Total)", key: "cancelledTotal", width: 15 },
+      { header: "Delivery Charge", key: "totalDeliveryCharge", width: 15 },
+      { header: "Paid", key: "totalPaid", width: 12 },
+      { header: "Balance", key: "balance", width: 14 },
     ];
     sheet.getRow(1).font = { bold: true };
-    rows.forEach((r) => sheet.addRow(r));
+    rows.forEach((r) => sheet.addRow({ ...r, vendor: r.vendor.name }));
 
     const totals = rows.reduce(
       (acc, r) => ({
+        openingAmount: acc.openingAmount + r.openingAmount,
+        openingCancelled: acc.openingCancelled + r.openingCancelled,
+        todayAmount: acc.todayAmount + r.todayAmount,
+        todayCancelled: acc.todayCancelled + r.todayCancelled,
         totalAmount: acc.totalAmount + r.totalAmount,
+        adjustmentTotal: acc.adjustmentTotal + r.adjustmentTotal,
         cancelledTotal: acc.cancelledTotal + r.cancelledTotal,
         totalDeliveryCharge: acc.totalDeliveryCharge + r.totalDeliveryCharge,
         totalPaid: acc.totalPaid + r.totalPaid,
         balance: acc.balance + r.balance,
       }),
-      { totalAmount: 0, cancelledTotal: 0, totalDeliveryCharge: 0, totalPaid: 0, balance: 0 }
+      {
+        openingAmount: 0,
+        openingCancelled: 0,
+        todayAmount: 0,
+        todayCancelled: 0,
+        totalAmount: 0,
+        adjustmentTotal: 0,
+        cancelledTotal: 0,
+        totalDeliveryCharge: 0,
+        totalPaid: 0,
+        balance: 0,
+      }
     );
-    const totalRow = sheet.addRow({ agent: "TOTAL", ...totals });
+    const totalRow = sheet.addRow({ vendor: "TOTAL", ...totals });
     totalRow.font = { bold: true };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="agent-credit-statement.xlsx"');
+    res.setHeader("Content-Disposition", 'attachment; filename="vendor-credit-statement.xlsx"');
     await workbook.xlsx.write(res);
     res.end();
   })
 );
 
 router.get(
-  "/:agentId/payments",
+  "/:vendorId/payments",
   asyncHandler(async (req, res) => {
-    const payments = await prisma.agentPayment.findMany({
-      where: { employeeId: req.params.agentId },
-      orderBy: { date: "desc" },
-    });
-    res.json(payments);
+    const [manual, driverPayments] = await Promise.all([
+      prisma.vendorPayment.findMany({
+        where: { vendorId: req.params.vendorId },
+        orderBy: { date: "desc" },
+      }),
+      prisma.purchase.findMany({
+        where: { vendorId: req.params.vendorId },
+        include: { employee: { select: { name: true } } },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+
+    const combined = [
+      ...manual.map((p) => ({
+        id: p.id,
+        date: p.date,
+        amount: p.amount,
+        note: p.note,
+        source: "MANUAL" as const,
+        employeeName: null as string | null,
+      })),
+      ...driverPayments.map((p) => ({
+        id: p.id,
+        date: p.date,
+        amount: p.amount,
+        note: p.note,
+        source: "DRIVER" as const,
+        employeeName: p.employee.name,
+      })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    res.json(combined);
   })
 );
 
@@ -206,46 +377,108 @@ const paymentSchema = z.object({
   note: z.string().max(300).optional(),
 });
 
-router.post(
-  "/:agentId/payments",
-  requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req, res) => {
-    const agent = await prisma.user.findUnique({ where: { id: req.params.agentId } });
-    if (!agent || !agent.isAgent) throw new ApiError(404, "Agent not found");
+const adjustmentSchema = z.object({
+  date: z.string(),
+  amount: z.number().int().refine((v) => v !== 0, "Amount can't be zero"),
+  note: z.string().max(300).optional(),
+});
 
-    const data = paymentSchema.parse(req.body);
+// Adjustment amount can be positive (adds to Total Amount) or negative (subtracts).
+router.post(
+  "/:vendorId/adjustments",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const vendor = await prisma.vendor.findUnique({ where: { id: req.params.vendorId } });
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+
+    const data = adjustmentSchema.parse(req.body);
     const { start } = dayRange(data.date);
-    const payment = await prisma.agentPayment.create({
-      data: { employeeId: req.params.agentId, date: start, amount: data.amount, note: data.note },
+    const adjustment = await prisma.vendorAdjustment.create({
+      data: { vendorId: req.params.vendorId, date: start, amount: data.amount, note: data.note },
     });
 
     await writeAuditLog({
       userId: req.user!.sub,
-      action: "AGENT_PAYMENT_CREATE",
-      entity: "AgentPayment",
-      entityId: payment.id,
-      meta: { agentId: req.params.agentId, amount: data.amount },
+      action: "VENDOR_ADJUSTMENT_CREATE",
+      entity: "VendorAdjustment",
+      entityId: adjustment.id,
+      meta: { vendorId: req.params.vendorId, amount: data.amount },
     });
-    emitGlobal("agentPayment:changed", { type: "created", payment });
+    emitGlobal("vendorPayment:changed", { type: "created" });
+    res.status(201).json(adjustment);
+  })
+);
+
+router.get(
+  "/:vendorId/adjustments",
+  asyncHandler(async (req, res) => {
+    const adjustments = await prisma.vendorAdjustment.findMany({
+      where: { vendorId: req.params.vendorId },
+      orderBy: { date: "desc" },
+    });
+    res.json(adjustments);
+  })
+);
+
+router.delete(
+  "/adjustments/:id",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.vendorAdjustment.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Adjustment entry not found");
+
+    await prisma.vendorAdjustment.delete({ where: { id: req.params.id } });
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "VENDOR_ADJUSTMENT_DELETE",
+      entity: "VendorAdjustment",
+      entityId: req.params.id,
+    });
+    emitGlobal("vendorPayment:changed", { type: "deleted" });
+    res.json({ deleted: true });
+  })
+);
+
+router.post(
+  "/:vendorId/payments",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const vendor = await prisma.vendor.findUnique({ where: { id: req.params.vendorId } });
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+
+    const data = paymentSchema.parse(req.body);
+    const { start } = dayRange(data.date);
+    const payment = await prisma.vendorPayment.create({
+      data: { vendorId: req.params.vendorId, date: start, amount: data.amount, note: data.note },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "VENDOR_PAYMENT_CREATE",
+      entity: "VendorPayment",
+      entityId: payment.id,
+      meta: { vendorId: req.params.vendorId, amount: data.amount },
+    });
+    emitGlobal("vendorPayment:changed", { type: "created", payment });
     res.status(201).json(payment);
   })
 );
 
 router.delete(
   "/payments/:id",
-  requireRole("SUPER_ADMIN"),
+  requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.agentPayment.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.vendorPayment.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Payment entry not found");
 
-    await prisma.agentPayment.delete({ where: { id: req.params.id } });
+    await prisma.vendorPayment.delete({ where: { id: req.params.id } });
     await writeAuditLog({
       userId: req.user!.sub,
-      action: "AGENT_PAYMENT_DELETE",
-      entity: "AgentPayment",
+      action: "VENDOR_PAYMENT_DELETE",
+      entity: "VendorPayment",
       entityId: req.params.id,
     });
-    emitGlobal("agentPayment:changed", { type: "deleted", id: req.params.id });
+    emitGlobal("vendorPayment:changed", { type: "deleted", id: req.params.id });
     res.json({ deleted: true });
   })
 );
