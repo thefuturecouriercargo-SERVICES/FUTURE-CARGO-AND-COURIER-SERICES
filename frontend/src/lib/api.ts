@@ -1,3 +1,7 @@
+// Kept only for reference/back-compat — actual requests now go through the
+// Next.js rewrite in next.config.js (see the note there for why: it makes the
+// auth cookie first-party from the browser's point of view, which iPhone
+// Safari's default privacy setting otherwise silently breaks).
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiClientError extends Error {
@@ -16,14 +20,17 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>;
 }
 
+// Always relative (same-origin) — the browser only ever talks to the frontend's
+// own domain, which Next.js then proxies server-side to the real backend.
 function buildUrl(path: string, query?: RequestOptions["query"]) {
-  const url = new URL(`${API_URL}/api${path}`);
+  const params = new URLSearchParams();
   if (query) {
     Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== "") params.set(k, String(v));
     });
   }
-  return url.toString();
+  const qs = params.toString();
+  return `/api${path}${qs ? `?${qs}` : ""}`;
 }
 
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -52,47 +59,43 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
   return res.json() as Promise<T>;
 }
 
+// Same relative-URL approach as buildUrl above, for the same Safari cookie reason.
+function buildRelativeUrl(path: string, query?: Record<string, string | undefined>) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([k, v]) => {
+      if (v) params.set(k, v);
+    });
+  }
+  const qs = params.toString();
+  return `/api${path}${qs ? `?${qs}` : ""}`;
+}
+
 export function reportExportUrl(query: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}/api/reports/export`);
-  Object.entries(query).forEach(([k, v]) => {
-    if (v) url.searchParams.set(k, v);
-  });
-  return url.toString();
+  return buildRelativeUrl("/reports/export", query);
 }
 export function employeePerformancePdfUrl(query: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}/api/reports/employee-performance/pdf`);
-  Object.entries(query).forEach(([k, v]) => {
-    if (v) url.searchParams.set(k, v);
-  });
-  return url.toString();
+  return buildRelativeUrl("/reports/employee-performance/pdf", query);
 }
 
 export function pnlExportUrl(query: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}/api/reports/pnl`);
-  Object.entries(query).forEach(([k, v]) => {
-    if (v) url.searchParams.set(k, v);
-  });
-  return url.toString();
+  return buildRelativeUrl("/reports/pnl", query);
 }
 
 export function expenseReportUrl(query: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}/api/reports/expenses/export`);
-  Object.entries(query).forEach(([k, v]) => {
-    if (v) url.searchParams.set(k, v);
-  });
-  return url.toString();
+  return buildRelativeUrl("/reports/expenses/export", query);
 }
 
 export function vendorCreditExportUrl(query: Record<string, string | undefined>) {
-  const url = new URL(`${API_URL}/api/vendor-credit/export`);
-  Object.entries(query).forEach(([k, v]) => {
-    if (v) url.searchParams.set(k, v);
-  });
-  return url.toString();
+  return buildRelativeUrl("/vendor-credit/export", query);
 }
 
 export function agentCreditExportUrl() {
-  return `${API_URL}/api/agent-credit/export`;
+  return buildRelativeUrl("/agent-credit/export");
+}
+
+export function settingsBackupUrl() {
+  return buildRelativeUrl("/settings/backup");
 }
 
 export { API_URL };
