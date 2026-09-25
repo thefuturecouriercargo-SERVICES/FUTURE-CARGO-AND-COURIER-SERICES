@@ -55,7 +55,9 @@ export default function VendorCreditPage() {
   const [deliveredRows, setDeliveredRows] = useState<{ vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; payable: number }[]>([]);
   const [loadingDelivered, setLoadingDelivered] = useState(false);
   const [newEntriesDate, setNewEntriesDate] = useState(dubaiToday());
-  const [newEntriesRows, setNewEntriesRows] = useState<{ vendorId: string; vendorName: string; count: number; totalAmount: number }[]>([]);
+  const [newEntriesRows, setNewEntriesRows] = useState<
+    { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; balance: number }[]
+  >([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
   const [rows, setRows] = useState<VendorCreditRow[]>([]);
   const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
@@ -238,6 +240,69 @@ export default function VendorCreditPage() {
           columns are just this date's activity, and <b>Total Amount</b> is the running total through this date.
           Balance = Total Amount − Cancelled − Delivery Charge (on Delivered only) − Paid.
         </p>
+
+        <div className="mb-6 border border-line bg-white p-5">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                ← Prev
+              </button>
+              <input type="date" value={newEntriesDate} onChange={(e) => setNewEntriesDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
+              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
+                Next →
+              </button>
+              <button onClick={() => setNewEntriesDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+                Today
+              </button>
+            </div>
+          </div>
+          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
+            How many genuinely new consignments each vendor got on <b>{newEntriesDate}</b>, with delivery charge and
+            balance for just these new entries. Counts an order only on the day it was actually entered — not
+            carried-over or resolved days.
+          </p>
+
+          {loadingNewEntries ? (
+            <p className="text-sm text-ink-soft">Loading…</p>
+          ) : newEntriesRows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Vendor</th>
+                    <th className="text-right">New Entries</th>
+                    <th className="text-right">Total Amount</th>
+                    <th className="text-right">Delivery Charge</th>
+                    <th className="text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {newEntriesRows.map((r) => (
+                    <tr key={r.vendorId}>
+                      <td>{r.vendorName}</td>
+                      <td className="text-right font-mono">{r.count}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
+                      <td className="text-right font-mono">{fmtNumber(r.deliveryCharge)}</td>
+                      <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.balance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td>TOTAL</td>
+                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
+                    <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
+                    <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.deliveryCharge, 0))}</td>
+                    <td className="text-right font-mono text-brass">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.balance, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
 
         <div className="border border-line bg-white p-5">
           {/* Mobile: stacked cards */}
@@ -704,61 +769,6 @@ export default function VendorCreditPage() {
           )}
         </div>
 
-        <div className="mt-6 border border-line bg-white p-5">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
-                ← Prev
-              </button>
-              <input type="date" value={newEntriesDate} onChange={(e) => setNewEntriesDate(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
-              <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, 1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
-                Next →
-              </button>
-              <button onClick={() => setNewEntriesDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
-                Today
-              </button>
-            </div>
-          </div>
-          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            How many genuinely new consignments each vendor got on <b>{newEntriesDate}</b>. Counts an order only
-            on the day it was actually entered — not carried-over or resolved days.
-          </p>
-
-          {loadingNewEntries ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
-          ) : newEntriesRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
-          ) : (
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Vendor</th>
-                    <th className="text-right">New Entries</th>
-                    <th className="text-right">Total Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {newEntriesRows.map((r) => (
-                    <tr key={r.vendorId}>
-                      <td>{r.vendorName}</td>
-                      <td className="text-right font-mono">{r.count}</td>
-                      <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="font-semibold">
-                    <td>TOTAL</td>
-                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
-                    <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
     </AuthGate>
   );
