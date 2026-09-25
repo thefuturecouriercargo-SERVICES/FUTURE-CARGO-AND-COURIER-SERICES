@@ -15,6 +15,15 @@ const nextConfig = {
         source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
       },
+      // Same same-origin reasoning as /api above, for real-time updates. If the
+      // raw WebSocket upgrade isn't proxied cleanly in some environment,
+      // Socket.IO automatically falls back to HTTP long-polling, which this
+      // rewrite handles the same way any other HTTP request does — so this
+      // stays functional either way.
+      {
+        source: "/socket.io/:path*",
+        destination: `${backendUrl}/socket.io/:path*`,
+      },
     ];
   },
 };
