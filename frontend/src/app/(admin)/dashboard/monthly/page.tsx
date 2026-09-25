@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { currentMonthStr, fmtNumber } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import KpiCard from "@/components/KpiCard";
@@ -49,7 +49,7 @@ export default function MonthlyDashboardPage() {
         <div className="flex items-center gap-2">
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
           <a
-            href={`${API_URL}/api/dashboard/monthly?month=${month}&format=pdf`}
+            href={`/api/dashboard/monthly?month=${month}&format=pdf`}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2"
