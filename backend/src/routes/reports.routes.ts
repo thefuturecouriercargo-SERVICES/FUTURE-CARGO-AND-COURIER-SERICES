@@ -453,7 +453,8 @@ router.get(
       revenue,
       totalExpenses,
       netProfit: revenue - totalExpenses,
-      deliveredCount: delivered.length,
+      // Matches the revenue figure above — agent deliveries don't count here either.
+      deliveredCount: delivered.filter((o) => !o.employee.isAgent).length,
       categoryBreakdown,
       topCategory: categoryBreakdown[0] ?? null,
     });
