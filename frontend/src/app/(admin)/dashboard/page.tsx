@@ -240,6 +240,24 @@ return (
           <button onClick={() => setDate(todayStr())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
             Today
           </button>
+          {data && (
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `📦 *Deliveries — ${date}*\n\n` +
+                  `Delivered: ${data.summary.delivered}\n` +
+                  `Pending: ${data.summary.pending + nonAgentPendingCarryover.length}\n` +
+                  `Transfer: ${data.summary.transferred}\n` +
+                  `Cancelled: ${data.summary.cancelled}\n\n` +
+                  `Total Sales: ${data.summary.totalSales} AED\n` +
+                  `DL Charge: ${data.summary.totalDeliveryCharge} AED`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border border-delivered px-3 py-2 font-mono text-xs uppercase text-delivered hover:bg-delivered/10"
+            >
+              📤 Share to WhatsApp
+            </a>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
   <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
