@@ -95,6 +95,48 @@ router.post(
   })
 );
 
+const updateEntrySchema = z.object({
+  date: z.string().optional(),
+  employeeId: z.string().optional(),
+  type: z.enum(["PAID", "SHORT", "BONUS"]).optional(),
+  amount: z.number().int().min(0).optional(),
+  note: z.string().max(500).optional().nullable(),
+});
+
+// PUT /payroll/entries/:id
+// Deliberately doesn't touch `month` — that's the payroll month an entry belongs
+// to (e.g. August), separate from the date it was actually paid (e.g. in September).
+router.put(
+  "/entries/:id",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.payrollEntry.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, "Payroll entry not found");
+
+    const data = updateEntrySchema.parse(req.body);
+    const entry = await prisma.payrollEntry.update({
+      where: { id: req.params.id },
+      data: {
+        ...(data.date ? { date: new Date(data.date) } : {}),
+        ...(data.employeeId ? { employeeId: data.employeeId } : {}),
+        ...(data.type ? { type: data.type } : {}),
+        ...(data.amount !== undefined ? { amount: data.amount } : {}),
+        ...(data.note !== undefined ? { note: data.note } : {}),
+      },
+      include: { employee: { select: { id: true, name: true } } },
+    });
+
+    await writeAuditLog({
+      userId: req.user!.sub,
+      action: "PAYROLL_ENTRY_UPDATE",
+      entity: "PayrollEntry",
+      entityId: entry.id,
+    });
+    emitGlobal("payroll:changed", { entry });
+    res.json(entry);
+  })
+);
+
 // DELETE /payroll/entries/:id
 router.delete(
   "/entries/:id",
