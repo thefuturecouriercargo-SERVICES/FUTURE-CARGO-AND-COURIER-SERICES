@@ -317,12 +317,12 @@ export default function DriverPortalPage() {
   // today's count, since triple digits in a single day isn't realistic). Checked
   // every few minutes rather than tied to the daily summary, since it needs the
   // full month's total.
-  const [achievement, setAchievement] = useState<{ title: string; subtitle: string } | null>(null);
+  const [achievement, setAchievement] = useState<{ title: string; subtitle: string; milestone: number } | null>(null);
   const prevMonthlyDeliveredRef = useRef<number | null>(null);
 
-  function showAchievement(title: string, subtitle: string) {
-    setAchievement({ title, subtitle });
-    setTimeout(() => setAchievement(null), 4000);
+  function showAchievement(title: string, subtitle: string, milestone: number) {
+    setAchievement({ title, subtitle, milestone });
+    setTimeout(() => setAchievement(null), 8000);
     playCrescendo();
   }
 
@@ -334,7 +334,7 @@ export default function DriverPortalPage() {
     if (prev !== null) {
       for (let m = 100; m <= 5000; m += 100) {
         if (prev < m && total >= m) {
-          showAchievement("Century Club", `${m} deliveries this month`);
+          showAchievement("Century Club", `${m} deliveries this month`, m);
           break;
         }
       }
@@ -834,6 +834,16 @@ export default function DriverPortalPage() {
               <div className="text-sm font-semibold">{achievement.title}</div>
               <div className="font-mono text-[10px] uppercase tracking-wide text-brass-light">{achievement.subtitle}</div>
             </div>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `🏆 ${orders[0]?.employee.name ?? "A driver"} just hit ${achievement.milestone} deliveries this month with Future Courier! 🎉`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 rounded border border-brass-light px-2.5 py-1.5 font-mono text-[10px] uppercase text-brass-light hover:bg-white/10"
+            >
+              📤 Share
+            </a>
           </div>
         </div>
       )}
