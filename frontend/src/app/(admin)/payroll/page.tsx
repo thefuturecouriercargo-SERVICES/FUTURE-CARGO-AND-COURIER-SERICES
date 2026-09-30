@@ -38,6 +38,8 @@ export default function PayrollPage() {
   const [formType, setFormType] = useState<"PAID" | "SHORT" | "BONUS">("PAID");
   const [formAmount, setFormAmount] = useState("");
   const [formNote, setFormNote] = useState("");
+  const [formDate, setFormDate] = useState("");
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [showAddStaff, setShowAddStaff] = useState(false);
@@ -165,23 +167,58 @@ export default function PayrollPage() {
     if (!formEmployeeId || !amount || amount <= 0) return;
     setSaving(true);
     try {
-      await apiFetch("/payroll/entries", {
-        method: "POST",
-        body: {
-          month,
-          date: new Date().toISOString().slice(0, 10),
-          employeeId: formEmployeeId,
-          type: formType,
-          amount,
-          note: formNote || undefined,
-        },
-      });
-      setFormAmount("");
-      setFormNote("");
+      if (editingEntryId) {
+        // Editing keeps the entry's payroll month as-is — only the entry's own
+        // details (who, type, amount, note, date paid) change.
+        await apiFetch(`/payroll/entries/${editingEntryId}`, {
+          method: "PUT",
+          body: {
+            date: formDate || undefined,
+            employeeId: formEmployeeId,
+            type: formType,
+            amount,
+            note: formNote || null,
+          },
+        });
+        cancelEditEntry();
+      } else {
+        await apiFetch("/payroll/entries", {
+          method: "POST",
+          body: {
+            month,
+            date: new Date().toISOString().slice(0, 10),
+            employeeId: formEmployeeId,
+            type: formType,
+            amount,
+            note: formNote || undefined,
+          },
+        });
+        setFormAmount("");
+        setFormNote("");
+      }
       await load();
     } finally {
       setSaving(false);
     }
+  }
+
+  function startEditEntry(e: PayrollEntry) {
+    setEditingEntryId(e.id);
+    setFormEmployeeId(e.employeeId);
+    setFormType(e.type);
+    setFormAmount(String(e.amount));
+    setFormNote(e.note ?? "");
+    setFormDate(e.date.slice(0, 10));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditEntry() {
+    setEditingEntryId(null);
+    setFormEmployeeId("");
+    setFormType("PAID");
+    setFormAmount("");
+    setFormNote("");
+    setFormDate("");
   }
 
   async function deleteEntry(id: string) {
@@ -316,9 +353,9 @@ export default function PayrollPage() {
       )}
 
       {!isReadOnly && (
-      <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">New Entry</h2>
-        <form onSubmit={onSubmitEntry} className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className={`mb-6 border p-5 ${editingEntryId ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
+        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
+        <form onSubmit={onSubmitEntry} className={`grid grid-cols-2 gap-3 ${editingEntryId ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Employee</label>
             <select
@@ -362,6 +399,17 @@ export default function PayrollPage() {
               className="w-full rounded border border-line px-2.5 py-2 text-sm"
             />
           </div>
+          {editingEntryId && (
+            <div>
+              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date Paid</label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+                className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              />
+            </div>
+          )}
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Note (optional)</label>
             <input
@@ -370,14 +418,23 @@ export default function PayrollPage() {
               className="w-full rounded border border-line px-2.5 py-2 text-sm"
             />
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button
               type="submit"
               disabled={saving}
               className="w-full rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : editingEntryId ? "Update" : "Save"}
             </button>
+            {editingEntryId && (
+              <button
+                type="button"
+                onClick={cancelEditEntry}
+                className="rounded border border-line px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-cancelled"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -586,9 +643,14 @@ export default function PayrollPage() {
                   <td className="text-ink-soft">{e.note || "—"}</td>
                   <td className="whitespace-nowrap">
                     {!isReadOnly && (
-                      <button onClick={() => deleteEntry(e.id)} className="text-xs text-cancelled hover:underline">
-                        Delete
-                      </button>
+                      <>
+                        <button onClick={() => startEditEntry(e)} className="mr-3 text-xs text-brass hover:underline">
+                          Edit
+                        </button>
+                        <button onClick={() => deleteEntry(e.id)} className="text-xs text-cancelled hover:underline">
+                          Delete
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
