@@ -62,6 +62,11 @@ export default function VendorsPage() {
     await load();
   }
 
+  async function activateVendor(v: Vendor) {
+    await apiFetch(`/vendors/${v.id}`, { method: "PUT", body: { active: true } });
+    await load();
+  }
+
   return (
     <div>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
@@ -147,9 +152,15 @@ export default function VendorsPage() {
                   <button onClick={() => startEdit(v)} className="mr-2 text-xs text-brass hover:underline">
                     Edit
                   </button>
-                  <button onClick={() => removeVendor(v)} className="text-xs text-cancelled hover:underline">
-                    Remove
-                  </button>
+                  {v.active ? (
+                    <button onClick={() => removeVendor(v)} className="text-xs text-cancelled hover:underline">
+                      Remove
+                    </button>
+                  ) : (
+                    <button onClick={() => activateVendor(v)} className="text-xs text-delivered hover:underline">
+                      Activate
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
