@@ -48,3 +48,8 @@ export function monthRange(monthStr?: string): { start: Date; end: Date; year: n
 export function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
+
+/** A timestamp as its Dubai calendar date, "YYYY-MM-DD". */
+export function dubaiDateStr(date: Date): string {
+  return new Date(date.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
+}

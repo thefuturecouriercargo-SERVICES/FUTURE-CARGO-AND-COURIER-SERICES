@@ -1,7 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, settingsBackupUrl } from "@/lib/api";
+
+interface BackupStatus {
+  configured: boolean;
+  hasApiKey: boolean;
+  to: string[];
+  schedule: string;
+  lastSentAt: string | null;
+}
 
 interface CompanySettings {
   id: string;
@@ -16,10 +24,28 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [dark, setDark] = useState(false);
+  const [backup, setBackup] = useState<BackupStatus | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     apiFetch<CompanySettings>("/settings/company").then(setSettings);
+    apiFetch<BackupStatus>("/settings/backup/status").then(setBackup).catch(() => {});
   }, []);
+
+  async function sendNow() {
+    setSending(true);
+    setSendMsg(null);
+    try {
+      const r = await apiFetch<{ to: string[]; sizeKb: number }>("/settings/backup/email", { method: "POST" });
+      setSendMsg({ ok: true, text: `Sent to ${r.to.join(", ")} (${r.sizeKb} KB).` });
+      apiFetch<BackupStatus>("/settings/backup/status").then(setBackup).catch(() => {});
+    } catch (err) {
+      setSendMsg({ ok: false, text: err instanceof Error ? err.message : "Failed to send" });
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -78,12 +104,51 @@ export default function SettingsPage() {
       </div>
 
       <div className="mt-8 max-w-xl border border-line bg-white p-6">
-        <h2 className="mb-3 font-display text-[17px] font-semibold text-navy">Backup &amp; Restore</h2>
-        <p className="text-sm text-ink-soft">
-          Data lives in PostgreSQL. Use the standard Postgres tools for backups: <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-xs">pg_dump</code> to
-          export a full backup and <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-xs">pg_restore</code> / <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-xs">psql</code> to
-          restore it. See the project README for ready-to-run commands, including a scheduled backup example for the Docker deployment.
+        <h2 className="mb-3 font-display text-[17px] font-semibold text-navy">Backup</h2>
+        <p className="mb-4 text-sm text-ink-soft">
+          Downloads every record (orders, vendors, staff, payroll, expenses, credits, audit log) as one JSON file. Keep a copy somewhere safe.
         </p>
+        <a
+          href={settingsBackupUrl()}
+          className="inline-block rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2"
+        >
+          ⬇ Download Backup
+        </a>
+
+        <div className="mt-6 border-t border-line pt-4">
+          <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-brass">Weekly email backup</h3>
+          {!backup ? (
+            <p className="text-sm text-ink-soft">Loading…</p>
+          ) : backup.configured ? (
+            <div className="text-sm">
+              <p>
+                <span className="text-delivered">● Active</span> — {backup.schedule}, sent to <b>{backup.to.join(", ")}</b>
+              </p>
+              <p className="mt-1 text-ink-soft">
+                Last sent: {backup.lastSentAt ? new Date(backup.lastSentAt).toLocaleString("en-GB") : "not yet"}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-ink-soft">
+              <span className="text-cancelled">● Not set up.</span> Add{" "}
+              <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-xs">RESEND_API_KEY</code>
+              {!backup.hasApiKey ? " (missing)" : ""} and{" "}
+              <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-xs">BACKUP_EMAIL_TO</code>
+              {backup.to.length === 0 ? " (missing)" : ""} to the backend service variables in Railway.
+            </p>
+          )}
+          {backup?.configured && (
+            <button
+              type="button"
+              onClick={sendNow}
+              disabled={sending}
+              className="mt-3 rounded border border-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-50"
+            >
+              {sending ? "Sending…" : "Send backup email now"}
+            </button>
+          )}
+          {sendMsg && <p className={`mt-2 text-xs ${sendMsg.ok ? "text-delivered" : "text-cancelled"}`}>{sendMsg.text}</p>}
+        </div>
       </div>
     </div>
   );

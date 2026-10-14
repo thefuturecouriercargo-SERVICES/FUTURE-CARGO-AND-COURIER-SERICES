@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
-import { addDays, fmtNumber, todayStr } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
@@ -740,13 +740,14 @@ return (
                     <th>Employee</th>
                     <th>Status</th>
                     <th>Entry Date</th>
+                    <th>Delivered / Cancelled</th>
                     <th>Reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-10 text-center text-ink-soft">
+                      <td colSpan={12} className="py-10 text-center text-ink-soft">
                         No consignments match this filter.
                       </td>
                     </tr>
@@ -766,6 +767,12 @@ return (
                         </td>
                         <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
                           {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </td>
+                        <td
+                          className={`whitespace-nowrap font-mono text-xs ${o.status === "CANCELLED" ? "text-cancelled" : o.status === "DELIVERED" ? "text-delivered" : "text-ink-soft"}`}
+                          title={o.resolvedAt ? new Date(o.resolvedAt).toLocaleString("en-GB") : ""}
+                        >
+                          {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
                         </td>
                         <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                           {o.remarks || "—"}

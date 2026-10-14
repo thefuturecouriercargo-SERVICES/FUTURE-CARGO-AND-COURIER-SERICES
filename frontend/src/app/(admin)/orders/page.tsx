@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
@@ -579,6 +579,7 @@ required
                 <th>Employee</th>
                 <th>Status</th>
                 <th>Entry Date</th>
+                <th>Delivered / Cancelled</th>
                 <th>Reason</th>
                 <th>Actions</th>
               </tr>
@@ -586,13 +587,13 @@ required
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-8 text-center text-ink-soft">
+                  <td colSpan={14} className="py-8 text-center text-ink-soft">
                     Loading…
                   </td>
                 </tr>
              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-8 text-center text-ink-soft">
+                  <td colSpan={14} className="py-8 text-center text-ink-soft">
                     No consignments entered for this date yet.
                   </td>
                 </tr>
@@ -647,6 +648,12 @@ required
                     </td>
                     <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
                       {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                    </td>
+                    <td
+                      className={`whitespace-nowrap font-mono text-xs ${o.status === "CANCELLED" ? "text-cancelled" : o.status === "DELIVERED" ? "text-delivered" : "text-ink-soft"}`}
+                      title={o.resolvedAt ? new Date(o.resolvedAt).toLocaleString("en-GB") : ""}
+                    >
+                      {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
                     </td>
                     <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
                       {o.remarks || "—"}

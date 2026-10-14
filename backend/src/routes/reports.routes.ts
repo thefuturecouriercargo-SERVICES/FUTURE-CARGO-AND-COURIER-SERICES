@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate } from "../middleware/auth";
-import { parseDateParam, formatDate } from "../utils/dates";
+import { parseDateParam, formatDate, dubaiDateStr } from "../utils/dates";
 import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
 import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
 
@@ -105,6 +105,7 @@ async function computeConsignmentReport(q: Record<string, unknown>) {
     { header: "Emirate", key: "emirate", width: 12 },
     { header: "Employee", key: "employee", width: 14 },
     { header: "Status", key: "status", width: 12 },
+    { header: "Delivered/Cancelled", key: "resolved", width: 18 },
   ];
 
   // SL No. here is a clean running count for the report itself (1, 2, 3…) — not the
@@ -121,6 +122,7 @@ async function computeConsignmentReport(q: Record<string, unknown>) {
     emirate: o.emirate,
     employee: o.employee.name,
     status: o.status,
+    resolved: o.resolvedAt ? dubaiDateStr(o.resolvedAt) : "",
   }));
 
   // Total excludes still-open orders (Pending/Transfer) — only resolved business
@@ -200,7 +202,7 @@ router.get(
       });
       y = doc.y + 10;
 
-      const colWidths = [55, 40, 55, 65, 60, 55, 55, 60, 65, 65];
+      const colWidths = [55, 40, 55, 65, 60, 55, 55, 60, 65, 65, 80];
       const startX = doc.page.margins.left;
       const rowHeight = 18;
       const statusColIndex = columns.findIndex((c) => c.key === "status");
@@ -243,9 +245,9 @@ router.get(
 
       // Totals summary at the end of the report.
       y += 6;
-      drawRow(["", "", "", "TOTAL", sumTotal, sumDl, "", "", "", ""], { summary: true });
-      drawRow(["", "", "", "CANCELLED", sumCancelled, "", "", "", "", ""], { summary: true });
-      drawRow(["", "", "", "BALANCE (Total - Cancelled - DL Charge)", balance, "", "", "", "", ""], { summary: true });
+      drawRow(["", "", "", "TOTAL", sumTotal, sumDl, "", "", "", "", ""], { summary: true });
+      drawRow(["", "", "", "CANCELLED", sumCancelled, "", "", "", "", "", ""], { summary: true });
+      drawRow(["", "", "", "BALANCE (Total - Cancelled - DL Charge)", balance, "", "", "", "", "", ""], { summary: true });
 
       drawLetterheadFooter(doc);
       doc.end();

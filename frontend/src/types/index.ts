@@ -50,6 +50,7 @@ export interface Order {
   status: OrderStatus;
   remarks?: string | null;
   transferredBy?: string | null;
+  resolvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -13,6 +13,31 @@ router.use(authenticate);
 
 const STATUSES = ["PENDING", "DELIVERED", "TRANSFER", "CANCELLED"] as const;
 const PAYMENTS = ["CASH", "BANK"] as const;
+type Status = (typeof STATUSES)[number];
+
+/**
+ * Fields that must change alongside a status change:
+ *  - resolvedAt: stamped when an order becomes Delivered/Cancelled, cleared when
+ *    it goes back to Pending/Transfer, untouched if the status didn't change.
+ *  - remarks: set to the cancel reason on Cancel; cleared (null) when an order
+ *    that WAS cancelled moves to any other status, so an old cancel reason never
+ *    lingers on a delivered order. Untouched otherwise.
+ */
+function statusSideEffects(
+  prevStatus: Status | null,
+  nextStatus: Status,
+  reason?: string
+): { resolvedAt?: Date | null; remarks?: string | null } {
+  const out: { resolvedAt?: Date | null; remarks?: string | null } = {};
+  const resolved = nextStatus === "DELIVERED" || nextStatus === "CANCELLED";
+  if (prevStatus !== nextStatus) out.resolvedAt = resolved ? new Date() : null;
+  if (nextStatus === "CANCELLED") {
+    if (reason !== undefined) out.remarks = reason;
+  } else if (prevStatus === "CANCELLED") {
+    out.remarks = null;
+  }
+  return out;
+}
 
 function buildWhere(query: Record<string, unknown>): Prisma.OrderWhereInput {
   const where: Prisma.OrderWhereInput = {};
@@ -154,6 +179,7 @@ const order = await prisma.$transaction(async (tx) => {
           employeeId: data.employeeId,
           status: data.status ?? "PENDING",
           remarks: data.remarks,
+          resolvedAt: data.status === "DELIVERED" || data.status === "CANCELLED" ? new Date() : null,
         },
         include: { vendor: true, employee: { select: { id: true, name: true } } },
       });
@@ -203,9 +229,13 @@ if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
   }
 }
 
+// Status side effects first; an explicit remarks value in the edit form still wins.
+const sideEffects = data.status ? statusSideEffects(existing.status, data.status, data.remarks) : {};
+
 const order = await prisma.order.update({
       where: { id: req.params.id },
       data: {
+        ...sideEffects,
         ...(data.cnNo !== undefined ? { cnNo: data.cnNo } : {}),
         ...vendorFields,
         ...(data.payment ? { payment: data.payment } : {}),
@@ -270,7 +300,7 @@ router.patch(
             status: data.status,
             ...(data.emirate ? { emirate: data.emirate.toUpperCase() } : {}),
             ...(data.employeeId ? { employeeId: data.employeeId } : {}),
-            ...(data.status === "CANCELLED" ? { remarks: data.reason } : {}),
+            ...statusSideEffects(existing.status, data.status!, data.reason),
             ...carryFields,
           },
         });
@@ -348,7 +378,7 @@ router.patch(
           data: {
             status,
             ...carryFields,
-            ...(status === "CANCELLED" ? { remarks: reason } : {}),
+            ...statusSideEffects(existing.status, status, reason),
           },
           include: { vendor: true, employee: { select: { id: true, name: true } } },
         });
@@ -424,7 +454,7 @@ router.post(
     const [order] = await prisma.$transaction([
       prisma.order.update({
         where: { id: req.params.id },
-        data: { employeeId: toEmployeeId, status: "TRANSFER" },
+        data: { employeeId: toEmployeeId, status: "TRANSFER", ...statusSideEffects(existing.status, "TRANSFER") },
         include: { vendor: true, employee: { select: { id: true, name: true } } },
       }),
       prisma.orderTransfer.create({

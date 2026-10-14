@@ -58,3 +58,9 @@ export function agingBadgeClass(days: number): string {
   if (days >= 5) return "bg-cancelled text-white animate-[badge-blink_0.8s_ease-in-out_infinite]";
   return "bg-pending text-white animate-[badge-blink_1.6s_ease-in-out_infinite]";
 }
+
+/** dd/mm/yyyy for a timestamp, or "—" when empty. */
+export function fmtDayDate(value?: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}

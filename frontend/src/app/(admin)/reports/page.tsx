@@ -15,6 +15,7 @@ interface PreviewRow {
   emirate: string;
   employee: string;
   status: string;
+  resolved?: string;
 }
 
 interface PreviewData {
@@ -246,6 +247,7 @@ export default function ReportsPage() {
                   <th>Emirate</th>
                   <th>Employee</th>
                   <th>Status</th>
+                  <th>Delivered / Cancelled</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,6 +263,7 @@ export default function ReportsPage() {
                     <td>{r.emirate}</td>
                     <td>{r.employee}</td>
                     <td>{r.status}</td>
+                    <td className="font-mono text-xs">{r.resolved || "—"}</td>
                   </tr>
                 ))}
               </tbody>

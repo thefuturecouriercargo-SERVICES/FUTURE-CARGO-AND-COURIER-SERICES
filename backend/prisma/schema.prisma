@@ -188,6 +188,9 @@ model Order {
   employee       User        @relation("OrderEmployee", fields: [employeeId], references: [id])
   status         OrderStatus @default(PENDING)
   remarks        String?
+  // When the order was marked Delivered or Cancelled. Cleared again if it is
+  // moved back to Pending/Transfer. Shown next to Entry Date.
+  resolvedAt     DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
