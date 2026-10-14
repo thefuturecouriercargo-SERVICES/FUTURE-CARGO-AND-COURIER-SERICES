@@ -8,6 +8,7 @@ import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
+import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
 
 interface Summary {
   assigned: number;
@@ -128,6 +129,7 @@ export default function DriverPortalPage() {
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [claimOpen, setClaimOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
   // Data the voice assistant needs beyond what's already loaded — fetched once.
@@ -658,6 +660,13 @@ export default function DriverPortalPage() {
         />
       )}
 
+      <button
+        onClick={() => setClaimOpen(true)}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded bg-brass px-4 py-3.5 font-mono text-sm font-bold uppercase tracking-wide text-white shadow hover:opacity-90"
+      >
+        📦 Assign order — scan barcode
+      </button>
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
@@ -813,6 +822,15 @@ export default function DriverPortalPage() {
         </p>
       )}
       <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onSubmitted={() => showToast("Cash closing submitted", "success")} />
+
+      {claimOpen && (
+        <ClaimModal
+          onClose={() => {
+            setClaimOpen(false);
+            load();
+          }}
+        />
+      )}
 
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
 
@@ -1328,6 +1346,61 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
           Submitted {new Date(existing.submittedAt).toLocaleTimeString()} · status {existing.status}
         </p>
       )}
+    </div>
+  );
+}
+
+
+// Driver scans parcels to take them. Each good scan becomes one of his Pending
+// orders straight away; only the office can remove or move an order afterwards.
+function ClaimModal({ onClose }: { onClose: () => void }) {
+  const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date }[]>([]);
+
+  async function onCode(code: string) {
+    try {
+      const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string }>("/driver/scan-claim", {
+        method: "POST",
+        body: { code },
+      });
+      beep(r.result !== "ALREADY");
+      setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date() }, ...prev]);
+    } catch (err) {
+      beep(false);
+      setLog((prev) => [{ ok: false, text: err instanceof Error ? err.message : "Failed", at: new Date() }, ...prev]);
+    }
+  }
+
+  const added = log.filter((l) => l.ok && !l.already).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-lg bg-white p-5 sm:rounded-lg">
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="font-display text-xl font-semibold text-navy">Assign orders to me</h2>
+          <span className="rounded bg-delivered-bg px-2 py-1 font-mono text-xs font-bold text-delivered">{added} added</span>
+        </div>
+        <p className="mb-4 text-sm text-ink-soft">Scan each parcel&apos;s barcode. It is added to your Pending list straight away.</p>
+
+        <BarcodeScanner onCode={onCode} autoCamera />
+
+        <div className="mt-4 space-y-1.5">
+          {log.map((l, i) => (
+            <div
+              key={i}
+              className={`rounded border px-3 py-2 text-sm ${
+                !l.ok ? "border-cancelled bg-cancelled-bg text-cancelled" : l.already ? "border-line bg-paper text-ink-soft" : "border-delivered bg-delivered-bg text-delivered"
+              }`}
+            >
+              {l.ok ? (l.already ? "• " : "✓ ") : "✕ "}
+              {l.text}
+            </div>
+          ))}
+        </div>
+
+        <button onClick={onClose} className="mt-5 w-full rounded bg-navy px-4 py-3 font-mono text-xs uppercase tracking-wide text-paper">
+          Done
+        </button>
+      </div>
     </div>
   );
 }

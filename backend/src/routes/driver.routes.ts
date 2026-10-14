@@ -4,6 +4,10 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange } from "../utils/dates";
+import { z } from "zod";
+import { assignByScan } from "../services/booking.service";
+import { writeAuditLog } from "../services/audit.service";
+import { emitGlobal, emitToUser } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -43,6 +47,23 @@ router.get(
     }));
 
     res.json({ date: start.toISOString().slice(0, 10), orders: ordersWithTransferInfo });
+  })
+);
+
+// Driver scans a parcel to take it: vendor bookings are accepted to him as Pending.
+// He can't take another driver's open order, and there is no driver "unassign".
+router.post(
+  "/scan-claim",
+  asyncHandler(async (req, res) => {
+    const { code } = z.object({ code: z.string().min(1).max(100) }).parse(req.body);
+    const r = await assignByScan(code, req.user!.sub, { allowReassign: false });
+    if (r.result !== "ALREADY") {
+      await writeAuditLog({ userId: req.user!.sub, action: "DRIVER_SCAN_CLAIM", entity: "Order", entityId: r.order.id, meta: { cnNo: r.order.cnNo } });
+      emitGlobal("order:changed", { type: "created", order: r.order });
+      emitGlobal("booking:changed", { type: "accepted" });
+      emitToUser(req.user!.sub, "order:assigned", { order: r.order });
+    }
+    res.json(r);
   })
 );
 

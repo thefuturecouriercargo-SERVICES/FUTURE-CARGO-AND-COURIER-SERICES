@@ -5,7 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
-import { bookingInputSchema, createBooking, acceptBooking, assertRefFree } from "../services/booking.service";
+import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan } from "../services/booking.service";
 
 // Office side of vendor bookings: the "Awaiting Pickup" queue.
 const router = Router();
@@ -139,6 +139,30 @@ router.post(
       emitGlobal("booking:changed", { type: "accepted", ids: accepted.map((a) => a.id) });
     }
     res.json({ accepted, failed });
+  })
+);
+
+// Scan & Assign: one scanned CN → the chosen driver. Office may move open orders between drivers.
+router.post(
+  "/scan-assign",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const { code, employeeId } = z.object({ code: z.string().min(1).max(100), employeeId: z.string().min(1) }).parse(req.body);
+    const r = await assignByScan(code, employeeId, { allowReassign: true });
+    if (r.result !== "ALREADY") {
+      await writeAuditLog({
+        userId: req.user!.sub,
+        action: r.result === "ACCEPTED" ? "SCAN_ACCEPT" : "SCAN_REASSIGN",
+        entity: "Order",
+        entityId: r.order.id,
+        meta: { cnNo: r.order.cnNo, to: employeeId, from: r.previousEmployeeId },
+      });
+      emitGlobal("order:changed", { type: r.result === "ACCEPTED" ? "created" : "updated", order: r.order });
+      emitGlobal("booking:changed", { type: "accepted" });
+      emitToUser(employeeId, "order:assigned", { order: r.order });
+      if (r.previousEmployeeId) emitToUser(r.previousEmployeeId, "order:removed", { orderId: r.order.id });
+    }
+    res.json(r);
   })
 );
 

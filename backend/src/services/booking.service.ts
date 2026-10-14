@@ -137,3 +137,68 @@ export async function acceptBooking(
     return order;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Scan to assign
+// ---------------------------------------------------------------------------
+
+export type ScanAssignResult = {
+  result: "ACCEPTED" | "REASSIGNED" | "ALREADY";
+  message: string;
+  order: Awaited<ReturnType<typeof prisma.order.findFirstOrThrow>> & {
+    vendor: { name: string };
+    employee: { id: string; name: string };
+  };
+  previousEmployeeId?: string;
+};
+
+/**
+ * What a scanned CN does when assigned to a driver:
+ *  - vendor booking still Awaiting Pickup → accepted into Daily Entry for this driver
+ *  - order already this driver's            → nothing (ALREADY)
+ *  - open order of another driver           → moved to this driver (office only)
+ *  - delivered / cancelled / unknown        → refused with a clear message
+ */
+export async function assignByScan(
+  code: string,
+  employeeId: string,
+  opts: { allowReassign: boolean }
+): Promise<ScanAssignResult> {
+  const digits = code.trim().replace(/^0+(?=\d)/, "");
+  const cnNo = Number(digits);
+  if (!/^\d+$/.test(digits) || !Number.isSafeInteger(cnNo)) throw new ApiError(400, `"${code}" is not a CN number`);
+
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.role !== "DRIVER" || !employee.active) throw new ApiError(404, "Driver not found or inactive");
+
+  const include = { vendor: { select: { name: true } }, employee: { select: { id: true, name: true } } } as const;
+
+  const booking = await prisma.booking.findUnique({ where: { cnNo } });
+  if (booking?.status === "AWAITING_PICKUP") {
+    await acceptBooking(booking.id, { employeeId });
+    const order = await prisma.order.findFirstOrThrow({ where: { cnNo }, include, orderBy: { createdAt: "desc" } });
+    return { result: "ACCEPTED", message: `CN ${cnNo} added — ${order.vendor.name}, AED ${order.total}`, order };
+  }
+  if (booking?.status === "REJECTED") throw new ApiError(400, `CN ${cnNo} was rejected by the office`);
+
+  const order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
+  if (!order) throw new ApiError(404, `CN ${cnNo} not found — not booked or entered yet`);
+
+  if (order.employeeId === employeeId) {
+    return { result: "ALREADY", message: `CN ${cnNo} is already ${employee.name}'s`, order };
+  }
+  if (order.status === "DELIVERED" || order.status === "CANCELLED") {
+    throw new ApiError(400, `CN ${cnNo} is already ${order.status.toLowerCase()}`);
+  }
+  if (!opts.allowReassign) {
+    throw new ApiError(403, `CN ${cnNo} is assigned to ${order.employee.name} — ask the office to move it`);
+  }
+
+  const updated = await prisma.order.update({ where: { id: order.id }, data: { employeeId }, include });
+  return {
+    result: "REASSIGNED",
+    message: `CN ${cnNo} moved from ${order.employee.name} to ${employee.name}`,
+    order: updated,
+    previousEmployeeId: order.employeeId,
+  };
+}
