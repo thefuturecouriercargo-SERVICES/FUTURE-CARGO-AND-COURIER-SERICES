@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
+import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
 
 interface Props {
   /** When set, the form edits this booking instead of creating a new one. */
@@ -22,6 +23,27 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
   const [vendorId, setVendorId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [pasteMsg, setPasteMsg] = useState("");
+
+  function fillFromMessage() {
+    const p = parseWhatsappOrder(paste);
+    const filled: string[] = [];
+    const next = { ...form };
+    if (p.customerName) { next.customerName = p.customerName; filled.push("name"); }
+    if (p.customerPhone) { next.customerPhone = p.customerPhone; filled.push("phone"); }
+    if (p.address) { next.address = p.address; filled.push("address"); }
+    if (p.emirate && EMIRATES.includes(p.emirate)) { next.emirate = p.emirate; filled.push("emirate"); }
+    if (p.items) { next.items = p.items; filled.push("items"); }
+    if (p.codAmount !== undefined) { next.codAmount = String(p.codAmount); filled.push("amount"); }
+    if (p.notes) { next.notes = p.notes; filled.push("notes"); }
+    setForm(next);
+    setPasteMsg(
+      filled.length
+        ? `Filled ${filled.join(", ")}. Please check every field before saving.`
+        : "Couldn't recognise anything — please type the details in."
+    );
+  }
 
   useEffect(() => {
     if (editing) {
@@ -71,7 +93,11 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         },
         vendors ? vendorId : undefined
       );
-      if (!editing) setForm({ ...EMPTY, emirate: form.emirate });
+      if (!editing) {
+        setForm({ ...EMPTY, emirate: form.emirate });
+        setPaste("");
+        setPasteMsg("");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
     } finally {
@@ -84,6 +110,30 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
       <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">
         {editing ? `Edit consignment CN ${editing.cnNo}` : "New consignment"}
       </h2>
+
+      {!editing && (
+        <div className="mb-4 border border-dashed border-brass bg-paper p-3">
+          <label className={labelCls}>Paste WhatsApp order (optional)</label>
+          <textarea
+            value={paste}
+            onChange={(e) => setPaste(e.target.value)}
+            rows={4}
+            className={input}
+            placeholder={"Paste the customer's WhatsApp message here, e.g.\nName: Fatima\nPhone: 050 123 4567\nAddress: Al Nahda, Sharjah\nTotal: 250 AED"}
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={fillFromMessage}
+              disabled={!paste.trim()}
+              className="rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-40"
+            >
+              ⤵ Fill form from message
+            </button>
+            {pasteMsg && <span className="text-xs text-ink-soft">{pasteMsg}</span>}
+          </div>
+        </div>
+      )}
 
       {vendors && (
         <div className="mb-3">
