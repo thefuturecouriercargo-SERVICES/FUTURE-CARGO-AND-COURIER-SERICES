@@ -86,3 +86,46 @@ export interface CashClosing {
 export const EMIRATES = ["DUBAI", "SHARJAH", "ABUDHABI", "AL AIN", "AJMAN", "RAS AL KHAIMAH", "FUJAIRAH", "UMM AL QUWAIN", "EXCHANGED", "OTHER"];
 export const STATUSES: OrderStatus[] = ["PENDING", "DELIVERED", "TRANSFER", "CANCELLED"];
 export const PAYMENTS: PaymentMode[] = ["CASH", "BANK"];
+
+export type BookingStatus = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED";
+
+/** A consignment booked through the Vendor Portal (or by the office for a vendor). */
+export interface Booking {
+  id: string;
+  vendorId: string;
+  vendor: { id: string; name: string; deliveryCharge?: number };
+  cnNo: number;
+  cnSource: "SYSTEM" | "VENDOR";
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  emirate: string;
+  items?: string | null;
+  codAmount: number;
+  notes?: string | null;
+  status: BookingStatus;
+  rejectReason?: string | null;
+  createdBy: "VENDOR" | "ADMIN";
+  orderId?: string | null;
+  order?: {
+    id: string;
+    status: OrderStatus;
+    date: string;
+    resolvedAt?: string | null;
+    employee: { id?: string; name: string };
+  } | null;
+  labelPrintedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookingInput {
+  cnNo?: number;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  emirate: string;
+  items?: string;
+  codAmount: number;
+  notes?: string;
+}

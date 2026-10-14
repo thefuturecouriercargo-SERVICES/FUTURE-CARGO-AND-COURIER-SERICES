@@ -17,6 +17,7 @@ import agentCreditRoutes from "./agentCredit.routes";
 import vendorAuthRoutes from "./vendorAuth.routes";
 import vendorPortalRoutes from "./vendorPortal.routes";
 import scanRoutes from "./scan.routes";
+import bookingRoutes from "./booking.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -39,4 +40,5 @@ router.use("/agent-credit", agentCreditRoutes);
 router.use("/vendor-auth", vendorAuthRoutes);
 router.use("/vendor-portal", vendorPortalRoutes);
 router.use("/scan", scanRoutes);
+router.use("/bookings", bookingRoutes);
 export default router;

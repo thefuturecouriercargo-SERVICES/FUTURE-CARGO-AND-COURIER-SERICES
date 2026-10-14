@@ -3,6 +3,11 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticateVendor } from "../middleware/auth";
 import { parseDateParam, monthRange, formatDate, dayRange } from "../utils/dates";
+import { z } from "zod";
+import { ApiError } from "../utils/asyncHandler";
+import { bookingInputSchema, createBooking, assertCnFree } from "../services/booking.service";
+import { writeAuditLog } from "../services/audit.service";
+import { emitGlobal } from "../lib/socket";
 
 const router = Router();
 router.use(authenticateVendor);
@@ -203,6 +208,100 @@ router.get(
       orderBy: { date: "desc" },
     });
     res.json(payments);
+  })
+);
+
+// ---- Bookings: consignments the vendor enters here, with a printable label ----
+
+const BOOKING_INCLUDE = {
+  vendor: { select: { id: true, name: true } },
+  order: { select: { id: true, status: true, date: true, resolvedAt: true, employee: { select: { name: true } } } },
+} as const;
+
+router.get(
+  "/bookings",
+  asyncHandler(async (req, res) => {
+    const vendorId = req.vendor!.sub;
+    const ids = typeof req.query.ids === "string" && req.query.ids ? req.query.ids.split(",") : undefined;
+    const status = req.query.status as string | undefined;
+    const bookings = await prisma.booking.findMany({
+      where: {
+        vendorId,
+        ...(ids ? { id: { in: ids } } : {}),
+        ...(status ? { status: status as "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" } : {}),
+      },
+      include: BOOKING_INCLUDE,
+      orderBy: { createdAt: "desc" },
+      take: ids ? undefined : 300,
+    });
+    res.json({ bookings });
+  })
+);
+
+router.post(
+  "/bookings",
+  asyncHandler(async (req, res) => {
+    const input = bookingInputSchema.parse(req.body);
+    const booking = await createBooking(req.vendor!.sub, input, "VENDOR");
+    await writeAuditLog({ action: "BOOKING_CREATE", entity: "Booking", entityId: booking.id, meta: { vendor: booking.vendor.name, cnNo: booking.cnNo, by: "VENDOR" } });
+    emitGlobal("booking:changed", { type: "created", id: booking.id });
+    res.status(201).json(booking);
+  })
+);
+
+async function ownAwaitingBooking(vendorId: string, id: string) {
+  const booking = await prisma.booking.findFirst({ where: { id, vendorId } });
+  if (!booking) throw new ApiError(404, "Booking not found");
+  if (booking.status !== "AWAITING_PICKUP") {
+    throw new ApiError(400, "This consignment has already been picked up by Future Courier — contact the office to change it");
+  }
+  return booking;
+}
+
+router.put(
+  "/bookings/:id",
+  asyncHandler(async (req, res) => {
+    const existing = await ownAwaitingBooking(req.vendor!.sub, req.params.id);
+    const input = bookingInputSchema.parse(req.body);
+    // The CN can only be changed on the vendor's own numbers; a generated one stays.
+    const cnChange = existing.cnSource === "VENDOR" && input.cnNo && input.cnNo !== existing.cnNo ? input.cnNo : undefined;
+    if (cnChange) await assertCnFree(cnChange, existing.id);
+    const booking = await prisma.booking.update({
+      where: { id: existing.id },
+      data: {
+        ...(cnChange ? { cnNo: cnChange } : {}),
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        address: input.address,
+        emirate: input.emirate.toUpperCase(),
+        items: input.items || null,
+        codAmount: input.codAmount,
+        notes: input.notes || null,
+      },
+      include: BOOKING_INCLUDE,
+    });
+    emitGlobal("booking:changed", { type: "updated", id: booking.id });
+    res.json(booking);
+  })
+);
+
+router.delete(
+  "/bookings/:id",
+  asyncHandler(async (req, res) => {
+    const existing = await ownAwaitingBooking(req.vendor!.sub, req.params.id);
+    await prisma.booking.delete({ where: { id: existing.id } });
+    await writeAuditLog({ action: "BOOKING_DELETE", entity: "Booking", entityId: existing.id, meta: { cnNo: existing.cnNo, by: "VENDOR" } });
+    emitGlobal("booking:changed", { type: "deleted", id: existing.id });
+    res.json({ deleted: true });
+  })
+);
+
+router.post(
+  "/bookings/mark-printed",
+  asyncHandler(async (req, res) => {
+    const { ids } = z.object({ ids: z.array(z.string()).min(1) }).parse(req.body);
+    await prisma.booking.updateMany({ where: { id: { in: ids }, vendorId: req.vendor!.sub }, data: { labelPrintedAt: new Date() } });
+    res.json({ ok: true });
   })
 );
 

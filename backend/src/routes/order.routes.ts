@@ -15,6 +15,17 @@ const STATUSES = ["PENDING", "DELIVERED", "TRANSFER", "CANCELLED"] as const;
 const PAYMENTS = ["CASH", "BANK"] as const;
 type Status = (typeof STATUSES)[number];
 
+/** A CN booked through the Vendor Portal must be accepted from Awaiting Pickup, not re-typed. */
+async function assertCnNotBooked(cnNo: number) {
+  const booking = await prisma.booking.findUnique({ where: { cnNo }, include: { vendor: { select: { name: true } } } });
+  if (booking && booking.status !== "ACCEPTED") {
+    throw new ApiError(
+      409,
+      `CN No. ${cnNo} is a ${booking.vendor.name} booking (${booking.customerName}) — accept it from Awaiting Pickup instead`
+    );
+  }
+}
+
 /**
  * Fields that must change alongside a status change:
  *  - resolvedAt: stamped when an order becomes Delivered/Cancelled, cleared when
@@ -157,6 +168,7 @@ const existingCn = await prisma.order.findFirst({ where: { cnNo: data.cnNo } });
 if (existingCn) {
   throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
 }
+await assertCnNotBooked(data.cnNo);
 
 const order = await prisma.$transaction(async (tx) => {
       const lastSl = await tx.order.aggregate({
@@ -227,6 +239,7 @@ if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
   if (existingCn) {
     throw new ApiError(409, `CN No. ${data.cnNo} already exists (dated ${existingCn.date.toISOString().slice(0, 10)}, ${existingCn.status})`);
   }
+  await assertCnNotBooked(data.cnNo);
 }
 
 // Status side effects first; an explicit remarks value in the edit form still wins.
@@ -335,6 +348,9 @@ router.delete(
   "/:id",
   requireRole("SUPER_ADMIN"),
   asyncHandler(async (req, res) => {
+    // If this consignment came from a vendor booking, put the booking back in
+    // Awaiting Pickup rather than leaving it marked accepted with no order.
+    await prisma.booking.updateMany({ where: { orderId: req.params.id }, data: { status: "AWAITING_PICKUP", orderId: null } });
     await prisma.order.delete({ where: { id: req.params.id } });
     await writeAuditLog({ userId: req.user!.sub, action: "DELETE", entity: "Order", entityId: req.params.id });
     emitGlobal("order:changed", { type: "deleted", id: req.params.id });
