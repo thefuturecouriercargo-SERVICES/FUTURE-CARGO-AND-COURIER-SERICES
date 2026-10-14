@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/asyncHandler";
 import { dayRange } from "../utils/dates";
@@ -9,6 +10,15 @@ import { dayRange } from "../utils/dates";
  * Override with CN_START in Railway if ever needed.
  */
 export const CN_START = parseInt(process.env.CN_START || "900001", 10) || 900001;
+
+/**
+ * Transaction-scoped lock taken before creating any Order. Serialises order
+ * creation so the "is this CN already used?" check and the insert can't race.
+ * Released automatically when the transaction ends.
+ */
+export async function lockOrderCreation(tx: Prisma.TransactionClient) {
+  await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(7340001)");
+}
 
 export const bookingInputSchema = z.object({
   // Optional — the vendor's own order/bill number, kept as a reference only.
@@ -25,6 +35,8 @@ export const bookingInputSchema = z.object({
   items: z.string().trim().max(500).optional(),
   codAmount: z.number().int().min(0, "COD amount can't be negative"),
   notes: z.string().trim().max(500).optional(),
+  // Set after the user saw the "possible duplicate" warning and chose to save anyway.
+  confirmDuplicate: z.boolean().optional(),
 });
 export type BookingInput = z.infer<typeof bookingInputSchema>;
 
@@ -62,9 +74,41 @@ export async function assertRefFree(vendorId: string, vendorRef: string | undefi
   if (dup) throw new ApiError(409, `Order No. ${vendorRef} is already entered (CN ${dup.cnNo})`);
 }
 
+const phoneDigits = (p: string) => p.replace(/\D/g, "").replace(/^(?:00)?971/, "0").replace(/^(?!0)/, "0");
+
+/**
+ * The same WhatsApp order pasted twice would get two CNs. Warn (409 with
+ * code POSSIBLE_DUPLICATE) when this vendor already has a non-rejected booking
+ * in the last 24h with the same customer phone and the same COD amount.
+ */
+async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, ignoreBookingId?: string) {
+  if (input.confirmDuplicate) return;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recent = await prisma.booking.findMany({
+    where: {
+      vendorId,
+      codAmount: input.codAmount,
+      status: { not: "REJECTED" },
+      createdAt: { gte: since },
+      ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}),
+    },
+    select: { cnNo: true, customerPhone: true, customerName: true },
+  });
+  const phone = phoneDigits(input.customerPhone);
+  const hit = recent.find((b) => phoneDigits(b.customerPhone) === phone);
+  if (hit) {
+    throw new ApiError(
+      409,
+      `Possible duplicate: CN ${hit.cnNo} (${hit.customerName}) has the same phone and amount in the last 24 hours.`,
+      { code: "POSSIBLE_DUPLICATE", cnNo: hit.cnNo }
+    );
+  }
+}
+
 /** Creates a booking with the next CN from our own range. Retries on a race. */
 export async function createBooking(vendorId: string, input: BookingInput, createdBy: "VENDOR" | "ADMIN") {
   await assertRefFree(vendorId, input.vendorRef || undefined);
+  await assertNotLikelyDuplicate(vendorId, input);
   const base = {
     vendorId,
     vendorRef: input.vendorRef || null,
@@ -116,6 +160,16 @@ export async function acceptBooking(
   const { date } = dayRange(opts.date);
 
   return prisma.$transaction(async (tx) => {
+    // One order creation at a time (shared with Daily Entry), so two people
+    // scanning/accepting the same parcel at once can never create it twice.
+    await lockOrderCreation(tx);
+
+    // Re-check inside the lock: claim the booking only if it's still waiting.
+    const claimed = await tx.booking.updateMany({ where: { id: booking.id, status: "AWAITING_PICKUP" }, data: { status: "ACCEPTED" } });
+    if (claimed.count === 0) throw new ApiError(409, `CN No. ${booking.cnNo} was just accepted by someone else`);
+    const dup = await tx.order.findFirst({ where: { cnNo: booking.cnNo }, select: { id: true } });
+    if (dup) throw new ApiError(409, `CN No. ${booking.cnNo} is already in Daily Entry`);
+
     const lastSl = await tx.order.aggregate({ where: { date }, _max: { slNo: true } });
     const order = await tx.order.create({
       data: {
@@ -133,7 +187,7 @@ export async function acceptBooking(
       },
       include: { vendor: true, employee: { select: { id: true, name: true } } },
     });
-    await tx.booking.update({ where: { id: booking.id }, data: { status: "ACCEPTED", orderId: order.id } });
+    await tx.booking.update({ where: { id: booking.id }, data: { orderId: order.id } });
     return order;
   });
 }

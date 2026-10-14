@@ -135,6 +135,7 @@ export interface Booking {
 
 export interface BookingInput {
   vendorRef?: string;
+  confirmDuplicate?: boolean;
   customerName: string;
   customerPhone: string;
   address: string;

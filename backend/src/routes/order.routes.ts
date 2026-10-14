@@ -7,6 +7,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange, parseDateParam } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
+import { lockOrderCreation } from "../services/booking.service";
 
 const router = Router();
 router.use(authenticate);
@@ -171,6 +172,11 @@ if (existingCn) {
 await assertCnNotBooked(data.cnNo);
 
 const order = await prisma.$transaction(async (tx) => {
+      // Same lock as vendor-booking accepts: re-check the CN inside it so two
+      // simultaneous entries of one CN can't both get through.
+      await lockOrderCreation(tx);
+      const dupCn = await tx.order.findFirst({ where: { cnNo: data.cnNo }, select: { id: true } });
+      if (dupCn) throw new ApiError(409, `CN No. ${data.cnNo} already exists`);
       const lastSl = await tx.order.aggregate({
         where: { date },
         _max: { slNo: true },

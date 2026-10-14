@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
+import { ApiClientError } from "@/lib/api";
 
 interface Props {
   /** When set, the form edits this booking instead of creating a new one. */
@@ -74,21 +75,34 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     const cod = Number(form.codAmount);
     if (form.codAmount.trim() === "" || Number.isNaN(cod) || cod < 0) return setError("Enter the COD amount (0 if prepaid).");
 
+    const payload: BookingInput = {
+      vendorRef: form.vendorRef.trim() || undefined,
+      customerName: form.customerName.trim(),
+      customerPhone: form.customerPhone.trim(),
+      address: form.address.trim(),
+      emirate: form.emirate,
+      items: form.items.trim() || undefined,
+      codAmount: Math.round(cod),
+      notes: form.notes.trim() || undefined,
+    };
+
     setSaving(true);
     try {
-      await onSubmit(
-        {
-          vendorRef: form.vendorRef.trim() || undefined,
-          customerName: form.customerName.trim(),
-          customerPhone: form.customerPhone.trim(),
-          address: form.address.trim(),
-          emirate: form.emirate,
-          items: form.items.trim() || undefined,
-          codAmount: Math.round(cod),
-          notes: form.notes.trim() || undefined,
-        },
-        vendors ? vendorId : undefined
-      );
+      try {
+        await onSubmit(payload, vendors ? vendorId : undefined);
+      } catch (err) {
+        // Same phone + amount already entered recently → ask before saving a second CN.
+        const details = err instanceof ApiClientError ? (err.details as { code?: string } | undefined) : undefined;
+        if (details?.code === "POSSIBLE_DUPLICATE") {
+          if (!window.confirm(`${err instanceof Error ? err.message : "Possible duplicate."}\n\nIs this a different order? Press OK to save it anyway, or Cancel to stop.`)) {
+            setError("Not saved — looks like a duplicate.");
+            return;
+          }
+          await onSubmit({ ...payload, confirmDuplicate: true }, vendors ? vendorId : undefined);
+        } else {
+          throw err;
+        }
+      }
       if (!editing) {
         setForm({ ...EMPTY, emirate: form.emirate });
         setPaste("");
