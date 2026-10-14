@@ -17,6 +17,21 @@ interface Match {
   status: string;
 }
 
+interface BookingMatch {
+  id: string;
+  cnNo: number;
+  vendorRef?: string | null;
+  vendor: string;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  emirate: string;
+  items?: string | null;
+  codAmount: number;
+  notes?: string | null;
+  status: string;
+}
+
 interface ScanResult {
   at: Date;
   source: "Camera" | "Photo" | "Scanner / typed";
@@ -24,6 +39,7 @@ interface ScanResult {
   text: string;
   candidates: number[];
   matches: Match[];
+  bookings: BookingMatch[];
   lookupError?: string;
 }
 
@@ -89,15 +105,17 @@ export default function ScanTestPage() {
   async function record(source: ScanResult["source"], format: string, text: string) {
     let candidates: number[] = [];
     let matches: Match[] = [];
+    let bookings: BookingMatch[] = [];
     let lookupError: string | undefined;
     try {
-      const r = await apiFetch<{ candidates: number[]; matches: Match[] }>("/scan/lookup", { query: { code: text } });
+      const r = await apiFetch<{ candidates: number[]; matches: Match[]; bookings?: BookingMatch[] }>("/scan/lookup", { query: { code: text } });
       candidates = r.candidates;
       matches = r.matches;
+      bookings = r.bookings ?? [];
     } catch (err) {
       lookupError = err instanceof Error ? err.message : "Lookup failed";
     }
-    setResults((prev) => [{ at: new Date(), source, format, text, candidates, matches, lookupError }, ...prev].slice(0, 30));
+    setResults((prev) => [{ at: new Date(), source, format, text, candidates, matches, bookings, lookupError }, ...prev].slice(0, 30));
   }
 
   async function startCamera() {
@@ -253,8 +271,10 @@ export default function ScanTestPage() {
             <dd>
               {latest.lookupError ? (
                 <span className="text-cancelled">{latest.lookupError}</span>
+              ) : latest.matches.length === 0 && latest.bookings.length === 0 ? (
+                <span className="text-ink-soft">No consignment or vendor booking with this number yet.</span>
               ) : latest.matches.length === 0 ? (
-                <span className="text-ink-soft">No consignment with this CN yet.</span>
+                <span className="text-ink-soft">Not in Daily Entry yet.</span>
               ) : (
                 <div className="space-y-1.5">
                   {latest.matches.map((m) => (
@@ -266,6 +286,31 @@ export default function ScanTestPage() {
                 </div>
               )}
             </dd>
+
+            {latest.bookings.length > 0 && (
+              <>
+                <dt className="font-mono text-[10px] uppercase text-ink-soft">Vendor booking</dt>
+                <dd className="space-y-1.5">
+                  {latest.bookings.map((b) => (
+                    <div key={b.id} className="rounded border border-brass bg-paper px-2 py-1.5 text-sm">
+                      <div>
+                        <b className="font-mono">CN {b.cnNo}</b>
+                        {b.vendorRef && <span className="text-ink-soft"> · their No. {b.vendorRef}</span>} · {b.vendor} ·{" "}
+                        <b>{b.status === "AWAITING_PICKUP" ? "Awaiting pickup" : b.status === "ACCEPTED" ? "Accepted" : "Rejected"}</b>
+                      </div>
+                      <div>
+                        <b>{b.customerName}</b> · {b.customerPhone} · <b>AED {fmtNumber(b.codAmount)}</b>
+                      </div>
+                      <div className="text-ink-soft">
+                        {b.address}, {b.emirate}
+                      </div>
+                      {b.items && <div className="text-ink-soft">Items: {b.items}</div>}
+                      {b.notes && <div className="text-ink-soft">Note: {b.notes}</div>}
+                    </div>
+                  ))}
+                </dd>
+              </>
+            )}
           </dl>
         </div>
       )}
@@ -289,7 +334,9 @@ export default function ScanTestPage() {
                     <td className="whitespace-nowrap font-mono text-xs">{r.at.toLocaleTimeString("en-GB")}</td>
                     <td className="font-mono text-xs">{r.format}</td>
                     <td className="max-w-[320px] break-all font-mono text-xs">{visible(r.text)}</td>
-                    <td className="text-xs">{r.matches.length ? r.matches.map((m) => `CN ${m.cnNo} (${m.vendor})`).join(", ") : "—"}</td>
+                    <td className="text-xs">
+                      {[...r.matches.map((m) => `CN ${m.cnNo} (${m.vendor})`), ...r.bookings.map((b) => `Booking CN ${b.cnNo} — ${b.customerName}`)].join(", ") || "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

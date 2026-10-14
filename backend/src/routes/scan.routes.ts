@@ -30,9 +30,37 @@ router.get(
         })
       : [];
 
+    // Vendor bookings: by our CN, or by the vendor's own order No. (what their barcode holds).
+    const bookings = await prisma.booking.findMany({
+      where: {
+        OR: [
+          ...(candidates.length ? [{ cnNo: { in: candidates } }] : []),
+          { vendorRef: code },
+          ...(candidates.length ? [{ vendorRef: { in: candidates.map(String) } }] : []),
+        ],
+      },
+      include: { vendor: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+
     res.json({
       code,
       candidates,
+      bookings: bookings.map((b) => ({
+        id: b.id,
+        cnNo: b.cnNo,
+        vendorRef: b.vendorRef,
+        vendor: b.vendor.name,
+        customerName: b.customerName,
+        customerPhone: b.customerPhone,
+        address: b.address,
+        emirate: b.emirate,
+        items: b.items,
+        codAmount: b.codAmount,
+        notes: b.notes,
+        status: b.status,
+      })),
       matches: orders.map((o) => ({
         id: o.id,
         cnNo: o.cnNo,

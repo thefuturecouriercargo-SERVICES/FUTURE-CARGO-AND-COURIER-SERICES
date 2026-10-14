@@ -5,7 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
-import { bookingInputSchema, createBooking, acceptBooking, assertCnFree } from "../services/booking.service";
+import { bookingInputSchema, createBooking, acceptBooking, assertRefFree } from "../services/booking.service";
 
 // Office side of vendor bookings: the "Awaiting Pickup" queue.
 const router = Router();
@@ -45,10 +45,12 @@ router.get(
   "/by-cn/:cn",
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const cnNo = Number(req.params.cn);
-    if (!Number.isInteger(cnNo)) throw new ApiError(400, "Invalid CN");
-    const booking = await prisma.booking.findUnique({ where: { cnNo }, include: INCLUDE });
-    if (!booking) throw new ApiError(404, "No booking with that CN");
+    const code = req.params.cn.trim();
+    const cnNo = Number(code);
+    const booking =
+      (Number.isSafeInteger(cnNo) ? await prisma.booking.findUnique({ where: { cnNo }, include: INCLUDE }) : null) ??
+      (await prisma.booking.findFirst({ where: { vendorRef: code }, include: INCLUDE, orderBy: { createdAt: "desc" } }));
+    if (!booking) throw new ApiError(404, "No booking with that CN or order No.");
     res.json(booking);
   })
 );
@@ -78,12 +80,11 @@ router.put(
     if (!existing) throw new ApiError(404, "Booking not found");
     if (existing.status === "ACCEPTED") throw new ApiError(400, "Already in Daily Entry — edit the consignment there");
     const input = bookingInputSchema.parse(req.body);
-    const cnChange = input.cnNo && input.cnNo !== existing.cnNo ? input.cnNo : undefined;
-    if (cnChange) await assertCnFree(cnChange, existing.id);
+    await assertRefFree(existing.vendorId, input.vendorRef || undefined, existing.id);
     const booking = await prisma.booking.update({
       where: { id: existing.id },
       data: {
-        ...(cnChange ? { cnNo: cnChange, cnSource: "VENDOR" } : {}),
+        vendorRef: input.vendorRef || null,
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         address: input.address,

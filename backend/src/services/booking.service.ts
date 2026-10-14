@@ -11,8 +11,8 @@ import { dayRange } from "../utils/dates";
 export const CN_START = parseInt(process.env.CN_START || "900001", 10) || 900001;
 
 export const bookingInputSchema = z.object({
-  // Optional — a vendor's own bill/barcode number. Blank → we generate one.
-  cnNo: z.number().int().positive().optional(),
+  // Optional — the vendor's own order/bill number, kept as a reference only.
+  vendorRef: z.string().trim().max(50).optional(),
   customerName: z.string().trim().min(1, "Customer name is required").max(120),
   customerPhone: z
     .string()
@@ -52,10 +52,22 @@ async function nextSystemCn(): Promise<number> {
   return Math.max(CN_START - 1, maxBooking._max.cnNo ?? 0, maxOrder._max.cnNo ?? 0) + 1;
 }
 
-/** Creates a booking, generating the CN when none is given. Retries on a race. */
+/** 409 if this vendor already has a booking with the same reference number. */
+export async function assertRefFree(vendorId: string, vendorRef: string | undefined, ignoreBookingId?: string) {
+  if (!vendorRef) return;
+  const dup = await prisma.booking.findFirst({
+    where: { vendorId, vendorRef, ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}) },
+    select: { cnNo: true },
+  });
+  if (dup) throw new ApiError(409, `Order No. ${vendorRef} is already entered (CN ${dup.cnNo})`);
+}
+
+/** Creates a booking with the next CN from our own range. Retries on a race. */
 export async function createBooking(vendorId: string, input: BookingInput, createdBy: "VENDOR" | "ADMIN") {
+  await assertRefFree(vendorId, input.vendorRef || undefined);
   const base = {
     vendorId,
+    vendorRef: input.vendorRef || null,
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     address: input.address,
@@ -66,18 +78,17 @@ export async function createBooking(vendorId: string, input: BookingInput, creat
     createdBy,
   };
 
-  if (input.cnNo) {
-    await assertCnFree(input.cnNo);
-    return prisma.booking.create({ data: { ...base, cnNo: input.cnNo, cnSource: "VENDOR" }, include: { vendor: true } });
-  }
-
   for (let attempt = 0; attempt < 5; attempt++) {
     const cnNo = await nextSystemCn();
     try {
       return await prisma.booking.create({ data: { ...base, cnNo, cnSource: "SYSTEM" }, include: { vendor: true } });
     } catch (err) {
       // Unique clash: two bookings grabbed the same number at once — try the next one.
-      if ((err as { code?: string }).code === "P2002") continue;
+      const e = err as { code?: string; meta?: { target?: string[] | string } };
+      if (e.code === "P2002" && String(e.meta?.target ?? "").includes("vendorRef")) {
+        throw new ApiError(409, `Order No. ${input.vendorRef} is already entered`);
+      }
+      if (e.code === "P2002") continue;
       throw err;
     }
   }

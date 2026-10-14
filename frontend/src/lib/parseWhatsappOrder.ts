@@ -14,6 +14,7 @@ export interface ParsedOrder {
   items?: string;
   codAmount?: number;
   notes?: string;
+  vendorRef?: string;
 }
 
 const EMIRATE_WORDS: [RegExp, string][] = [
@@ -111,6 +112,13 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       } else if (!out[label.key]) {
         (out as Record<string, string>)[label.key] = value;
       }
+      continue;
+    }
+
+    // "Order #20308", "Order No: 20308", "Invoice 20308" → the vendor's own reference.
+    const ref = line.match(/^(?:new\s*)?(?:order|invoice|bill|inv)\s*(?:no\.?|number|id|#)?\s*[:#\-]?\s*#?\s*([A-Za-z]{0,4}\d{3,})\s*$/i);
+    if (ref) {
+      if (!out.vendorRef) out.vendorRef = ref[1];
       continue;
     }
 

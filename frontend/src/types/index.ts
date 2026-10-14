@@ -96,6 +96,7 @@ export interface Booking {
   vendor: { id: string; name: string; deliveryCharge?: number };
   cnNo: number;
   cnSource: "SYSTEM" | "VENDOR";
+  vendorRef?: string | null;
   customerName: string;
   customerPhone: string;
   address: string;
@@ -120,7 +121,7 @@ export interface Booking {
 }
 
 export interface BookingInput {
-  cnNo?: number;
+  vendorRef?: string;
   customerName: string;
   customerPhone: string;
   address: string;

@@ -13,7 +13,7 @@ interface Props {
   onCancelEdit?: () => void;
 }
 
-const EMPTY = { cnNo: "", customerName: "", customerPhone: "", address: "", emirate: "DUBAI", items: "", codAmount: "", notes: "" };
+const EMPTY = { vendorRef: "", customerName: "", customerPhone: "", address: "", emirate: "DUBAI", items: "", codAmount: "", notes: "" };
 
 const input = "w-full rounded border border-line px-2.5 py-2 text-sm";
 const labelCls = "mb-1 block font-mono text-[10px] uppercase text-ink-soft";
@@ -37,6 +37,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (p.items) { next.items = p.items; filled.push("items"); }
     if (p.codAmount !== undefined) { next.codAmount = String(p.codAmount); filled.push("amount"); }
     if (p.notes) { next.notes = p.notes; filled.push("notes"); }
+    if (p.vendorRef) { next.vendorRef = p.vendorRef; filled.push("order No."); }
     setForm(next);
     setPasteMsg(
       filled.length
@@ -48,7 +49,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
   useEffect(() => {
     if (editing) {
       setForm({
-        cnNo: String(editing.cnNo),
+        vendorRef: editing.vendorRef ?? "",
         customerName: editing.customerName,
         customerPhone: editing.customerPhone,
         address: editing.address,
@@ -66,8 +67,6 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
 
   const set = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
-  // A generated CN can't be changed by the vendor; their own bill number can.
-  const cnLocked = Boolean(editing && editing.cnSource === "SYSTEM" && !vendors);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -75,14 +74,12 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (vendors && !vendorId) return setError("Choose a vendor.");
     const cod = Number(form.codAmount);
     if (form.codAmount.trim() === "" || Number.isNaN(cod) || cod < 0) return setError("Enter the COD amount (0 if prepaid).");
-    const cn = form.cnNo.trim() ? Number(form.cnNo.trim()) : undefined;
-    if (cn !== undefined && (!Number.isInteger(cn) || cn <= 0)) return setError("CN / bill number must be digits only.");
 
     setSaving(true);
     try {
       await onSubmit(
         {
-          ...(cn && !cnLocked ? { cnNo: cn } : {}),
+          vendorRef: form.vendorRef.trim() || undefined,
           customerName: form.customerName.trim(),
           customerPhone: form.customerPhone.trim(),
           address: form.address.trim(),
@@ -187,20 +184,17 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
           <input value={form.notes} onChange={set("notes")} className={input} maxLength={500} placeholder="e.g. call before coming, deliver after 5pm" />
         </div>
         <div className="sm:col-span-2">
-          <label className={labelCls}>Your bill / barcode number (optional)</label>
+          <label className={labelCls}>Your order / bill No. (optional)</label>
           <input
-            value={form.cnNo}
-            onChange={set("cnNo")}
-            className={`${input} font-mono ${cnLocked ? "bg-paper-2 text-ink-soft" : ""}`}
-            inputMode="numeric"
-            disabled={cnLocked}
-            placeholder="Leave blank and we'll generate one"
+            value={form.vendorRef}
+            onChange={set("vendorRef")}
+            className={`${input} font-mono`}
+            maxLength={50}
+            placeholder="e.g. 20308 — the number on your own bill or barcode"
           />
-          {!cnLocked && (
-            <p className="mt-1 text-[11px] text-ink-soft">
-              If you already print your own bill with a number on it, enter that number here. Otherwise leave it blank.
-            </p>
-          )}
+          <p className="mt-1 text-[11px] text-ink-soft">
+            Kept as your reference only. Future Courier gives every consignment its own CN number after you save.
+          </p>
         </div>
       </div>
 

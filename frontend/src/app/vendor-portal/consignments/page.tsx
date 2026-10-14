@@ -47,7 +47,7 @@ function ConsignmentsContent() {
     const q = search.trim().toLowerCase();
     return bookings.filter((b) => {
       if (filter && b.status !== filter) return false;
-      if (q && !`${b.cnNo} ${b.customerName} ${b.customerPhone}`.toLowerCase().includes(q)) return false;
+      if (q && !`${b.cnNo} ${b.vendorRef ?? ""} ${b.customerName} ${b.customerPhone}`.toLowerCase().includes(q)) return false;
       return true;
     });
   }, [bookings, filter, search]);
@@ -120,10 +120,12 @@ function ConsignmentsContent() {
         </p>
 
         {justSaved && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-delivered bg-delivered-bg p-3 text-sm">
-            <span>
-              ✓ Saved <b className="font-mono">CN {justSaved.cnNo}</b> — {justSaved.customerName}
-            </span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
+            <div>
+              <div className="text-sm text-delivered">✓ Saved — {justSaved.customerName}{justSaved.vendorRef ? ` (your No. ${justSaved.vendorRef})` : ""}</div>
+              <div className="mt-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft">Write this CN on the parcel</div>
+              <div className="font-mono text-4xl font-bold tracking-wider text-navy">{justSaved.cnNo}</div>
+            </div>
             <span className="flex gap-2">
               <button onClick={() => printLabels([justSaved.id])} className="rounded bg-navy px-3 py-1.5 font-mono text-[11px] uppercase text-paper hover:bg-navy-2">
                 🖨 Print label
@@ -157,7 +159,7 @@ function ConsignmentsContent() {
               </button>
             ))}
             <input
-              placeholder="Search CN, name, phone…"
+              placeholder="Search CN, your No., name, phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="ml-auto rounded border border-line px-2.5 py-1.5 text-sm"
@@ -212,7 +214,10 @@ function ConsignmentsContent() {
                       <td>
                         <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
-                      <td className="font-mono">{b.cnNo}</td>
+                      <td className="font-mono">
+                        <b className="text-base">{b.cnNo}</b>
+                        {b.vendorRef && <div className="text-[10px] text-ink-soft">Your No. {b.vendorRef}</div>}
+                      </td>
                       <td>
                         <div className="font-medium">{b.customerName}</div>
                         <div className="text-xs text-ink-soft">{b.customerPhone}</div>

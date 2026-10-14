@@ -69,7 +69,7 @@ export default function AwaitingPickupPage() {
       .filter((b) => {
         if (filter && b.status !== filter) return false;
         if (vendorFilter && b.vendorId !== vendorFilter) return false;
-        if (q && !`${b.cnNo} ${b.customerName} ${b.customerPhone} ${b.vendor.name}`.toLowerCase().includes(q)) return false;
+        if (q && !`${b.cnNo} ${b.vendorRef ?? ""} ${b.customerName} ${b.customerPhone} ${b.vendor.name}`.toLowerCase().includes(q)) return false;
         return true;
       })
       .sort((a, b) =>
@@ -90,18 +90,19 @@ export default function AwaitingPickupPage() {
 
   function onScan(e: FormEvent) {
     e.preventDefault();
-    const cn = Number(scan.trim());
+    const code = scan.trim();
     setScan("");
-    if (!cn) return;
-    const b = bookings.find((x) => x.cnNo === cn);
+    if (!code) return;
+    const cn = Number(code);
+    const b = bookings.find((x) => x.cnNo === cn) ?? bookings.find((x) => x.vendorRef === code);
     if (!b) {
-      setMsg({ ok: false, text: `CN ${cn} is not a vendor booking.` });
+      setMsg({ ok: false, text: `${code} is not a vendor booking (checked CN and vendor order No.).` });
     } else if (b.status !== "AWAITING_PICKUP") {
-      setMsg({ ok: false, text: `CN ${cn} (${b.customerName}) is already ${b.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
+      setMsg({ ok: false, text: `CN ${b.cnNo} (${b.customerName}) is already ${b.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
     } else {
       setFilter("AWAITING_PICKUP");
       setSelected((prev) => new Set(prev).add(b.id));
-      setMsg({ ok: true, text: `✓ CN ${cn} — ${b.vendor.name}, ${b.customerName} selected.` });
+      setMsg({ ok: true, text: `✓ CN ${b.cnNo} — ${b.vendor.name}, ${b.customerName} selected.` });
     }
     scanRef.current?.focus();
   }
@@ -220,7 +221,7 @@ export default function AwaitingPickupPage() {
           value={scan}
           onChange={(e) => setScan(e.target.value)}
           inputMode="numeric"
-          placeholder="Scan or type CN…"
+          placeholder="Scan or type CN / vendor order No…"
           className="w-full rounded border-2 border-brass px-3 py-2 font-mono text-sm"
         />
         <button type="submit" className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase hover:border-brass">
@@ -341,11 +342,11 @@ export default function AwaitingPickupPage() {
                         <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
                       <td className="font-mono">
-                        {b.cnNo}
-                        {b.cnSource === "VENDOR" && (
-                          <span className="ml-1 text-[9px] uppercase text-ink-soft" title="Vendor's own bill number">
-                            own
-                          </span>
+                        <b>{b.cnNo}</b>
+                        {b.vendorRef && (
+                          <div className="text-[10px] text-ink-soft" title="Vendor's own order / bill No.">
+                            Ref {b.vendorRef}
+                          </div>
                         )}
                       </td>
                       <td>{b.vendor.name}</td>

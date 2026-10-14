@@ -5,7 +5,7 @@ import { authenticateVendor } from "../middleware/auth";
 import { parseDateParam, monthRange, formatDate, dayRange } from "../utils/dates";
 import { z } from "zod";
 import { ApiError } from "../utils/asyncHandler";
-import { bookingInputSchema, createBooking, assertCnFree } from "../services/booking.service";
+import { bookingInputSchema, createBooking, assertRefFree } from "../services/booking.service";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -263,13 +263,11 @@ router.put(
   asyncHandler(async (req, res) => {
     const existing = await ownAwaitingBooking(req.vendor!.sub, req.params.id);
     const input = bookingInputSchema.parse(req.body);
-    // The CN can only be changed on the vendor's own numbers; a generated one stays.
-    const cnChange = existing.cnSource === "VENDOR" && input.cnNo && input.cnNo !== existing.cnNo ? input.cnNo : undefined;
-    if (cnChange) await assertCnFree(cnChange, existing.id);
+    await assertRefFree(existing.vendorId, input.vendorRef || undefined, existing.id);
     const booking = await prisma.booking.update({
       where: { id: existing.id },
       data: {
-        ...(cnChange ? { cnNo: cnChange } : {}),
+        vendorRef: input.vendorRef || null,
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         address: input.address,
