@@ -39,6 +39,7 @@ router.get(
 
     const orders = await prisma.order.findMany({
       where,
+      include: { booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } } },
       orderBy: [{ date: "desc" }, { slNo: "asc" }],
       take: 1000,
     });

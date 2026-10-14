@@ -126,7 +126,7 @@ router.get(
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: { vendor: true, employee: { select: { id: true, name: true } } },
+        include: { vendor: true, employee: { select: { id: true, name: true } }, booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } } },
         orderBy: [{ date: "desc" }, { slNo: "asc" }],
         take,
         skip,
@@ -508,7 +508,7 @@ router.get(
     // tell whether a consignment number was later re-resolved under a newer entry.
     const pastOrders = await prisma.order.findMany({
       where: { date: { lt: start } },
-      include: { vendor: true, employee: { select: { id: true, name: true } } },
+      include: { vendor: true, employee: { select: { id: true, name: true } }, booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } } },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
 
@@ -607,6 +607,7 @@ router.get(
         vendor: true,
         employee: { select: { id: true, name: true } },
         transfers: { include: { fromEmployee: { select: { name: true } }, toEmployee: { select: { name: true } } } },
+        booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } },
       },
     });
     if (!order) throw new ApiError(404, "Order not found");

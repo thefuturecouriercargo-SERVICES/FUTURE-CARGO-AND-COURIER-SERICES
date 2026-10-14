@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
+import OrderDetails from "@/components/OrderDetails";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -106,6 +107,7 @@ const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+const [expandedId, setExpandedId] = useState<string | null>(null);
 const [bulkEmirate, setBulkEmirate] = useState("");
 const [bulkEmployeeId, setBulkEmployeeId] = useState("");
 const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
@@ -599,12 +601,22 @@ required
                 </tr>
               ) : (
             filteredOrders.map((o, i) => (
-                <tr key={o.id}>
+                <Fragment key={o.id}>
+                <tr className={expandedId === o.id ? "bg-paper-2" : ""}>
                   <td>
                     <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                   </td>
                   <td className="font-mono">{i + 1}</td>
-                    <td className="font-mono">{o.cnNo}</td>
+                    <td className="font-mono">
+                      <button
+                        onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
+                        className="whitespace-nowrap text-left hover:text-brass hover:underline"
+                        title="Show details"
+                      >
+                        {expandedId === o.id ? "▾" : "▸"} {o.cnNo}
+                        {o.booking && <span className="ml-1" title="Has customer details">👤</span>}
+                      </button>
+                    </td>
                     <td>{o.brandName}</td>
                     <td className="text-right font-mono">{fmtNumber(o.total)}</td>
                     <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
@@ -667,6 +679,15 @@ required
                       </button>
                     </td>
                   </tr>
+                  {expandedId === o.id && (
+                    <tr className="bg-paper">
+                      <td />
+                      <td colSpan={13} className="py-3">
+                        <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
                 ))
               )}
             </tbody>

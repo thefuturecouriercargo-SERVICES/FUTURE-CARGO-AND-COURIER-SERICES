@@ -7,6 +7,7 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
+import OrderDetails from "@/components/OrderDetails";
 
 interface Summary {
   assigned: number;
@@ -126,6 +127,7 @@ export default function DriverPortalPage() {
   const [search, setSearch] = useState("");
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
   // Data the voice assistant needs beyond what's already loaded — fetched once.
@@ -702,6 +704,11 @@ export default function DriverPortalPage() {
                 <div className="font-mono text-[15px] font-bold text-navy">
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
+                {o.booking && (
+                  <div className="mt-1 text-sm">
+                    👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
+                  </div>
+                )}
                 <div className="mt-1 text-xs text-ink-soft">
                   Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
                 </div>
@@ -747,12 +754,25 @@ export default function DriverPortalPage() {
                   </span>
                 )}
                 <button
+                  onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
+                  className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide hover:-translate-y-px ${
+                    detailsId === o.id ? "border-navy bg-navy text-paper" : "border-navy text-navy"
+                  }`}
+                >
+                  {detailsId === o.id ? "Hide details" : "Details"}
+                </button>
+                <button
                   onClick={() => setStatusOrder(o)}
                   className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
                 >
                   Update Status
                 </button>
               </div>
+              {detailsId === o.id && (
+                <div className="w-full basis-full border-t border-line pt-3">
+                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact />
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -25,6 +25,7 @@ router.get(
       include: {
         vendor: true,
         employee: { select: { id: true, name: true } },
+        booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } },
         // Most recent transfer for this order (if any) — so the driver receiving it
         // can see who handed it to them, not just that it says TRANSFER.
         transfers: {

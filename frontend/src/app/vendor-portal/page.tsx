@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
-import { EMIRATES } from "@/types";
+import { EMIRATES, OrderBookingDetails } from "@/types";
+import OrderDetails from "@/components/OrderDetails";
 
 interface VendorOrder {
   id: string;
@@ -17,6 +18,7 @@ interface VendorOrder {
   status: "PENDING" | "DELIVERED" | "TRANSFER" | "CANCELLED";
   emirate: string;
   remarks?: string | null;
+  booking?: OrderBookingDetails | null;
 }
 
 interface CreditSummary {
@@ -100,6 +102,7 @@ function VendorPortalContent() {
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [tab, setTab] = useState<"orders" | "monthly">("orders");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [month, setMonth] = useState(currentMonthStr());
   const [monthly, setMonthly] = useState<MonthlyReport | null>(null);
   const [creditDate, setCreditDate] = useState(dubaiToday());
@@ -389,9 +392,16 @@ function VendorPortalContent() {
                       </tr>
                     ) : (
                       filtered.map((o) => (
-                        <tr key={o.id}>
+                        <Fragment key={o.id}>
+                        <tr className={openId === o.id ? "bg-paper-2" : ""}>
                           <td>{o.date.slice(0, 10)}</td>
-                          <td className="font-mono">{o.cnNo}</td>
+                          <td className="font-mono">
+                            <button onClick={() => setOpenId(openId === o.id ? null : o.id)} className="whitespace-nowrap text-left hover:text-brass hover:underline">
+                              {openId === o.id ? "▾" : "▸"} {o.cnNo}
+                              {o.booking && <span className="ml-1">👤</span>}
+                            </button>
+                            {o.booking && <div className="text-[11px] text-ink-soft">{o.booking.customerName}</div>}
+                          </td>
                           <td className="text-right font-mono">{fmtNumber(o.total)}</td>
                           <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
                           <td>{o.emirate}</td>
@@ -404,6 +414,14 @@ function VendorPortalContent() {
                             {o.remarks || "—"}
                           </td>
                         </tr>
+                        {openId === o.id && (
+                          <tr className="bg-paper">
+                            <td colSpan={7} className="py-3">
+                              <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={vendor.name} total={o.total} />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       ))
                     )}
                   </tbody>

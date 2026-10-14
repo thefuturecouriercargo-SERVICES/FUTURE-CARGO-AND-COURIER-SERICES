@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -8,6 +8,7 @@ import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import BookingForm from "@/components/BookingForm";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
+import OrderDetails from "@/components/OrderDetails";
 import { Booking, BookingInput } from "@/types";
 
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
@@ -27,6 +28,7 @@ function ConsignmentsContent() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Booking | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Booking | null>(null);
   const [error, setError] = useState("");
 
@@ -229,12 +231,15 @@ function ConsignmentsContent() {
                   </tr>
                 ) : (
                   shown.map((b) => (
-                    <tr key={b.id}>
+                    <Fragment key={b.id}>
+                    <tr className={openId === b.id ? "bg-paper-2" : ""}>
                       <td>
                         <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
                       <td className="font-mono">
-                        <b className="text-base">{b.cnNo}</b>
+                        <button onClick={() => setOpenId(openId === b.id ? null : b.id)} className="whitespace-nowrap text-left hover:text-brass">
+                          {openId === b.id ? "▾" : "▸"} <b className="text-base">{b.cnNo}</b>
+                        </button>
                         {b.vendorRef && <div className="text-[10px] text-ink-soft">Your No. {b.vendorRef}</div>}
                       </td>
                       <td>
@@ -273,6 +278,15 @@ function ConsignmentsContent() {
                         )}
                       </td>
                     </tr>
+                    {openId === b.id && (
+                      <tr className="bg-paper">
+                        <td />
+                        <td colSpan={8} className="py-3">
+                          <OrderDetails booking={b} cnNo={b.cnNo} vendorName={b.vendor.name} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))
                 )}
               </tbody>

@@ -51,8 +51,21 @@ export interface Order {
   remarks?: string | null;
   transferredBy?: string | null;
   resolvedAt?: string | null;
+  /** Customer details, when the order came from a vendor booking. */
+  booking?: OrderBookingDetails | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OrderBookingDetails {
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  emirate: string;
+  items?: string | null;
+  notes?: string | null;
+  vendorRef?: string | null;
+  codAmount: number;
 }
 
 export interface Summary {
