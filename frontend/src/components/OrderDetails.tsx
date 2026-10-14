@@ -79,12 +79,6 @@ export default function OrderDetails({
           )}
         </span>
       </div>
-      {booking.vendorRef && (
-        <div className={row}>
-          <span className={label}>Vendor No.</span>
-          <span className="font-mono">{booking.vendorRef}</span>
-        </div>
-      )}
       <div className="flex flex-wrap gap-2 pt-1.5">
         <a href={`tel:${tel}`} className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper">
           📞 Call

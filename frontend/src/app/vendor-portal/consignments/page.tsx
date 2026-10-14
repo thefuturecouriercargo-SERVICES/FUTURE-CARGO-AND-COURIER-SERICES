@@ -124,7 +124,7 @@ function ConsignmentsContent() {
         {justSaved && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
             <div>
-              <div className="text-sm text-delivered">✓ Saved — {justSaved.customerName}{justSaved.vendorRef ? ` (your No. ${justSaved.vendorRef})` : ""}</div>
+              <div className="text-sm text-delivered">✓ Saved — {justSaved.customerName}</div>
               <div className="mt-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft">Write this CN on the parcel</div>
               <div className="font-mono text-4xl font-bold tracking-wider text-navy">{justSaved.cnNo}</div>
             </div>
@@ -161,7 +161,7 @@ function ConsignmentsContent() {
               </button>
             ))}
             <input
-              placeholder="Search CN, your No., name, phone…"
+              placeholder="Search CN, name, phone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="ml-auto rounded border border-line px-2.5 py-1.5 text-sm"
@@ -240,7 +240,6 @@ function ConsignmentsContent() {
                         <button onClick={() => setOpenId(openId === b.id ? null : b.id)} className="whitespace-nowrap text-left hover:text-brass">
                           {openId === b.id ? "▾" : "▸"} <b className="text-base">{b.cnNo}</b>
                         </button>
-                        {b.vendorRef && <div className="text-[10px] text-ink-soft">Your No. {b.vendorRef}</div>}
                       </td>
                       <td>
                         <div className="font-medium">{b.customerName}</div>

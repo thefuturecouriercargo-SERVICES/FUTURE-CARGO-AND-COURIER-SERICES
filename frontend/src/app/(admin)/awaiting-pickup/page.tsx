@@ -33,6 +33,7 @@ export default function AwaitingPickupPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [justSaved, setJustSaved] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -168,7 +169,8 @@ export default function AwaitingPickupPage() {
       setMsg({ ok: true, text: `✓ CN ${editing.cnNo} updated.` });
     } else {
       const b = await apiFetch<Booking>("/bookings", { method: "POST", body: { ...input, vendorId } });
-      setMsg({ ok: true, text: `✓ Booked CN ${b.cnNo} for ${b.vendor.name} — ${b.customerName}.` });
+      setJustSaved(b);
+      setMsg(null);
     }
     await load();
   }
@@ -190,16 +192,41 @@ export default function AwaitingPickupPage() {
               setEditing(null);
               setShowForm(!showForm);
             }}
-            className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2"
+            className={`rounded px-5 py-3 font-mono text-sm font-bold uppercase tracking-wide ${
+              showForm && !editing ? "border border-navy bg-white text-navy" : "bg-brass text-white hover:opacity-90"
+            }`}
           >
-            {showForm && !editing ? "Close form" : "+ New for a vendor"}
+            {showForm && !editing ? "✕ Close form" : "➕ Enter order for a vendor"}
           </button>
         )}
       </div>
       <p className="mb-5 max-w-3xl text-sm text-ink-soft">
-        Consignments vendors entered in their portal. Check them, pick a driver, and accept — they then appear in Daily
-        Entry as Pending, payment Cash. Scan or type a label&apos;s CN to select it.
+        Orders vendors entered in their portal, plus orders the office enters for small vendors. Print the labels, then
+        tick, pick a driver and accept — they then appear in Daily Entry as Pending, payment Cash. Scan or type a CN to select it.
       </p>
+
+      {justSaved && (
+        <div className="mb-4 flex max-w-2xl flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
+          <div>
+            <div className="text-sm text-delivered">
+              ✓ Saved for <b>{justSaved.vendor.name}</b> — {justSaved.customerName}
+            </div>
+            <div className="mt-1 font-mono text-[11px] uppercase tracking-widest text-ink-soft">CN</div>
+            <div className="font-mono text-4xl font-bold tracking-wider text-navy">{justSaved.cnNo}</div>
+          </div>
+          <span className="flex gap-2">
+            <button
+              onClick={() => printLabels([justSaved.id])}
+              className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase text-paper hover:bg-navy-2"
+            >
+              🖨 Print label
+            </button>
+            <button onClick={() => setJustSaved(null)} className="rounded border border-line bg-white px-3 py-2 font-mono text-[11px] uppercase">
+              Close
+            </button>
+          </span>
+        </div>
+      )}
 
       {(showForm || editing) && canEdit && (
         <div className="mb-6 max-w-2xl">
@@ -221,7 +248,7 @@ export default function AwaitingPickupPage() {
           value={scan}
           onChange={(e) => setScan(e.target.value)}
           inputMode="numeric"
-          placeholder="Scan or type CN / vendor order No…"
+          placeholder="Scan or type CN…"
           className="w-full rounded border-2 border-brass px-3 py-2 font-mono text-sm"
         />
         <button type="submit" className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase hover:border-brass">
@@ -362,11 +389,6 @@ export default function AwaitingPickupPage() {
                       </td>
                       <td className="font-mono">
                         <b>{b.cnNo}</b>
-                        {b.vendorRef && (
-                          <div className="text-[10px] text-ink-soft" title="Vendor's own order / bill No.">
-                            Ref {b.vendorRef}
-                          </div>
-                        )}
                       </td>
                       <td>{b.vendor.name}</td>
                       <td>

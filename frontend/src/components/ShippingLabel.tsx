@@ -129,7 +129,6 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
       <div className={`${size === "80mm" ? "mt-3" : "mt-auto"} flex justify-between border-t border-black pt-1`} style={{ fontSize: sq ? 9 : 10 }}>
         <span>
           From: <b>{booking.vendor.name}</b>
-          {booking.vendorRef && <> · Ref {booking.vendorRef}</>}
         </span>
         <span>The Future Courier Service L.L.C</span>
       </div>

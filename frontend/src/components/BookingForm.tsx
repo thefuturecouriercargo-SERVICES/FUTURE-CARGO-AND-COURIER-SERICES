@@ -37,7 +37,6 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (p.items) { next.items = p.items; filled.push("items"); }
     if (p.codAmount !== undefined) { next.codAmount = String(p.codAmount); filled.push("amount"); }
     if (p.notes) { next.notes = p.notes; filled.push("notes"); }
-    if (p.vendorRef) { next.vendorRef = p.vendorRef; filled.push("order No."); }
     setForm(next);
     setPasteMsg(
       filled.length
@@ -182,19 +181,6 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         <div className="sm:col-span-2">
           <label className={labelCls}>Notes for driver</label>
           <input value={form.notes} onChange={set("notes")} className={input} maxLength={500} placeholder="e.g. call before coming, deliver after 5pm" />
-        </div>
-        <div className="sm:col-span-2">
-          <label className={labelCls}>Your order / bill No. (optional)</label>
-          <input
-            value={form.vendorRef}
-            onChange={set("vendorRef")}
-            className={`${input} font-mono`}
-            maxLength={50}
-            placeholder="e.g. 20308 — the number on your own bill or barcode"
-          />
-          <p className="mt-1 text-[11px] text-ink-soft">
-            Kept as your reference only. Future Courier gives every consignment its own CN number after you save.
-          </p>
         </div>
       </div>
 
