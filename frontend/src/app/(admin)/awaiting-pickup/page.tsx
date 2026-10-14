@@ -264,6 +264,25 @@ export default function AwaitingPickupPage() {
           />
         </div>
 
+        {shown.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => printLabels(shown.map((b) => b.id))}
+              className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper hover:bg-navy-2"
+            >
+              🖨 Print all ({shown.length})
+            </button>
+            {shown.some((b) => !b.labelPrintedAt) && (
+              <button
+                onClick={() => printLabels(shown.filter((b) => !b.labelPrintedAt).map((b) => b.id))}
+                className="rounded border border-navy bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2"
+              >
+                🖨 Print new only ({shown.filter((b) => !b.labelPrintedAt).length})
+              </button>
+            )}
+          </div>
+        )}
+
         {selected.size > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-2 border border-brass bg-paper-2 px-3 py-2.5 text-sm">
             <span className="font-medium">{selected.size} selected</span>
