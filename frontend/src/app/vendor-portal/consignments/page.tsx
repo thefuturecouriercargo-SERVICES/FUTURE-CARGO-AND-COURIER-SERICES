@@ -1,11 +1,11 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
+import VendorNav from "@/components/VendorNav";
 import BookingForm from "@/components/BookingForm";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
 import OrderDetails from "@/components/OrderDetails";
@@ -109,11 +109,9 @@ function ConsignmentsContent() {
           Sign out
         </button>
       </div>
+      <VendorNav />
 
       <div className="mx-auto max-w-5xl p-4 md:p-8">
-        <Link href="/vendor-portal" className="mb-3 inline-block text-sm text-brass hover:underline">
-          ← Back to account
-        </Link>
         <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Send a consignment</p>
         <h1 className="mb-2 font-display text-3xl font-semibold text-navy">New Consignments &amp; Labels</h1>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">

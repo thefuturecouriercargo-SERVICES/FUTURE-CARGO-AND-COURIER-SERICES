@@ -2,10 +2,10 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
+import VendorNav from "@/components/VendorNav";
 import { EMIRATES, OrderBookingDetails } from "@/types";
 import OrderDetails from "@/components/OrderDetails";
 
@@ -170,18 +170,9 @@ function VendorPortalContent() {
           Sign out
         </button>
       </div>
+      <VendorNav />
 
       <div className="mx-auto max-w-5xl p-4 md:p-8">
-        <Link
-          href="/vendor-portal/consignments"
-          className="mb-6 flex items-center justify-between gap-3 border-2 border-brass bg-white p-4 hover:bg-paper-2"
-        >
-          <span>
-            <span className="block font-display text-lg font-semibold text-navy">📦 New consignment &amp; labels</span>
-            <span className="block text-sm text-ink-soft">Enter your orders and print barcode labels — no paper bill needed.</span>
-          </span>
-          <span className="font-mono text-xl text-brass">→</span>
-        </Link>
 
         <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Overview</p>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

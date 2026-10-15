@@ -212,6 +212,117 @@ router.get(
   })
 );
 
+// ---- Daily view & global search -------------------------------------------
+
+const PORTAL_BOOKING_SELECT = {
+  customerName: true,
+  customerPhone: true,
+  address: true,
+  emirate: true,
+  items: true,
+  notes: true,
+  vendorRef: true,
+  codAmount: true,
+} as const;
+
+function dubaiDayBounds(day: Date) {
+  // `day` is midnight UTC of the Dubai calendar date; Dubai is UTC+4.
+  const start = new Date(day.getTime() - 4 * 60 * 60 * 1000);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+// One day: consignments in Daily Entry for that date, plus bookings entered that
+// day that are still waiting for pickup (or were rejected), with totals.
+router.get(
+  "/daily",
+  asyncHandler(async (req, res) => {
+    const vendorId = req.vendor!.sub;
+    const { start: day } = dayRange(req.query.date as string | undefined);
+    const { start, end } = dubaiDayBounds(day);
+
+    const [orders, waiting] = await Promise.all([
+      prisma.order.findMany({
+        where: { vendorId, date: day },
+        include: { booking: { select: PORTAL_BOOKING_SELECT } },
+        orderBy: [{ slNo: "asc" }],
+      }),
+      prisma.booking.findMany({
+        where: { vendorId, status: { in: ["AWAITING_PICKUP", "REJECTED"] }, createdAt: { gte: start, lt: end } },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    const delivered = orders.filter((o) => o.status === "DELIVERED");
+    const notCancelled = orders.filter((o) => o.status !== "CANCELLED");
+    res.json({
+      date: formatDate(day),
+      orders,
+      waiting,
+      summary: {
+        total: orders.length,
+        delivered: delivered.length,
+        pending: orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length,
+        cancelled: orders.filter((o) => o.status === "CANCELLED").length,
+        awaitingPickup: waiting.filter((b) => b.status === "AWAITING_PICKUP").length,
+        codTotal: notCancelled.reduce((s, o) => s + o.total, 0),
+        deliveredAmount: delivered.reduce((s, o) => s + o.total, 0),
+        deliveryCharge: notCancelled.reduce((s, o) => s + o.deliveryCharge, 0),
+      },
+    });
+  })
+);
+
+// Search every consignment this vendor ever had: CN, customer name or phone.
+router.get(
+  "/search",
+  asyncHandler(async (req, res) => {
+    const vendorId = req.vendor!.sub;
+    const q = String(req.query.q ?? "").trim();
+    if (q.length < 2) return res.json({ orders: [], bookings: [] });
+    const digits = q.replace(/\D/g, "");
+    const cn = /^\d+$/.test(q) ? Number(q) : NaN;
+    const text = { contains: q, mode: "insensitive" as const };
+    // Phones are stored as typed ("050 123 4567"), so match on digits only.
+    let phoneIds: string[] = [];
+    if (digits.length >= 6) {
+      const tail = digits.slice(-7);
+      const all = await prisma.booking.findMany({ where: { vendorId }, select: { id: true, customerPhone: true } });
+      phoneIds = all.filter((b) => b.customerPhone.replace(/\D/g, "").includes(tail)).map((b) => b.id);
+    }
+    const phoneMatch = phoneIds.length ? [{ id: { in: phoneIds } }] : [];
+
+    const [orders, bookings] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          vendorId,
+          OR: [
+            ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
+            { booking: { customerName: text } },
+            ...(phoneIds.length ? [{ booking: { id: { in: phoneIds } } }] : []),
+          ],
+        },
+        include: { booking: { select: PORTAL_BOOKING_SELECT } },
+        orderBy: [{ date: "desc" }],
+        take: 50,
+      }),
+      prisma.booking.findMany({
+        where: {
+          vendorId,
+          status: { not: "ACCEPTED" },
+          OR: [
+            ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
+            { customerName: text },
+            ...phoneMatch,
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
+    res.json({ orders, bookings });
+  })
+);
+
 // ---- Bookings: consignments the vendor enters here, with a printable label ----
 
 const BOOKING_INCLUDE = {

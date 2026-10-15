@@ -18,7 +18,7 @@ function VendorLoginForm() {
     setBusy(true);
     try {
       await login(username.trim(), password);
-      router.push("/vendor-portal");
+      router.push("/vendor-portal/daily");
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Unable to sign in");
     } finally {
