@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
 import { Employee } from "@/types";
@@ -51,14 +51,14 @@ export default function AssignPage() {
 
   const driverName = drivers.find((d) => d.id === driverId)?.name ?? "";
 
-  async function onCode(code: string) {
+  async function onCode(code: string, confirm = false): Promise<void> {
     if (!driverId) return;
     try {
       const r = await apiFetch<{
         result: "ACCEPTED" | "REASSIGNED" | "ALREADY";
         message: string;
         order: { cnNo: number; total: number; vendor: { name: string }; booking?: { customerName: string } | null };
-      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId } });
+      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(confirm ? { confirm: true } : {}) } });
       beep(r.result !== "ALREADY");
       setLog((prev) => [
         {
@@ -74,6 +74,13 @@ export default function AssignPage() {
         ...prev,
       ]);
     } catch (err) {
+      // A match by vendor bill No., or moving a parcel from another driver: ask first.
+      if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
+        beep(true);
+        if (window.confirm(err.message)) return onCode(code, true);
+        setLog((prev) => [{ at: new Date(), code, ok: false, kind: "ERROR", message: `Skipped — ${err.message}`, driver: driverName }, ...prev]);
+        return;
+      }
       beep(false);
       setLog((prev) => [
         { at: new Date(), code, ok: false, kind: "ERROR", message: err instanceof Error ? err.message : "Failed", driver: driverName },

@@ -1359,15 +1359,22 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
 function ClaimModal({ onClose }: { onClose: () => void }) {
   const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date }[]>([]);
 
-  async function onCode(code: string) {
+  async function onCode(code: string, confirm = false): Promise<void> {
     try {
       const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string }>("/driver/scan-claim", {
         method: "POST",
-        body: { code },
+        body: { code, ...(confirm ? { confirm: true } : {}) },
       });
       beep(r.result !== "ALREADY");
       setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date() }, ...prev]);
     } catch (err) {
+      // Matched only by the vendor's own bill No. — show what it is and ask.
+      if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
+        beep(true);
+        if (window.confirm(err.message)) return onCode(code, true);
+        setLog((prev) => [{ ok: false, text: `Skipped — ${err.message}`, at: new Date() }, ...prev]);
+        return;
+      }
       beep(false);
       setLog((prev) => [{ ok: false, text: err instanceof Error ? err.message : "Failed", at: new Date() }, ...prev]);
     }

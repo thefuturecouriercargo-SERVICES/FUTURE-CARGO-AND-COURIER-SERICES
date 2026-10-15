@@ -147,8 +147,10 @@ router.post(
   "/scan-assign",
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const { code, employeeId } = z.object({ code: z.string().min(1).max(100), employeeId: z.string().min(1) }).parse(req.body);
-    const r = await assignByScan(code, employeeId, { allowReassign: true, allowWebFetch: true });
+    const { code, employeeId, confirm } = z
+      .object({ code: z.string().min(1).max(100), employeeId: z.string().min(1), confirm: z.boolean().optional() })
+      .parse(req.body);
+    const r = await assignByScan(code, employeeId, { allowReassign: true, allowWebFetch: true, confirmed: confirm });
     if (r.result !== "ALREADY") {
       await writeAuditLog({
         userId: req.user!.sub,

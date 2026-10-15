@@ -55,8 +55,8 @@ router.get(
 router.post(
   "/scan-claim",
   asyncHandler(async (req, res) => {
-    const { code } = z.object({ code: z.string().min(1).max(100) }).parse(req.body);
-    const r = await assignByScan(code, req.user!.sub, { allowReassign: false });
+    const { code, confirm } = z.object({ code: z.string().min(1).max(100), confirm: z.boolean().optional() }).parse(req.body);
+    const r = await assignByScan(code, req.user!.sub, { allowReassign: false, confirmed: confirm });
     if (r.result !== "ALREADY") {
       await writeAuditLog({ userId: req.user!.sub, action: "DRIVER_SCAN_CLAIM", entity: "Order", entityId: r.order.id, meta: { cnNo: r.order.cnNo } });
       emitGlobal("order:changed", { type: "created", order: r.order });
