@@ -106,7 +106,7 @@ async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, i
 }
 
 /** Creates a booking with the next CN from our own range. Retries on a race. */
-export async function createBooking(vendorId: string, input: BookingInput, createdBy: "VENDOR" | "ADMIN") {
+export async function createBooking(vendorId: string, input: BookingInput, createdBy: "VENDOR" | "ADMIN" | "WEBSITE") {
   await assertRefFree(vendorId, input.vendorRef || undefined);
   await assertNotLikelyDuplicate(vendorId, input);
   const base = {
@@ -227,7 +227,15 @@ export async function assignByScan(
 
   const include = { vendor: { select: { name: true } }, employee: { select: { id: true, name: true } } } as const;
 
-  const booking = await prisma.booking.findUnique({ where: { cnNo } });
+  // Our CN first; otherwise a vendor's own bill number (e.g. Inspired website
+  // order 20308 printed as a barcode on their bill) that is still waiting.
+  const booking =
+    (await prisma.booking.findUnique({ where: { cnNo } })) ??
+    (await prisma.booking.findFirst({ where: { vendorRef: digits, status: "AWAITING_PICKUP" }, orderBy: { createdAt: "desc" } }));
+  if (booking && booking.cnNo !== cnNo) {
+    // Scanned the vendor's number — continue as if our CN had been scanned.
+    return assignByScan(String(booking.cnNo), employeeId, opts);
+  }
   if (booking?.status === "AWAITING_PICKUP") {
     await acceptBooking(booking.id, { employeeId });
     const order = await prisma.order.findFirstOrThrow({ where: { cnNo }, include, orderBy: { createdAt: "desc" } });
@@ -235,8 +243,13 @@ export async function assignByScan(
   }
   if (booking?.status === "REJECTED") throw new ApiError(400, `CN ${cnNo} was rejected by the office`);
 
-  const order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
-  if (!order) throw new ApiError(404, `CN ${cnNo} not found — not booked or entered yet`);
+  let order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
+  if (!order) {
+    // A vendor bill number whose booking was already accepted → its order.
+    const accepted = await prisma.booking.findFirst({ where: { vendorRef: digits, status: "ACCEPTED", orderId: { not: null } }, orderBy: { createdAt: "desc" } });
+    if (accepted?.orderId) order = await prisma.order.findUnique({ where: { id: accepted.orderId }, include });
+  }
+  if (!order) throw new ApiError(404, `${code} not found — not booked or entered yet`);
 
   if (order.employeeId === employeeId) {
     return { result: "ALREADY", message: `CN ${cnNo} is already ${employee.name}'s`, order };

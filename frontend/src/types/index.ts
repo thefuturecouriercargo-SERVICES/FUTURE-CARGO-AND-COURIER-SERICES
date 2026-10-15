@@ -119,7 +119,7 @@ export interface Booking {
   notes?: string | null;
   status: BookingStatus;
   rejectReason?: string | null;
-  createdBy: "VENDOR" | "ADMIN";
+  createdBy: "VENDOR" | "ADMIN" | "WEBSITE";
   orderId?: string | null;
   order?: {
     id: string;

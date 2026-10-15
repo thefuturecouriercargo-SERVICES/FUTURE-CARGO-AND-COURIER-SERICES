@@ -8,6 +8,7 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
+import InspiredSyncPanel from "@/components/InspiredSyncPanel";
 import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
 
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
@@ -204,6 +205,8 @@ export default function AwaitingPickupPage() {
         Orders vendors entered in their portal, plus orders the office enters for small vendors. Print the labels, then
         tick, pick a driver and accept — they then appear in Daily Entry as Pending, payment Cash. Scan or type a CN to select it.
       </p>
+
+      <InspiredSyncPanel onSynced={load} />
 
       {justSaved && (
         <div className="mb-4 flex max-w-2xl flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
@@ -406,6 +409,11 @@ export default function AwaitingPickupPage() {
                       <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
                         {new Date(b.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                         {b.createdBy === "ADMIN" && <div className="text-[9px] uppercase">by office</div>}
+                        {b.createdBy === "WEBSITE" && (
+                          <div className="text-[9px] font-bold uppercase text-transferred" title={b.vendorRef ? `Website order #${b.vendorRef}` : "Website order"}>
+                            web{b.vendorRef ? ` #${b.vendorRef}` : ""}
+                          </div>
+                        )}
                       </td>
                       <td className="whitespace-nowrap">
                         <button onClick={() => printLabels([b.id])} className="mr-2 text-xs text-brass hover:underline">
