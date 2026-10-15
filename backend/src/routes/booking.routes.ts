@@ -150,7 +150,7 @@ router.post(
     const { code, employeeId, confirm } = z
       .object({ code: z.string().min(1).max(100), employeeId: z.string().min(1), confirm: z.boolean().optional() })
       .parse(req.body);
-    const r = await assignByScan(code, employeeId, { allowReassign: true, allowWebFetch: true, confirmed: confirm });
+    const r = await assignByScan(code, employeeId, { allowReassign: true, confirmed: confirm });
     if (r.result !== "ALREADY") {
       await writeAuditLog({
         userId: req.user!.sub,

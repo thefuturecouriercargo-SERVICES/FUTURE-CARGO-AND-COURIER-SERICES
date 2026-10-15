@@ -221,11 +221,8 @@ function needsConfirm(message: string, preview: Record<string, unknown>): never 
 export async function assignByScan(
   code: string,
   employeeId: string,
-  // allowWebFetch: only the office Scan & Assign may look a number up on a
-  // vendor's website. Drivers scan every vendor's barcodes, so a number that
-  // happens to match an Inspired order must never pull that order in.
-  // confirmed: the person already saw and accepted the "is this the parcel?" check.
-  opts: { allowReassign: boolean; allowWebFetch?: boolean; confirmed?: boolean; retried?: boolean; viaRef?: string }
+  // confirmed: the office already accepted the "move it from another driver?" check.
+  opts: { allowReassign: boolean; confirmed?: boolean }
 ): Promise<ScanAssignResult> {
   const digits = code.trim().replace(/^0+(?=\d)/, "");
   const cnNo = Number(digits);
@@ -236,55 +233,18 @@ export async function assignByScan(
 
   const include = { vendor: { select: { name: true } }, employee: { select: { id: true, name: true } } } as const;
 
-  // Our CN first; otherwise a vendor's own bill number (e.g. Inspired website
-  // order 20485 printed as a barcode on their bill) that is still waiting.
-  const ownCn = await prisma.booking.findUnique({ where: { cnNo }, include: { vendor: { select: { name: true } } } });
-  const byRef = ownCn
-    ? null
-    : await prisma.booking.findFirst({ where: { vendorRef: digits, status: "AWAITING_PICKUP" }, include: { vendor: { select: { name: true } } }, orderBy: { createdAt: "desc" } });
-  const booking = ownCn ?? byRef;
-
-  if (byRef) {
-    // Matched only by the vendor's own number — never assign silently.
-    if (!opts.confirmed) {
-      needsConfirm(
-        `Bill No. ${digits} matches ${byRef.vendor.name} order: ${byRef.customerName}, ${byRef.emirate}, ${byRef.codAmount > 0 ? `AED ${byRef.codAmount}` : "PREPAID"}. Is this the parcel?`,
-        { vendor: byRef.vendor.name, customerName: byRef.customerName, emirate: byRef.emirate, codAmount: byRef.codAmount, cnNo: byRef.cnNo, ref: digits }
-      );
-    }
-    return assignByScan(String(byRef.cnNo), employeeId, { ...opts, viaRef: digits });
-  }
+  // Only OUR CN is ever matched. Vendors' own bill/order numbers overlap between
+  // vendors (Escalo #2000 vs Inspired #2000), so they are never used for scanning.
+  const booking = await prisma.booking.findUnique({ where: { cnNo } });
 
   if (booking?.status === "AWAITING_PICKUP") {
     await acceptBooking(booking.id, { employeeId });
     const order = await prisma.order.findFirstOrThrow({ where: { cnNo }, include, orderBy: { createdAt: "desc" } });
-    return { result: "ACCEPTED", message: `CN ${cnNo} added — ${order.vendor.name}, AED ${order.total}${opts.viaRef ? ` (bill No. ${opts.viaRef})` : ""}`, order };
+    return { result: "ACCEPTED", message: `CN ${cnNo} added — ${order.vendor.name}, AED ${order.total}`, order };
   }
   if (booking?.status === "REJECTED") throw new ApiError(400, `CN ${cnNo} was rejected by the office`);
 
-  let order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
-  let orderViaRef = false;
-  if (!order) {
-    // A vendor bill number whose booking was already accepted → its order.
-    const accepted = await prisma.booking.findFirst({ where: { vendorRef: digits, status: "ACCEPTED", orderId: { not: null } }, orderBy: { createdAt: "desc" } });
-    if (accepted?.orderId) {
-      order = await prisma.order.findUnique({ where: { id: accepted.orderId }, include });
-      orderViaRef = Boolean(order);
-    }
-  }
-  if (!order && !opts.retried && opts.allowWebFetch) {
-    // Not in our system at all — maybe an Inspired website order placed minutes
-    // ago that the 5-minute sync hasn't picked up yet. Fetch it right now
-    // (recent orders only); the next pass will ask "is this the parcel?".
-    const { importInspiredOrderByNumber } = await import("./inspiredWoo.service");
-    let imported = false;
-    try {
-      imported = await importInspiredOrderByNumber(digits);
-    } catch (err) {
-      throw new ApiError(400, err instanceof Error ? err.message : "Inspired lookup failed");
-    }
-    if (imported) return assignByScan(code, employeeId, { ...opts, retried: true });
-  }
+  const order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
   if (!order) {
     throw new ApiError(404, `${code} is not one of our barcodes — no consignment or vendor order with this number. Enter this parcel in Daily Entry.`);
   }
@@ -301,7 +261,7 @@ export async function assignByScan(
   // Moving a parcel between drivers (or a match by vendor bill No.) — confirm first.
   if (!opts.confirmed) {
     needsConfirm(
-      `${orderViaRef ? `Bill No. ${digits} = ` : ""}CN ${order.cnNo} (${order.vendor.name}, AED ${order.total}) is with ${order.employee.name}. Move it to ${employee.name}?`,
+      `CN ${order.cnNo} (${order.vendor.name}, AED ${order.total}) is with ${order.employee.name}. Move it to ${employee.name}?`,
       { vendor: order.vendor.name, cnNo: order.cnNo, from: order.employee.name, to: employee.name }
     );
   }

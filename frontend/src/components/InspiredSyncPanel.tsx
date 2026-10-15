@@ -134,9 +134,6 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
               {o.mapped.items && <div className="text-xs text-ink-soft">{o.mapped.items}</div>}
             </div>
           ))}
-          <p className="text-[11px] text-ink-soft">
-            Compare an order number here with the barcode on that order&apos;s printed bill — if they match, scanning their bill works on Scan &amp; Assign.
-          </p>
         </div>
       )}
     </div>
