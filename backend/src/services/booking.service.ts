@@ -74,7 +74,7 @@ export async function assertRefFree(vendorId: string, vendorRef: string | undefi
   if (dup) throw new ApiError(409, `Order No. ${vendorRef} is already entered (CN ${dup.cnNo})`);
 }
 
-const phoneDigits = (p: string) => p.replace(/\D/g, "").replace(/^(?:00)?971/, "0").replace(/^(?!0)/, "0");
+export const phoneDigits = (p: string) => p.replace(/\D/g, "").replace(/^(?:00)?971/, "0").replace(/^(?!0)/, "0");
 
 /**
  * The same WhatsApp order pasted twice would get two CNs. Warn (409 with

@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { writeAuditLog } from "./audit.service";
 import { emitGlobal } from "../lib/socket";
-import { createBooking } from "./booking.service";
+import { createBooking, phoneDigits } from "./booking.service";
 
 /**
  * Inspired Market website (WooCommerce) → Awaiting Pickup.
@@ -157,6 +157,29 @@ export async function testInspiredConnection() {
 
 const CANCELLED_STATUSES = ["cancelled", "refunded", "failed", "trash"];
 
+/**
+ * The same order may already have been entered by hand (vendor portal or office)
+ * before it arrives from the website. Same vendor, same customer phone, same
+ * COD amount, entered in the last 48h, not yet linked to a website order → it's
+ * the same order: link it (store the website order No.) instead of creating a
+ * second CN.
+ */
+async function linkToManualTwin(vendorId: string, data: ReturnType<typeof mapWooOrder>): Promise<boolean> {
+  const phone = phoneDigits(data.customerPhone);
+  if (phone.length < 9) return false;
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const candidates = await prisma.booking.findMany({
+    where: { vendorId, vendorRef: null, createdBy: { not: "WEBSITE" }, codAmount: data.codAmount, status: { not: "REJECTED" }, createdAt: { gte: since } },
+    select: { id: true, cnNo: true, customerPhone: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const twin = candidates.find((c) => phoneDigits(c.customerPhone) === phone);
+  if (!twin) return false;
+  await prisma.booking.update({ where: { id: twin.id }, data: { vendorRef: data.vendorRef } });
+  await writeAuditLog({ action: "INSPIRED_LINK_MANUAL", entity: "Booking", entityId: twin.id, meta: { cnNo: twin.cnNo, websiteOrder: data.vendorRef } });
+  return true;
+}
+
 async function findInspiredVendor() {
   const cfg = inspiredConfig();
   return prisma.vendor.findFirst({ where: { name: { equals: cfg.vendorName, mode: "insensitive" } } });
@@ -194,6 +217,7 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
   const data = mapWooOrder(o);
   const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
   if (exists) return true;
+  if (await linkToManualTwin(vendor.id, data)) return true;
   await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
   emitGlobal("booking:changed", { type: "imported", count: 1 });
   await writeAuditLog({ action: "INSPIRED_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
@@ -210,7 +234,8 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
 async function refreshImportedInspiredOrders(vendorId: string) {
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const bookings = await prisma.booking.findMany({
-    where: { vendorId, createdBy: "WEBSITE", status: { in: ["AWAITING_PICKUP", "ACCEPTED"] }, createdAt: { gte: since }, vendorRef: { not: null } },
+    // Website imports and hand-entered orders linked to a website order.
+    where: { vendorId, status: { in: ["AWAITING_PICKUP", "ACCEPTED"] }, createdAt: { gte: since }, vendorRef: { not: null } },
     include: { order: { select: { id: true, status: true, total: true, remarks: true } } },
   });
   const open = bookings.filter((b) => b.status === "AWAITING_PICKUP" || (b.order && (b.order.status === "PENDING" || b.order.status === "TRANSFER")));
@@ -289,6 +314,7 @@ let lastSync: {
   at: Date;
   imported: number;
   skipped: number;
+  linked?: number;
   updated?: number;
   rejected?: number;
   flagged?: number;
@@ -319,6 +345,7 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
 
   let imported = 0;
   let skipped = 0;
+  let linked = 0;
   const errors: string[] = [];
   for (const o of orders) {
     const data = mapWooOrder(o);
@@ -335,6 +362,10 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
         skipped++;
         continue;
       }
+    }
+    if (await linkToManualTwin(vendor.id, data)) {
+      linked++;
+      continue;
     }
     try {
       await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
@@ -353,7 +384,7 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
     errors.push(`re-check: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  lastSync = { at: new Date(), imported, skipped, ...refresh, errors };
+  lastSync = { at: new Date(), imported, skipped, linked, ...refresh, errors };
   if (refresh.updated || refresh.rejected || refresh.flagged) {
     await writeAuditLog({ userId: triggeredBy, action: "INSPIRED_RECHECK", entity: "Booking", meta: refresh });
   }

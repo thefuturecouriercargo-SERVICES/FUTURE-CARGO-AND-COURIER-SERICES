@@ -38,11 +38,12 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
     setBusy("sync");
     setMsg(null);
     try {
-      const r = await apiFetch<{ imported: number; skipped: number; updated?: number; rejected?: number; flagged?: number; errors: string[] }>(
+      const r = await apiFetch<{ imported: number; skipped: number; linked?: number; updated?: number; rejected?: number; flagged?: number; errors: string[] }>(
         "/integrations/inspired/sync",
         { method: "POST" }
       );
       const extra = [
+        r.linked ? `${r.linked} matched to orders already entered by hand (no duplicate)` : "",
         r.updated ? `${r.updated} updated from website edits` : "",
         r.rejected ? `${r.rejected} rejected (cancelled on website)` : "",
         r.flagged ? `${r.flagged} with a driver flagged ⚠` : "",
