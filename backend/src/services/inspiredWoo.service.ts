@@ -16,7 +16,7 @@ import { createBooking } from "./booking.service";
  *   INSPIRED_WC_KEY      ck_…
  *   INSPIRED_WC_SECRET   cs_…
  *   INSPIRED_VENDOR_NAME vendor name in our Vendors list (default INSPIRED)
- *   INSPIRED_WC_STATUSES order statuses to import (default processing,on-hold)
+ *   INSPIRED_WC_STATUSES order statuses to import (default processing,on-hold,completed)
  *   INSPIRED_WC_DAYS     how far back the first sync looks (default 2 days)
  */
 
@@ -29,7 +29,8 @@ export function inspiredConfig() {
     key,
     secret,
     vendorName: process.env.INSPIRED_VENDOR_NAME || "INSPIRED",
-    statuses: (process.env.INSPIRED_WC_STATUSES || "processing,on-hold").split(",").map((s) => s.trim()).filter(Boolean),
+    // Inspired marks an order "completed" when it is confirmed (ready to ship), not when delivered.
+    statuses: (process.env.INSPIRED_WC_STATUSES || "processing,on-hold,completed").split(",").map((s) => s.trim()).filter(Boolean),
     days: Math.max(1, parseInt(process.env.INSPIRED_WC_DAYS || "2", 10) || 2),
     configured: Boolean(url && key && secret),
   };
@@ -325,6 +326,15 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
     if (exists) {
       skipped++;
       continue;
+    }
+    // Already typed into Daily Entry by hand with Inspired's own order No. as the CN.
+    const typedNo = Number(data.vendorRef);
+    if (Number.isSafeInteger(typedNo)) {
+      const typed = await prisma.order.findFirst({ where: { cnNo: typedNo, vendorId: vendor.id }, select: { id: true } });
+      if (typed) {
+        skipped++;
+        continue;
+      }
     }
     try {
       await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
