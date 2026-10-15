@@ -216,7 +216,10 @@ export type ScanAssignResult = {
 export async function assignByScan(
   code: string,
   employeeId: string,
-  opts: { allowReassign: boolean; retried?: boolean }
+  // allowWebFetch: only the office Scan & Assign may look a number up on a
+  // vendor's website. Drivers scan every vendor's barcodes, so a number that
+  // happens to match an Inspired order must never pull that order in.
+  opts: { allowReassign: boolean; allowWebFetch?: boolean; retried?: boolean }
 ): Promise<ScanAssignResult> {
   const digits = code.trim().replace(/^0+(?=\d)/, "");
   const cnNo = Number(digits);
@@ -249,7 +252,7 @@ export async function assignByScan(
     const accepted = await prisma.booking.findFirst({ where: { vendorRef: digits, status: "ACCEPTED", orderId: { not: null } }, orderBy: { createdAt: "desc" } });
     if (accepted?.orderId) order = await prisma.order.findUnique({ where: { id: accepted.orderId }, include });
   }
-  if (!order && !opts.retried) {
+  if (!order && !opts.retried && opts.allowWebFetch) {
     // Not in our system at all — maybe an Inspired website order placed minutes
     // ago that the 5-minute sync hasn't picked up yet. Fetch it right now.
     const { importInspiredOrderByNumber } = await import("./inspiredWoo.service");

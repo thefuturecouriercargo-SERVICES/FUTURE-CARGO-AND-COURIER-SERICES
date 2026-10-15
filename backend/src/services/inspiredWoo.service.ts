@@ -212,7 +212,12 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
     }
   }
   if (!o) return false;
+  // Only a recent, live order counts. Another vendor's bill number can easily
+  // equal an old Inspired order number (e.g. Escalo #9563) — never import those.
+  const ageMs = Date.now() - new Date(o.date_created).getTime();
+  if (!(ageMs >= 0 && ageMs <= 3 * 24 * 60 * 60 * 1000)) return false;
   if (CANCELLED_STATUSES.includes(o.status)) throw new Error(`Inspired order #${num} is ${o.status} on their website — don't pick it up`);
+  if (!cfg.statuses.includes(o.status)) return false;
 
   const data = mapWooOrder(o);
   const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
