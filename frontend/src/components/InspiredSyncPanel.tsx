@@ -9,7 +9,7 @@ interface Status {
   url: string | null;
   vendorName: string;
   statuses: string[];
-  lastSync: { at: string; imported: number; skipped: number; errors: string[] } | null;
+  lastSync: { at: string; imported: number; skipped: number; updated?: number; rejected?: number; flagged?: number; errors: string[] } | null;
 }
 
 interface TestOrder {
@@ -38,10 +38,20 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
     setBusy("sync");
     setMsg(null);
     try {
-      const r = await apiFetch<{ imported: number; skipped: number; errors: string[] }>("/integrations/inspired/sync", { method: "POST" });
+      const r = await apiFetch<{ imported: number; skipped: number; updated?: number; rejected?: number; flagged?: number; errors: string[] }>(
+        "/integrations/inspired/sync",
+        { method: "POST" }
+      );
+      const extra = [
+        r.updated ? `${r.updated} updated from website edits` : "",
+        r.rejected ? `${r.rejected} rejected (cancelled on website)` : "",
+        r.flagged ? `${r.flagged} with a driver flagged ⚠` : "",
+      ].filter(Boolean);
       setMsg({
         ok: r.errors.length === 0,
-        text: `${r.imported} new website order${r.imported === 1 ? "" : "s"} added, ${r.skipped} already here.${r.errors.length ? ` Problems: ${r.errors.join("; ")}` : ""}`,
+        text: `${r.imported} new website order${r.imported === 1 ? "" : "s"} added, ${r.skipped} already here.${extra.length ? ` ${extra.join(", ")}.` : ""}${
+          r.errors.length ? ` Problems: ${r.errors.join("; ")}` : ""
+        }`,
       });
       onSynced?.();
     } catch (err) {
@@ -82,6 +92,8 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
           {status.lastSync && (
             <div className="text-[11px] text-ink-soft">
               Last check {new Date(status.lastSync.at).toLocaleTimeString("en-GB")}: {status.lastSync.imported} added
+              {status.lastSync.rejected ? `, ${status.lastSync.rejected} cancelled on website` : ""}
+              {status.lastSync.updated ? `, ${status.lastSync.updated} updated` : ""}
               {status.lastSync.errors.length > 0 && <span className="text-cancelled"> · {status.lastSync.errors[0]}</span>}
             </div>
           )}

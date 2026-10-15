@@ -9,6 +9,7 @@ import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
+import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 
 interface Summary {
   assigned: number;
@@ -713,6 +714,7 @@ export default function DriverPortalPage() {
                 <div className="font-mono text-[15px] font-bold text-navy">
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
+                {isPrepaid(o) && <PrepaidBadge large />}
                 {o.booking && (
                   <div className="mt-1 text-sm">
                     👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
@@ -1036,6 +1038,7 @@ function StatusModal({
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-sm rounded border border-line bg-white p-6">
         <h3 className="mb-1 font-display text-lg font-semibold text-navy">Update CN {order.cnNo}</h3>
+        {isPrepaid(order) && <PrepaidBadge large />}
         <p className="mb-1 text-xs text-ink-soft">
           Total <b className="text-ink">{fmtNumber(order.total)} AED</b> · {order.brandName}
         </p>

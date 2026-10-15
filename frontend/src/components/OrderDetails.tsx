@@ -73,7 +73,11 @@ export default function OrderDetails({
       <div className={row}>
         <span className={label}>COD</span>
         <span className="font-mono">
-          AED {fmtNumber(total ?? booking.codAmount)}
+          {(total ?? booking.codAmount) === 0 ? (
+            <b className="text-cancelled">PREPAID — do not collect cash</b>
+          ) : (
+            <>AED {fmtNumber(total ?? booking.codAmount)}</>
+          )}
           {total !== undefined && total !== booking.codAmount && (
             <span className="ml-2 text-xs text-ink-soft">(vendor entered {fmtNumber(booking.codAmount)})</span>
           )}

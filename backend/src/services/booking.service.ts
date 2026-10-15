@@ -216,7 +216,7 @@ export type ScanAssignResult = {
 export async function assignByScan(
   code: string,
   employeeId: string,
-  opts: { allowReassign: boolean }
+  opts: { allowReassign: boolean; retried?: boolean }
 ): Promise<ScanAssignResult> {
   const digits = code.trim().replace(/^0+(?=\d)/, "");
   const cnNo = Number(digits);
@@ -248,6 +248,18 @@ export async function assignByScan(
     // A vendor bill number whose booking was already accepted → its order.
     const accepted = await prisma.booking.findFirst({ where: { vendorRef: digits, status: "ACCEPTED", orderId: { not: null } }, orderBy: { createdAt: "desc" } });
     if (accepted?.orderId) order = await prisma.order.findUnique({ where: { id: accepted.orderId }, include });
+  }
+  if (!order && !opts.retried) {
+    // Not in our system at all — maybe an Inspired website order placed minutes
+    // ago that the 5-minute sync hasn't picked up yet. Fetch it right now.
+    const { importInspiredOrderByNumber } = await import("./inspiredWoo.service");
+    let imported = false;
+    try {
+      imported = await importInspiredOrderByNumber(digits);
+    } catch (err) {
+      throw new ApiError(400, err instanceof Error ? err.message : "Inspired lookup failed");
+    }
+    if (imported) return assignByScan(code, employeeId, { ...opts, retried: true });
   }
   if (!order) throw new ApiError(404, `${code} not found — not booked or entered yet`);
 

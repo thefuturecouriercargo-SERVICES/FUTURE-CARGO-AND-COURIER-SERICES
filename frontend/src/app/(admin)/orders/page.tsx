@@ -3,6 +3,7 @@
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import OrderDetails from "@/components/OrderDetails";
+import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -615,6 +616,7 @@ required
                       >
                         {expandedId === o.id ? "▾" : "▸"} {o.cnNo}
                         {o.booking && <span className="ml-1" title="Has customer details">👤</span>}
+                        {isPrepaid(o) && <PrepaidBadge />}
                       </button>
                     </td>
                     <td>{o.brandName}</td>

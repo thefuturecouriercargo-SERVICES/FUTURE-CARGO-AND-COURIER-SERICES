@@ -53,6 +53,7 @@ export interface WooOrder {
   number?: string;
   status: string;
   date_created: string;
+  date_modified_gmt?: string;
   total: string;
   payment_method?: string;
   payment_method_title?: string;
@@ -153,13 +154,151 @@ export async function testInspiredConnection() {
   }));
 }
 
-let lastSync: { at: Date; imported: number; skipped: number; errors: string[] } | null = null;
+const CANCELLED_STATUSES = ["cancelled", "refunded", "failed", "trash"];
+
+async function findInspiredVendor() {
+  const cfg = inspiredConfig();
+  return prisma.vendor.findFirst({ where: { name: { equals: cfg.vendorName, mode: "insensitive" } } });
+}
+
+/**
+ * Scan of an Inspired bill that isn't in our system yet: look that one order up
+ * on their website right now and import it. Returns true if the order is now in
+ * Awaiting Pickup (imported, or it already was). Throws if the website says the
+ * order is cancelled, so the scan shows why instead of "not found".
+ */
+export async function importInspiredOrderByNumber(num: string): Promise<boolean> {
+  const cfg = inspiredConfig();
+  if (!cfg.configured) return false;
+  const vendor = await findInspiredVendor();
+  if (!vendor) return false;
+
+  let o: WooOrder | null = null;
+  try {
+    o = await wooGet<WooOrder>(`orders/${encodeURIComponent(num)}`, {});
+  } catch {
+    o = null;
+  }
+  if (!o || String(o.number || o.id) !== num) {
+    try {
+      const list = await wooGet<WooOrder[]>("orders", { search: num, per_page: "10", status: "any" });
+      o = list.find((x) => String(x.number || x.id) === num) ?? null;
+    } catch {
+      o = null;
+    }
+  }
+  if (!o) return false;
+  if (CANCELLED_STATUSES.includes(o.status)) throw new Error(`Inspired order #${num} is ${o.status} on their website — don't pick it up`);
+
+  const data = mapWooOrder(o);
+  const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
+  if (exists) return true;
+  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
+  emitGlobal("booking:changed", { type: "imported", count: 1 });
+  await writeAuditLog({ action: "INSPIRED_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
+  return true;
+}
+
+/**
+ * Re-checks Inspired orders we already imported (last 14 days) against the website:
+ *  - still Awaiting Pickup + cancelled on website → rejected automatically
+ *  - still Awaiting Pickup + edited on website    → our copy updated
+ *  - already with a driver (Pending/Transfer) + cancelled or amount changed on
+ *    website → a ⚠ warning is put in the order's remarks so the driver and office see it
+ */
+async function refreshImportedInspiredOrders(vendorId: string) {
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const bookings = await prisma.booking.findMany({
+    where: { vendorId, createdBy: "WEBSITE", status: { in: ["AWAITING_PICKUP", "ACCEPTED"] }, createdAt: { gte: since }, vendorRef: { not: null } },
+    include: { order: { select: { id: true, status: true, total: true, remarks: true } } },
+  });
+  const open = bookings.filter((b) => b.status === "AWAITING_PICKUP" || (b.order && (b.order.status === "PENDING" || b.order.status === "TRANSFER")));
+  const refs = open.map((b) => b.vendorRef!).filter((r) => /^\d+$/.test(r));
+  const web = new Map<string, WooOrder>();
+  for (let i = 0; i < refs.length; i += 100) {
+    const chunk = refs.slice(i, i + 100);
+    const list = await wooGet<WooOrder[]>("orders", { include: chunk.join(","), per_page: "100", status: "any" });
+    for (const o of list) web.set(String(o.number || o.id), o);
+  }
+
+  let updated = 0;
+  let rejected = 0;
+  let flagged = 0;
+  for (const b of open) {
+    const o = web.get(b.vendorRef!);
+    if (!o) continue;
+    const cancelled = CANCELLED_STATUSES.includes(o.status);
+    const m = mapWooOrder(o);
+
+    if (b.status === "AWAITING_PICKUP") {
+      if (cancelled) {
+        await prisma.booking.update({ where: { id: b.id }, data: { status: "REJECTED", rejectReason: `Cancelled on Inspired website (${o.status})` } });
+        rejected++;
+        continue;
+      }
+      // Only take the website's version if it was edited there after our copy
+      // was last saved — so a correction made by the office isn't overwritten.
+      const webModified = o.date_modified_gmt ? new Date(`${o.date_modified_gmt}Z`).getTime() : 0;
+      if (!webModified || webModified <= b.updatedAt.getTime()) continue;
+      const changed =
+        b.customerName !== m.customerName ||
+        b.customerPhone !== m.customerPhone ||
+        b.address !== m.address ||
+        b.emirate !== m.emirate ||
+        (b.items ?? undefined) !== m.items ||
+        b.codAmount !== m.codAmount ||
+        (b.notes ?? undefined) !== m.notes;
+      if (changed) {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: {
+            customerName: m.customerName,
+            customerPhone: m.customerPhone,
+            address: m.address,
+            emirate: m.emirate,
+            items: m.items ?? null,
+            codAmount: m.codAmount,
+            notes: m.notes ?? null,
+          },
+        });
+        updated++;
+      }
+      continue;
+    }
+
+    // Already handed to a driver — warn rather than change it under them.
+    if (!b.order) continue;
+    const warning = cancelled
+      ? `⚠ Cancelled on Inspired website — do not deliver, check with office`
+      : m.codAmount !== b.order.total
+        ? `⚠ Amount changed on Inspired website: collect AED ${m.codAmount} (was ${b.order.total}) — check with office`
+        : null;
+    if (warning && b.order.remarks !== warning) {
+      await prisma.order.update({ where: { id: b.order.id }, data: { remarks: warning } });
+      flagged++;
+    }
+  }
+
+  if (updated || rejected) emitGlobal("booking:changed", { type: "refreshed" });
+  if (flagged) emitGlobal("order:changed", { type: "flagged" });
+  return { updated, rejected, flagged };
+}
+
+let lastSync: {
+  at: Date;
+  imported: number;
+  skipped: number;
+  updated?: number;
+  rejected?: number;
+  flagged?: number;
+  errors: string[];
+} | null = null;
 export const lastInspiredSync = () => lastSync;
 
 /** Imports new website orders as Awaiting Pickup bookings. Safe to run repeatedly. */
 export async function syncInspiredOrders(triggeredBy: string | null = null) {
   const cfg = inspiredConfig();
-  const vendor = await prisma.vendor.findFirst({ where: { name: { equals: cfg.vendorName, mode: "insensitive" } } });
+  const vendor = await findInspiredVendor();
   if (!vendor) throw new Error(`No vendor named "${cfg.vendorName}" in the Vendors list`);
 
   const after = new Date(Date.now() - cfg.days * 24 * 60 * 60 * 1000).toISOString();
@@ -197,7 +336,17 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
     }
   }
 
-  lastSync = { at: new Date(), imported, skipped, errors };
+  let refresh = { updated: 0, rejected: 0, flagged: 0 };
+  try {
+    refresh = await refreshImportedInspiredOrders(vendor.id);
+  } catch (err) {
+    errors.push(`re-check: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  lastSync = { at: new Date(), imported, skipped, ...refresh, errors };
+  if (refresh.updated || refresh.rejected || refresh.flagged) {
+    await writeAuditLog({ userId: triggeredBy, action: "INSPIRED_RECHECK", entity: "Booking", meta: refresh });
+  }
   if (imported > 0) {
     emitGlobal("booking:changed", { type: "imported", count: imported });
     await writeAuditLog({ userId: triggeredBy, action: "INSPIRED_SYNC", entity: "Booking", meta: { imported, skipped, errors: errors.length } });
@@ -212,7 +361,9 @@ export function startInspiredSyncScheduler() {
     try {
       const r = await syncInspiredOrders(null);
       // eslint-disable-next-line no-console
-      if (r.imported || r.errors.length) console.log(`[inspired] imported ${r.imported}, errors ${r.errors.length}`);
+      if (r.imported || r.updated || r.rejected || r.flagged || r.errors.length)
+        // eslint-disable-next-line no-console
+        console.log(`[inspired] imported ${r.imported}, updated ${r.updated}, rejected ${r.rejected}, flagged ${r.flagged}, errors ${r.errors.length}`);
     } catch (err) {
       lastSync = { at: new Date(), imported: 0, skipped: 0, errors: [err instanceof Error ? err.message : String(err)] };
       // eslint-disable-next-line no-console
