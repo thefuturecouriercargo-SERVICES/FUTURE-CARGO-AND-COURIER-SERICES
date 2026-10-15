@@ -9,6 +9,7 @@ import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
+import BillTypeSelect from "@/components/BillTypeSelect";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 
 interface Summary {
@@ -1358,12 +1359,13 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
 // orders straight away; only the office can remove or move an order afterwards.
 function ClaimModal({ onClose }: { onClose: () => void }) {
   const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date }[]>([]);
+  const [billVendorId, setBillVendorId] = useState("");
 
   async function onCode(code: string, confirm = false): Promise<void> {
     try {
       const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string }>("/driver/scan-claim", {
         method: "POST",
-        body: { code, ...(confirm ? { confirm: true } : {}) },
+        body: { code, ...(billVendorId ? { vendorId: billVendorId } : {}), ...(confirm ? { confirm: true } : {}) },
       });
       beep(r.result !== "ALREADY");
       setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date() }, ...prev]);
@@ -1391,6 +1393,7 @@ function ClaimModal({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mb-4 text-sm text-ink-soft">Scan each parcel&apos;s barcode. It is added to your Pending list straight away.</p>
 
+        <BillTypeSelect source="/driver/scan-vendors" value={billVendorId} onChange={setBillVendorId} />
         <BarcodeScanner onCode={onCode} autoCamera />
 
         <div className="mt-4 space-y-1.5">

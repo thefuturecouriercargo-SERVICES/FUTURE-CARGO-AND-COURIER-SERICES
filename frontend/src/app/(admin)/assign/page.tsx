@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
+import BillTypeSelect from "@/components/BillTypeSelect";
 import { Employee } from "@/types";
 
 interface ScanLog {
@@ -24,6 +25,7 @@ export default function AssignPage() {
   const [drivers, setDrivers] = useState<Employee[]>([]);
   const [driverId, setDriverId] = useState("");
   const [log, setLog] = useState<ScanLog[]>([]);
+  const [billVendorId, setBillVendorId] = useState("");
 
   useEffect(() => {
     apiFetch<Employee[]>("/employees")
@@ -58,7 +60,7 @@ export default function AssignPage() {
         result: "ACCEPTED" | "REASSIGNED" | "ALREADY";
         message: string;
         order: { cnNo: number; total: number; vendor: { name: string }; booking?: { customerName: string } | null };
-      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(confirm ? { confirm: true } : {}) } });
+      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(billVendorId ? { vendorId: billVendorId } : {}), ...(confirm ? { confirm: true } : {}) } });
       beep(r.result !== "ALREADY");
       setLog((prev) => [
         {
@@ -125,6 +127,8 @@ export default function AssignPage() {
           </option>
         ))}
       </select>
+
+      <BillTypeSelect source="/bookings/scan-vendors" value={billVendorId} onChange={setBillVendorId} />
 
       <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">2. Scan parcels{driverName ? ` for ${driverName}` : ""}</label>
       <BarcodeScanner onCode={onCode} disabled={!driverId} placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"} />

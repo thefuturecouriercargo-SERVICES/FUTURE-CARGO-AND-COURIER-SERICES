@@ -180,6 +180,13 @@ async function linkToManualTwin(vendorId: string, data: ReturnType<typeof mapWoo
   return true;
 }
 
+/** True if this vendor is the one connected to the Inspired website. */
+export async function isInspiredVendor(vendorId: string) {
+  if (!inspiredConfig().configured) return false;
+  const v = await findInspiredVendor();
+  return v?.id === vendorId;
+}
+
 async function findInspiredVendor() {
   const cfg = inspiredConfig();
   return prisma.vendor.findFirst({ where: { name: { equals: cfg.vendorName, mode: "insensitive" } } });

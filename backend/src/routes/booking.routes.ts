@@ -5,7 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
-import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan } from "../services/booking.service";
+import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan, scanBillVendors } from "../services/booking.service";
 
 // Office side of vendor bookings: the "Awaiting Pickup" queue.
 const router = Router();
@@ -142,15 +142,21 @@ router.post(
   })
 );
 
+router.get(
+  "/scan-vendors",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (_req, res) => res.json(await scanBillVendors()))
+);
+
 // Scan & Assign: one scanned CN → the chosen driver. Office may move open orders between drivers.
 router.post(
   "/scan-assign",
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const { code, employeeId, confirm } = z
-      .object({ code: z.string().min(1).max(100), employeeId: z.string().min(1), confirm: z.boolean().optional() })
+    const { code, employeeId, confirm, vendorId } = z
+      .object({ code: z.string().min(1).max(100), employeeId: z.string().min(1), confirm: z.boolean().optional(), vendorId: z.string().optional() })
       .parse(req.body);
-    const r = await assignByScan(code, employeeId, { allowReassign: true, confirmed: confirm });
+    const r = await assignByScan(code, employeeId, { allowReassign: true, confirmed: confirm, vendorId: vendorId || undefined });
     if (r.result !== "ALREADY") {
       await writeAuditLog({
         userId: req.user!.sub,

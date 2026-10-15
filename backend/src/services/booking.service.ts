@@ -222,7 +222,9 @@ export async function assignByScan(
   code: string,
   employeeId: string,
   // confirmed: the office already accepted the "move it from another driver?" check.
-  opts: { allowReassign: boolean; confirmed?: boolean }
+  // vendorId: "scanning this vendor's own printed bills" — the code is then that
+  // vendor's order No., matched ONLY against that vendor's orders.
+  opts: { allowReassign: boolean; confirmed?: boolean; vendorId?: string; retried?: boolean }
 ): Promise<ScanAssignResult> {
   const digits = code.trim().replace(/^0+(?=\d)/, "");
   const cnNo = Number(digits);
@@ -233,8 +235,35 @@ export async function assignByScan(
 
   const include = { vendor: { select: { name: true } }, employee: { select: { id: true, name: true } } } as const;
 
-  // Only OUR CN is ever matched. Vendors' own bill/order numbers overlap between
-  // vendors (Escalo #2000 vs Inspired #2000), so they are never used for scanning.
+  if (opts.vendorId) {
+    // Vendor bill mode: their numbers overlap with other vendors' numbers, so
+    // look only inside this one vendor's orders.
+    const vendor = await prisma.vendor.findUnique({ where: { id: opts.vendorId } });
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+    const byRef = await prisma.booking.findFirst({
+      where: { vendorId: vendor.id, vendorRef: digits, status: { not: "REJECTED" } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!byRef && !opts.retried) {
+      // Inspired: an order placed minutes ago may not be synced yet — fetch that
+      // one order now (recent orders only, never old ones).
+      const { importInspiredOrderByNumber, isInspiredVendor } = await import("./inspiredWoo.service");
+      if (await isInspiredVendor(vendor.id)) {
+        try {
+          if (await importInspiredOrderByNumber(digits)) return assignByScan(code, employeeId, { ...opts, retried: true });
+        } catch (err) {
+          throw new ApiError(400, err instanceof Error ? err.message : "Lookup failed");
+        }
+      }
+    }
+    if (!byRef) {
+      throw new ApiError(404, `No ${vendor.name} order with bill No. ${digits}. Check the bill type selected, or that the order is in Awaiting Pickup.`);
+    }
+    const r = await assignByScan(String(byRef.cnNo), employeeId, { ...opts, vendorId: undefined });
+    return { ...r, message: `${vendor.name} #${digits} · ${byRef.customerName} → ${r.message}` };
+  }
+
+  // Our CN. Vendors' own bill/order numbers are only read in vendor bill mode above.
   const booking = await prisma.booking.findUnique({ where: { cnNo } });
 
   if (booking?.status === "AWAITING_PICKUP") {
@@ -273,4 +302,21 @@ export async function assignByScan(
     order: updated,
     previousEmployeeId: order.employeeId,
   };
+}
+
+
+/** Vendors whose own printed bills can be scanned (their orders carry their order No.). */
+export async function scanBillVendors() {
+  const refs = await prisma.booking.findMany({
+    where: { vendorRef: { not: null } },
+    distinct: ["vendorId"],
+    select: { vendor: { select: { id: true, name: true } } },
+  });
+  const list = refs.map((r) => r.vendor);
+  const { isInspiredVendor, inspiredConfig } = await import("./inspiredWoo.service");
+  if (inspiredConfig().configured) {
+    const insp = await prisma.vendor.findFirst({ where: { name: { equals: inspiredConfig().vendorName, mode: "insensitive" } }, select: { id: true, name: true } });
+    if (insp && (await isInspiredVendor(insp.id)) && !list.some((v) => v.id === insp.id)) list.push(insp);
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name));
 }

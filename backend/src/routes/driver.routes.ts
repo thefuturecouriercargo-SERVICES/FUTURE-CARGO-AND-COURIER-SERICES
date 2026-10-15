@@ -5,7 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange } from "../utils/dates";
 import { z } from "zod";
-import { assignByScan } from "../services/booking.service";
+import { assignByScan, scanBillVendors } from "../services/booking.service";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 const router = Router();
@@ -50,13 +50,20 @@ router.get(
   })
 );
 
+router.get(
+  "/scan-vendors",
+  asyncHandler(async (_req, res) => res.json(await scanBillVendors()))
+);
+
 // Driver scans a parcel to take it: vendor bookings are accepted to him as Pending.
 // He can't take another driver's open order, and there is no driver "unassign".
 router.post(
   "/scan-claim",
   asyncHandler(async (req, res) => {
-    const { code, confirm } = z.object({ code: z.string().min(1).max(100), confirm: z.boolean().optional() }).parse(req.body);
-    const r = await assignByScan(code, req.user!.sub, { allowReassign: false, confirmed: confirm });
+    const { code, confirm, vendorId } = z
+      .object({ code: z.string().min(1).max(100), confirm: z.boolean().optional(), vendorId: z.string().optional() })
+      .parse(req.body);
+    const r = await assignByScan(code, req.user!.sub, { allowReassign: false, confirmed: confirm, vendorId: vendorId || undefined });
     if (r.result !== "ALREADY") {
       await writeAuditLog({ userId: req.user!.sub, action: "DRIVER_SCAN_CLAIM", entity: "Order", entityId: r.order.id, meta: { cnNo: r.order.cnNo } });
       emitGlobal("order:changed", { type: "created", order: r.order });
