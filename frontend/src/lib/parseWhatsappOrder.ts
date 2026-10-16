@@ -2,8 +2,13 @@
  * Best-effort parser for a WhatsApp order message pasted by a vendor.
  * Fills what it can recognise; the vendor reviews every field before saving.
  *
- * Handles labelled messages ("Name: …", "Phone - …", "Total AED 250") and
- * unlabelled ones (name on one line, phone on another, address lines).
+ * Tuned for the two formats Inspired / Escalo receive:
+ *  1. WhatsApp catalog confirmation — "✅ Order Received Successfully!", name,
+ *     "Ph:", address, "🔹 *product*" blocks with "- Qty : 1", "*Total:* 195.00",
+ *     plus thank-you / delivery boilerplate.
+ *  2. Manual message — name, "Address:…", "Emirate sharjha", "Mobile no:…",
+ *     item lines "Akoya-AED 40," and "Total-AED 160".
+ * Also handles generic "Label: value" messages.
  */
 
 export interface ParsedOrder {
@@ -17,55 +22,44 @@ export interface ParsedOrder {
   vendorRef?: string;
 }
 
+// Emirate words, including common misspellings seen in real messages.
 const EMIRATE_WORDS: [RegExp, string][] = [
-  [/\babu\s*dhabi\b|\babudhabi\b|\bauh\b|\bmussafah\b|\bkhalifa city\b|\breem island\b/i, "ABUDHABI"],
   [/\bal\s*ain\b|\balain\b/i, "AL AIN"],
-  [/\bras\s*al\s*khaimah\b|\bras\s*al\s*khaima\b|\brak\b/i, "RAS AL KHAIMAH"],
-  [/\bumm\s*al\s*quwain\b|\bumm\s*al\s*qaiwain\b|\buaq\b/i, "UMM AL QUWAIN"],
-  [/\bfujairah\b|\bfujeirah\b|\bkhor\s*fakkan\b/i, "FUJAIRAH"],
-  [/\bajman\b/i, "AJMAN"],
-  [/\bsharjah\b|\bshj\b|\bal\s*nahda\b|\bmuwaileh\b|\bal\s*majaz\b|\bal\s*taawun\b|\babu\s*shagara\b/i, "SHARJAH"],
-  [/\bdubai\b|\bdxb\b|\bdeira\b|\bbur\s*dubai\b|\bjlt\b|\bmarina\b|\bal\s*barsha\b|\bkarama\b|\bqusais\b|\bjvc\b|\bmirdif\b|\binternational city\b|\bsilicon oasis\b/i, "DUBAI"],
-];
-
-const LABELS: { key: keyof ParsedOrder; re: RegExp }[] = [
-  { key: "customerName", re: /^(?:customer\s*)?(?:full\s*)?name|^customer$|^cust(?:omer)?\s*name/i },
-  { key: "customerPhone", re: /^(?:mobile|mob|phone|ph|contact|tel|whats\s*app|whatsapp|number|no\.?|cell)(?:\s*(?:no|number|#))?\.?$/i },
-  { key: "address", re: /^(?:address|addr|location|area|delivery\s*address|building|flat|villa|street|landmark|place)$/i },
-  { key: "emirate", re: /^(?:emirate|city|state)$/i },
-  { key: "items", re: /^(?:items?|products?|order|order\s*details|details|description|qty|item\s*details)$/i },
-  { key: "codAmount", re: /^(?:total|amount|cod|cod\s*amount|price|grand\s*total|total\s*amount|bill|payable|to\s*collect|collect)$/i },
-  { key: "notes", re: /^(?:notes?|remarks?|comments?|instructions?)$/i },
+  [/\babu\s*dh?abi\b|\babudh?abi\b|\bauh\b|\bmussafah\b|\bkhalifa\s*city\b|\breem\s*island\b|\bmusaffah\b/i, "ABUDHABI"],
+  [/\bras\s*al\s*kh?aima?h?\b|\brak\b/i, "RAS AL KHAIMAH"],
+  [/\bumm\s*al\s*q[a-z]*\b|\buaq\b/i, "UMM AL QUWAIN"],
+  [/\bfuj[ae]i?rah?\b|\bkhor\s*fakk?an\b|\bkalba\b/i, "FUJAIRAH"],
+  [/\bajm[a]+n\b/i, "AJMAN"],
+  [/\bsh[a]?r[a]?j[a]?h?\b|\bsharjha\b|\bshj\b|\bal\s*nahda\b|\bmuwaileh\b|\bal\s*majaz\b|\bal\s*taawun\b|\babu\s*shagara\b|\bal\s*qasimia\b/i, "SHARJAH"],
+  [/\bdub[a]?[iy]\b|\bdxb\b|\bdeira\b|\bbur\s*dubai\b|\bjlt\b|\bmarina\b|\bal\s*barsha\b|\bkarama\b|\bqusais\b|\bjvc\b|\bmirdif\b|\binternational\s*city\b|\bsilicon\s*oasis\b|\bal\s*nahda\s*1\b/i, "DUBAI"],
 ];
 
 // UAE mobiles/landlines in their common written forms.
 const PHONE_RE = /(?:\+?971|00971|0)?[\s-]*\(?0?(?:5[024568]|[2-79])\)?[\s-]*\d{3}[\s-]*\d{4}\b/;
 
+// Lines that carry no customer data (confirmation text, separators, headings).
+const BOILERPLATE = [
+  /^order\s+received/i,
+  /^here\s+(are|is)\s+(your|the)\s+order/i,
+  /^order\s+summary/i,
+  /^order\s+details?:?$/i,
+  /^(new\s+)?order:?$/i,
+  /delivery\s+within/i,
+  /courier\s+partner/i,
+  /^thank\s*(you|s)/i,
+  /^(hi|hello|salam|assalam|dear)\b/i,
+  /^next\s+type/i,
+  /^[-=_*~.\s]+$/,
+  /^(sub\s*total|shipping|delivery\s*charge|discount)\b/i,
+];
+
 function cleanPhone(raw: string): string {
-  const digits = raw.replace(/[^\d+]/g, "");
-  let d = digits.replace(/^\+/, "");
+  let d = raw.replace(/[^\d+]/g, "").replace(/^\+/, "");
   if (d.startsWith("00971")) d = d.slice(5);
   else if (d.startsWith("971")) d = d.slice(3);
   if (!d.startsWith("0")) d = "0" + d;
-  // 05x xxx xxxx
   if (/^05\d{8}$/.test(d)) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
   return d;
-}
-
-function findAmount(text: string): number | undefined {
-  const patterns = [
-    /(?:total|amount|cod|grand\s*total|price|payable|collect)[^\d\n]{0,15}(\d[\d,]*(?:\.\d+)?)/i,
-    /(?:aed|dhs?|dirhams?)\s*\.?\s*(\d[\d,]*(?:\.\d+)?)/i,
-    /(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)\b/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) {
-      const n = Number(m[1].replace(/,/g, ""));
-      if (Number.isFinite(n) && n >= 0 && n < 1_000_000) return Math.round(n);
-    }
-  }
-  return undefined;
 }
 
 function detectEmirate(text: string): string | undefined {
@@ -73,100 +67,154 @@ function detectEmirate(text: string): string | undefined {
   return undefined;
 }
 
+function num(s: string): number | undefined {
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) && n >= 0 && n < 1_000_000 ? Math.round(n) : undefined;
+}
+
+/** Strip emojis, WhatsApp bold/italic markers and bullets. */
+function tidy(line: string): string {
+  return line
+    .replace(/^\[\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?\]\s*[^:]{1,40}:\s*/i, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/[*_~]/g, "")
+    .replace(/^[\s•\-–—>·]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function parseWhatsappOrder(raw: string): ParsedOrder {
-  // Strip WhatsApp export prefixes like "[14/10/26, 3:12 PM] Fatima:" and bold/italic markers.
-  const lines = raw
-    .split(/\r?\n/)
-    .map((l) =>
-      l
-        .replace(/^\[\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?\]\s*[^:]{1,40}:\s*/i, "")
-        .replace(/[*_~]/g, "")
-        .replace(/^[\s•\-–—>]+/, "")
-        .trim()
-    )
-    .filter(Boolean);
-
   const out: ParsedOrder = {};
+  const rawLines = raw.split(/\r?\n/);
+  const items: string[] = [];
+  const addressParts: string[] = [];
+  const notes: string[] = [];
   const leftovers: string[] = [];
-  const itemLines: string[] = [];
-  const addressLines: string[] = [];
+  let pendingItem: { name: string; qty: number } | null = null;
+  let totalFromLabel: number | undefined;
+  let lastAedAmount: number | undefined;
 
-  for (const line of lines) {
-    // "Label: value" / "Label - value" / "Label = value"
-    const m = line.match(/^([A-Za-z][A-Za-z .#/]{0,24}?)\s*[:：=\-–]\s*(.+)$/);
-    const label = m ? LABELS.find((l) => l.re.test(m[1].trim())) : undefined;
-    if (m && label) {
-      const value = m[2].trim();
-      if (label.key === "customerPhone") {
-        const pm = value.match(PHONE_RE);
-        if (pm && !out.customerPhone) out.customerPhone = cleanPhone(pm[0]);
-      } else if (label.key === "codAmount") {
-        const n = findAmount(`total ${value}`) ?? (Number(value.replace(/[^\d.]/g, "")) || undefined);
-        if (n !== undefined && out.codAmount === undefined) out.codAmount = n;
-      } else if (label.key === "address") {
-        addressLines.push(value);
-      } else if (label.key === "items") {
-        itemLines.push(value);
-      } else if (label.key === "emirate") {
-        out.emirate = detectEmirate(value) ?? value.toUpperCase();
-      } else if (!out[label.key]) {
-        (out as Record<string, string>)[label.key] = value;
-      }
+  const flushItem = () => {
+    if (pendingItem) items.push(`${pendingItem.qty} × ${pendingItem.name}`);
+    pendingItem = null;
+  };
+
+  for (const rawLine of rawLines) {
+    const isProductBullet = /^\s*(?:🔹|🔸|▪️|▫️|•|◾|➤|👉)/u.test(rawLine);
+    const line = tidy(rawLine);
+    if (!line) continue;
+    if (BOILERPLATE.some((re) => re.test(line))) continue;
+
+    // --- Catalog product blocks: "🔹 Inspired by: Noir…" then "Qty : 1", "Rate", "Amt"
+    const qty = line.match(/^qty\s*[:\-]?\s*(\d+)/i);
+    if (qty) {
+      if (pendingItem) pendingItem.qty = Number(qty[1]);
       continue;
     }
+    if (/^(rate|amt|amount|price|unit\s*price)\s*[:\-]/i.test(line) && pendingItem) continue;
+    if (isProductBullet || /^inspired\s+by\s*:/i.test(line)) {
+      flushItem();
+      const name = line.replace(/^inspired\s+by\s*:\s*/i, "").trim();
+      if (name) pendingItem = { name, qty: 1 };
+      continue;
+    }
+    flushItem();
 
-    // "Order #20308", "Order No: 20308", "Invoice 20308" → the vendor's own reference.
-    const ref = line.match(/^(?:new\s*)?(?:order|invoice|bill|inv)\s*(?:no\.?|number|id|#)?\s*[:#\-]?\s*#?\s*([A-Za-z]{0,4}\d{3,})\s*$/i);
+    // --- Order number (kept only as a reference)
+    const ref = line.match(/^(?:order|invoice|bill|inv)\s*(?:no\.?|number|id|#)?\s*[:#\-]?\s*#?\s*([A-Za-z]{0,4}\d{3,})\s*$/i);
     if (ref) {
       if (!out.vendorRef) out.vendorRef = ref[1];
       continue;
     }
 
-    // Headings like "Order", "New order", "Order details" carry no data.
-    if (/^(?:new\s*)?order(?:\s*(?:details|confirmation|#?\s*\d*))?:?$/i.test(line) || /^(?:hi|hello|salam|assalam)/i.test(line)) continue;
-
-    // Instructions for the driver → notes.
-    if (/^(?:please\s+)?(?:call|deliver|delivery|don'?t|do not|leave|ring|before|after|urgent|send)\b/i.test(line) && !/\d{3}/.test(line)) {
-      out.notes = out.notes ? `${out.notes}; ${line}` : line;
+    // --- Total (wins over any per-item amount)
+    const total = line.match(/^(?:grand\s*)?total\s*(?:amount)?\s*[:\-=]?\s*(?:aed|dhs?|dirhams?)?\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)/i);
+    if (total) {
+      totalFromLabel = num(total[1]);
+      continue;
+    }
+    const cod = line.match(/^(?:cod|cod\s*amount|to\s*collect|collect|payable)\s*[:\-=]?\s*(?:aed|dhs?)?\s*(\d[\d,]*(?:\.\d+)?)/i);
+    if (cod) {
+      totalFromLabel = num(cod[1]);
       continue;
     }
 
-    // Unlabelled phone number on its own line (or inside a line).
-    const pm = line.match(PHONE_RE);
-    if (pm && !out.customerPhone && line.replace(pm[0], "").replace(/[^A-Za-z]/g, "").length < 4) {
-      out.customerPhone = cleanPhone(pm[0]);
-      continue;
-    }
-
-    // Unlabelled amount line ("250 AED", "Total 250").
-    if (out.codAmount === undefined && /\b(aed|dhs?|dirhams?|total|cod)\b/i.test(line) && line.length < 40) {
-      const n = findAmount(line);
-      if (n !== undefined) {
-        out.codAmount = n;
-        continue;
+    // --- Labelled fields: "Label: value", "Label - value", or "Emirate sharjha"
+    const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|area|building|landmark|delivery\s*address|emirate|city|state|items?|products?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
+    if (lab) {
+      const key = lab[1].toLowerCase();
+      const value = lab[2].trim().replace(/,$/, "");
+      if (/^(ph|phone|mobile|mob|contact|tel|whats|number)/.test(key)) {
+        const pm = value.match(PHONE_RE);
+        if (pm && !out.customerPhone) out.customerPhone = cleanPhone(pm[0]);
+        else if (!pm) leftovers.push(line);
+      } else if (/^(name|customer|full)/.test(key)) {
+        if (!out.customerName) out.customerName = value;
+      } else if (/^(address|addr|location|area|building|landmark|delivery)/.test(key)) {
+        addressParts.push(value);
+      } else if (/^(emirate|city|state)/.test(key)) {
+        out.emirate = detectEmirate(value) ?? value.toUpperCase();
+      } else if (/^(item|product|order)/.test(key)) {
+        items.push(value);
+      } else {
+        notes.push(value);
       }
+      continue;
     }
 
-    // "2 x abaya", "1 pc perfume" → items
+    // --- A line that is only an amount: "120 aed", "AED 120"
+    const bare = line.match(/^(?:(?:aed|dhs?)\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?))\s*$/i);
+    if (bare) {
+      if (totalFromLabel === undefined) totalFromLabel = num(bare[1] ?? bare[2]);
+      continue;
+    }
+
+    // --- Manual item lines: "Akoya-AED 40,", "Noir - 40 AED", "Ahl 40 dhs"
+    const itemLine =
+      line.match(/^(.{2,60}?)\s*[-–:=]?\s*(?:aed|dhs?|dirhams?)\s*\.?\s*(\d[\d,]*(?:\.\d+)?)\s*,?$/i) ||
+      line.match(/^(.{2,60}?)\s*[-–:=]\s*(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)?\s*,?$/i) ||
+      line.match(/^(.{2,60}?)\s+(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)\s*,?$/i);
+    if (itemLine && !PHONE_RE.test(line) && /[a-z]/i.test(itemLine[1])) {
+      items.push(itemLine[1].replace(/[-–:=,\s]+$/, "").trim());
+      lastAedAmount = num(itemLine[2]);
+      continue;
+    }
+
+    // --- "2 x Abaya", "1 pc perfume"
     if (/^\d+\s*(?:x|×|pcs?|pieces?|nos?|qty)\b/i.test(line) || /\b(?:x|×)\s*\d+\b/i.test(line)) {
-      itemLines.push(line);
+      items.push(line);
+      continue;
+    }
+
+    // --- Unlabelled phone on its own line
+    const pm = line.match(PHONE_RE);
+    if (pm && line.replace(pm[0], "").replace(/[^A-Za-z]/g, "").length < 4) {
+      if (!out.customerPhone) out.customerPhone = cleanPhone(pm[0]);
+      continue;
+    }
+
+    // --- Driver instructions
+    if (/^(?:please\s+)?(?:call|deliver|delivery|don'?t|do not|leave|ring|before|after|urgent|send)\b/i.test(line) && !/\d{3}/.test(line)) {
+      notes.push(line);
       continue;
     }
 
     leftovers.push(line);
   }
+  flushItem();
 
-  // Unlabelled: first short line without digits is usually the name; the rest is the address.
-  if (!out.customerName && leftovers.length) {
-    const idx = leftovers.findIndex((l) => l.length <= 40 && !/\d/.test(l) && !detectEmirate(l) && l.split(/\s+/).length <= 5);
+  // Name: first short line without digits that isn't an emirate word.
+  if (!out.customerName) {
+    const idx = leftovers.findIndex((l) => l.length <= 40 && !/\d/.test(l) && l.split(/\s+/).length <= 5 && !detectEmirate(l));
     if (idx >= 0) out.customerName = leftovers.splice(idx, 1)[0];
   }
-  addressLines.push(...leftovers);
+  addressParts.push(...leftovers);
 
-  if (addressLines.length) out.address = addressLines.join(", ");
-  if (itemLines.length) out.items = itemLines.join(", ");
+  if (addressParts.length) out.address = addressParts.join(", ");
+  if (items.length) out.items = items.join(", ");
+  if (notes.length) out.notes = notes.join("; ");
   if (!out.emirate) out.emirate = detectEmirate([out.address, raw].filter(Boolean).join(" "));
-  if (out.codAmount === undefined) out.codAmount = findAmount(raw);
+  out.codAmount = totalFromLabel ?? (items.length <= 1 ? lastAedAmount : undefined);
   if (!out.customerPhone) {
     const pm = raw.match(PHONE_RE);
     if (pm) out.customerPhone = cleanPhone(pm[0]);
