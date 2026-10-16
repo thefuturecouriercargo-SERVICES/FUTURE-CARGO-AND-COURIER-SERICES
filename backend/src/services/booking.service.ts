@@ -305,18 +305,18 @@ export async function assignByScan(
 }
 
 
-/** Vendors whose own printed bills can be scanned (their orders carry their order No.). */
+/**
+ * Vendors that print their OWN bills, shown as "<NAME> bill" on the scan screens.
+ * A fixed list (Railway variable SCAN_BILL_VENDORS, comma-separated vendor names),
+ * so other vendors never appear there by accident.
+ */
 export async function scanBillVendors() {
-  const refs = await prisma.booking.findMany({
-    where: { vendorRef: { not: null } },
-    distinct: ["vendorId"],
-    select: { vendor: { select: { id: true, name: true } } },
-  });
-  const list = refs.map((r) => r.vendor);
-  const { isInspiredVendor, inspiredConfig } = await import("./inspiredWoo.service");
-  if (inspiredConfig().configured) {
-    const insp = await prisma.vendor.findFirst({ where: { name: { equals: inspiredConfig().vendorName, mode: "insensitive" } }, select: { id: true, name: true } });
-    if (insp && (await isInspiredVendor(insp.id)) && !list.some((v) => v.id === insp.id)) list.push(insp);
-  }
-  return list.sort((a, b) => a.name.localeCompare(b.name));
+  const names = (process.env.SCAN_BILL_VENDORS || "INSPIRED,ESCALO")
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+  const found = await Promise.all(
+    names.map((name) => prisma.vendor.findFirst({ where: { name: { equals: name, mode: "insensitive" } }, select: { id: true, name: true } }))
+  );
+  return found.filter((v): v is { id: string; name: string } => Boolean(v));
 }
