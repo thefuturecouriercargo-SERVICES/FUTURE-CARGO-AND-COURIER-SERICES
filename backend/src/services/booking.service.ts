@@ -107,9 +107,17 @@ async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, i
 
 /** Creates a booking with the next CN from our own range. Retries on a race. */
 /** True if no order and no booking uses this CN. */
+/**
+ * Manual Daily Entry CNs typed before this moment are ignored when a vendor's
+ * website order No. is used as CN (owner's instruction: old hand-typed numbers
+ * don't block website numbers). Railway variable CN_REUSE_CUTOFF can move it.
+ */
+export const CN_REUSE_CUTOFF = new Date(process.env.CN_REUSE_CUTOFF || "2026-10-16T00:00:00+04:00");
+const recentOrders = { createdAt: { gte: CN_REUSE_CUTOFF } };
+
 export async function isCnFree(cnNo: number) {
   const [order, booking] = await Promise.all([
-    prisma.order.findFirst({ where: { cnNo }, select: { id: true } }),
+    prisma.order.findFirst({ where: { cnNo, ...recentOrders }, select: { id: true } }),
     prisma.booking.findUnique({ where: { cnNo }, select: { id: true } }),
   ]);
   return !order && !booking;
@@ -187,7 +195,7 @@ export async function acceptBooking(
   const employee = await prisma.user.findUnique({ where: { id: opts.employeeId } });
   if (!employee || employee.role !== "DRIVER" || !employee.active) throw new ApiError(404, "Driver not found or inactive");
 
-  const existingOrder = await prisma.order.findFirst({ where: { cnNo: booking.cnNo } });
+  const existingOrder = await prisma.order.findFirst({ where: { cnNo: booking.cnNo, ...recentOrders } });
   if (existingOrder) throw new ApiError(409, `CN No. ${booking.cnNo} is already in Daily Entry`);
 
   const { date } = dayRange(opts.date);
@@ -200,7 +208,7 @@ export async function acceptBooking(
     // Re-check inside the lock: claim the booking only if it's still waiting.
     const claimed = await tx.booking.updateMany({ where: { id: booking.id, status: "AWAITING_PICKUP" }, data: { status: "ACCEPTED" } });
     if (claimed.count === 0) throw new ApiError(409, `CN No. ${booking.cnNo} was just accepted by someone else`);
-    const dup = await tx.order.findFirst({ where: { cnNo: booking.cnNo }, select: { id: true } });
+    const dup = await tx.order.findFirst({ where: { cnNo: booking.cnNo, ...recentOrders }, select: { id: true } });
     if (dup) throw new ApiError(409, `CN No. ${booking.cnNo} is already in Daily Entry`);
 
     // Website orders go into Daily Entry with the vendor's own order No. as CN
@@ -210,7 +218,7 @@ export async function acceptBooking(
     const own = Number(booking.vendorRef);
     if (booking.createdBy === "WEBSITE" && booking.cnSource === "SYSTEM" && Number.isSafeInteger(own) && own > 0 && own < CN_START) {
       const taken =
-        (await tx.order.findFirst({ where: { cnNo: own }, select: { id: true } })) ??
+        (await tx.order.findFirst({ where: { cnNo: own, ...recentOrders }, select: { id: true } })) ??
         (await tx.booking.findFirst({ where: { cnNo: own, id: { not: booking.id } }, select: { id: true } }));
       if (!taken) {
         await tx.booking.update({ where: { id: booking.id }, data: { cnNo: own, cnSource: "VENDOR" } });

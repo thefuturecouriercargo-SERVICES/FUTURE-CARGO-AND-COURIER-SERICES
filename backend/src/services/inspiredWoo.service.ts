@@ -411,7 +411,11 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
     // Already typed into Daily Entry by hand with Inspired's own order No. as the CN.
     const typedNo = Number(data.vendorRef);
     if (Number.isSafeInteger(typedNo)) {
-      const typed = await prisma.order.findFirst({ where: { cnNo: typedNo, vendorId: vendor.id }, select: { id: true } });
+      // Only a recent hand entry can be this same order; older ones are ignored.
+      const typed = await prisma.order.findFirst({
+        where: { cnNo: typedNo, vendorId: vendor.id, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        select: { id: true },
+      });
       if (typed) {
         skipped++;
         continue;
