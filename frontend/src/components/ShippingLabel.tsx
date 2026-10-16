@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber } from "@/lib/format";
@@ -65,6 +65,18 @@ export function splitItems(items?: string | null): { qty: string; name: string }
     });
 }
 
+type Fit = { font: number; row: number; cols: 1 | 2; clampName: number; tick: number; qtyW: number };
+const fitLevel = (font: number, row: number, cols: 1 | 2, clampName = 1): Fit => ({
+  font, row, cols, clampName, tick: font <= 7 ? 7 : font <= 10 ? 9 : font <= 12 ? 10 : 12, qtyW: font <= 7 ? 14 : font <= 9 ? 18 : font <= 12 ? 24 : 30,
+});
+/** Item-list sizes from biggest to smallest. The label steps down until every item fits. */
+const FIT_LEVELS: Record<LabelSize, Fit[]> = {
+  "4x6": [fitLevel(15, 24, 1, 2), fitLevel(13, 20, 1), fitLevel(11, 16, 1), fitLevel(10, 15, 2), fitLevel(8.5, 12, 2), fitLevel(7.5, 10, 2), fitLevel(6.5, 8, 2), fitLevel(6, 7, 2)],
+  a4: [fitLevel(15, 24, 1, 2), fitLevel(13, 20, 1), fitLevel(11, 16, 1), fitLevel(10, 15, 2), fitLevel(8.5, 12, 2), fitLevel(7.5, 10, 2), fitLevel(6.5, 8, 2), fitLevel(6, 7, 2)],
+  "4x4": [fitLevel(11, 17, 1), fitLevel(9.5, 14, 1), fitLevel(8.5, 12, 2), fitLevel(7.5, 10, 2), fitLevel(6.5, 8, 2), fitLevel(6, 7, 2)],
+  "80mm": [fitLevel(12, 20, 1, 0)],
+};
+
 /**
  * One printable shipping label. Black on white only, so it prints cleanly on
  * thermal label/receipt printers as well as office printers.
@@ -77,19 +89,33 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   const narrow = size === "80mm" || sq;
   const box: React.CSSProperties =
     size === "4x6"
-      ? { width: "100mm", height: "150mm", padding: "4mm" }
+      ? { width: "100mm", height: "150mm", padding: "4mm", overflow: "hidden" }
       : sq
         ? { width: "100mm", height: "100mm", padding: "3mm", overflow: "hidden" }
         : size === "80mm"
           ? { width: "80mm", padding: "3mm" }
-          : { width: "92mm", minHeight: "132mm", padding: "4mm", border: "1px dashed #999" };
+          : { width: "92mm", height: "132mm", padding: "4mm", border: "1px dashed #999", overflow: "hidden" };
 
   const items = splitItems(booking.items);
   const totalQty = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
-  const itemFont = sq ? 11 : narrow ? 12 : 15;
+  const levels = FIT_LEVELS[size];
+  // Remember the fitted size per item list, so a new order starts again at the biggest size.
+  const fitKey = `${size}|${booking.items ?? ""}|${booking.address ?? ""}|${booking.notes ?? ""}`;
+  const [fitState, setFitState] = useState({ key: fitKey, level: 0 });
+  const level = fitState.key === fitKey ? fitState.level : 0;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // After each render, if the items don't fit on the label, step down one size.
+  useLayoutEffect(() => {
+    const root = rootRef.current, box = boxRef.current;
+    if (!root || !box || size === "80mm" || level >= levels.length - 1) return;
+    const over = root.scrollHeight > root.clientHeight + 1 || box.scrollHeight > box.clientHeight + 1;
+    if (over) setFitState({ key: fitKey, level: level + 1 });
+  });
+  const fit = levels[Math.min(level, levels.length - 1)];
 
   return (
-    <div className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <div ref={rootRef} className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
       {/* Header: brand + date on the left, compact barcode + CN on the right */}
       <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-1.5">
         <div className="min-w-0">
@@ -119,35 +145,39 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         <div style={{ fontSize: sq ? 13 : 15, fontWeight: 700 }} className={sq ? "truncate" : ""}>
           {booking.customerName} · {booking.customerPhone}
         </div>
-        <div style={sq ? clamp(2) : clamp(3)}>{booking.address}</div>
+        <div style={sq || items.length > 14 ? clamp(2) : clamp(3)}>{booking.address}</div>
         <div style={{ fontWeight: 700, textTransform: "uppercase" }}>{booking.emirate}</div>
       </div>
 
-      {/* Items — boxed table, one row per product, tick box for packing */}
+      {/* Items — boxed table that fills the label down to the footer.
+          Every item is printed: rows shrink, then split into 2 columns for big orders. */}
       {items.length > 0 && (
-        <div className="mt-1.5 border-2 border-black" style={{ fontSize: itemFont }}>
+        <div ref={boxRef} className={`mt-1.5 flex flex-col border-2 border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font }}>
           <div className="flex border-b-2 border-black bg-black px-1.5 py-0.5 text-white" style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>
-            <span style={{ width: 18 }}>✓</span>
-            <span style={{ width: 30 }}>Qty</span>
+            <span style={{ width: fit.tick + 6 }}>✓</span>
+            <span style={{ width: fit.qtyW }}>{fit.qtyW < 24 ? "#" : "Qty"}</span>
             <span className="flex-1">Item</span>
             <span>{items.length} item{items.length === 1 ? "" : "s"}{totalQty && totalQty !== items.length ? ` · ${totalQty} pcs` : ""}</span>
           </div>
-          {items.slice(0, sq ? 5 : 9).map((it, i) => (
-            <div key={i} className="flex items-center border-b border-black px-1.5 last:border-b-0" style={{ minHeight: sq ? 16 : narrow ? 20 : 26 }}>
-              <span style={{ width: 18 }}>
-                <span style={{ display: "inline-block", width: sq ? 10 : 12, height: sq ? 10 : 12, border: "1.5px solid #000" }} />
-              </span>
-              <span style={{ width: 30, fontWeight: 800 }}>{it.qty}</span>
-              <span className="flex-1" style={{ fontWeight: 700, lineHeight: 1.2 }}>
-                {it.name}
-              </span>
-            </div>
-          ))}
-          {items.length > (sq ? 5 : 9) && (
-            <div className="px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 700 }}>
-              + {items.length - (sq ? 5 : 9)} more — see order details
-            </div>
-          )}
+          <div className={fit.cols === 2 ? "grid grid-cols-2" : "flex flex-col"}>
+            {items.map((it, i) => (
+              <div
+                key={i}
+                className="flex items-center border-b border-black px-1.5"
+                style={{ minHeight: fit.row, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined }}
+              >
+                <span className="flex shrink-0 items-center" style={{ width: fit.tick + 6 }}>
+                  <span style={{ display: "inline-block", width: fit.tick, height: fit.tick, border: "1.5px solid #000" }} />
+                </span>
+                <span className="shrink-0" style={{ width: fit.qtyW, fontWeight: 800 }}>{it.qty}</span>
+                <span className="min-w-0 flex-1" style={{ fontWeight: 700, lineHeight: 1.1, ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
+                  {it.name}
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* empty space stays inside the box */}
+          <div className="flex-1" />
         </div>
       )}
 
@@ -158,7 +188,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       )}
 
-      <div className={`${size === "80mm" ? "mt-2" : "mt-auto"} border-t border-black pt-0.5 text-right`} style={{ fontSize: 8 }}>
+      <div className={`${size === "80mm" || items.length ? "mt-1" : "mt-auto"} border-t border-black pt-0.5 text-right`} style={{ fontSize: 8 }}>
         The Future Courier Service L.L.C
       </div>
     </div>
