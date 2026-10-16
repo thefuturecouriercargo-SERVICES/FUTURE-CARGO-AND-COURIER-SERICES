@@ -120,6 +120,7 @@ export interface Booking {
   status: BookingStatus;
   rejectReason?: string | null;
   createdBy: "VENDOR" | "ADMIN" | "WEBSITE";
+  hasPhoto?: boolean;
   orderId?: string | null;
   order?: {
     id: string;

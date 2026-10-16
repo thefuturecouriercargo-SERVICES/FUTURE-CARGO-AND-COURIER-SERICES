@@ -7,6 +7,7 @@ import { z } from "zod";
 import { ApiError } from "../utils/asyncHandler";
 import { bookingInputSchema, createBooking, assertRefFree } from "../services/booking.service";
 import { writeAuditLog } from "../services/audit.service";
+import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { emitGlobal } from "../lib/socket";
 
 const router = Router();
@@ -355,9 +356,39 @@ router.post(
   asyncHandler(async (req, res) => {
     const input = bookingInputSchema.parse(req.body);
     const booking = await createBooking(req.vendor!.sub, input, "VENDOR");
+    await attachSlipPhoto(req.body?.photoId, booking.id, req.vendor!.sub);
     await writeAuditLog({ action: "BOOKING_CREATE", entity: "Booking", entityId: booking.id, meta: { vendor: booking.vendor.name, cnNo: booking.cnNo, by: "VENDOR" } });
     emitGlobal("booking:changed", { type: "created", id: booking.id });
     res.status(201).json(booking);
+  })
+);
+
+router.get(
+  "/photo-reader/status",
+  asyncHandler(async (_req, res) => {
+    res.json({ configured: photoReaderConfigured() });
+  })
+);
+
+router.post(
+  "/photo-read",
+  asyncHandler(async (req, res) => {
+    const data = z.object({ image: z.string().min(100), thumb: z.string().optional() }).parse(req.body);
+    const m = data.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!m) throw new ApiError(400, "Unsupported image");
+    const orders = await readOrderPhoto(m[2], m[1]);
+    const photoId = await storeSlipPhoto(req.vendor!.sub, data.thumb);
+    res.json({ orders, photoId });
+  })
+);
+
+router.get(
+  "/bookings/:id/photo",
+  asyncHandler(async (req, res) => {
+    const photo = await getBookingPhoto(req.params.id, req.vendor!.sub);
+    res.setHeader("Content-Type", photo.mime);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(Buffer.from(photo.data));
   })
 );
 

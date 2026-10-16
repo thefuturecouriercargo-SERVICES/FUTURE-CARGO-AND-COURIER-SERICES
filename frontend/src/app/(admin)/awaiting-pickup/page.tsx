@@ -7,6 +7,7 @@ import { fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
+import PhotoBulkEntry from "@/components/PhotoBulkEntry";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
 import { WebsiteSyncPanels } from "@/components/InspiredSyncPanel";
 import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
@@ -34,6 +35,7 @@ export default function AwaitingPickupPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(false);
   const [justSaved, setJustSaved] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -188,6 +190,15 @@ export default function AwaitingPickupPage() {
       <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-navy">Awaiting Pickup</h1>
         {canEdit && (
+          <span className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setShowPhotos(!showPhotos)}
+            className={`rounded px-5 py-3 font-mono text-sm font-bold uppercase tracking-wide ${
+              showPhotos ? "border border-navy bg-white text-navy" : "bg-navy text-paper hover:bg-navy-2"
+            }`}
+          >
+            {showPhotos ? "✕ Close photos" : "📷 Read order photos"}
+          </button>
           <button
             onClick={() => {
               setEditing(null);
@@ -199,6 +210,7 @@ export default function AwaitingPickupPage() {
           >
             {showForm && !editing ? "✕ Close form" : "➕ Enter order for a vendor"}
           </button>
+          </span>
         )}
       </div>
       <p className="mb-5 max-w-3xl text-sm text-ink-soft">
@@ -228,6 +240,12 @@ export default function AwaitingPickupPage() {
               Close
             </button>
           </span>
+        </div>
+      )}
+
+      {showPhotos && canEdit && (
+        <div className="mb-6">
+          <PhotoBulkEntry mode="admin" vendors={vendors} onSaved={load} onPrint={printLabels} />
         </div>
       )}
 
@@ -416,6 +434,11 @@ export default function AwaitingPickupPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap">
+                        {b.hasPhoto && (
+                          <a href={`/api/bookings/${b.id}/photo`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
+                            📷
+                          </a>
+                        )}
                         <button onClick={() => printLabels([b.id])} className="mr-2 text-xs text-brass hover:underline">
                           Label
                         </button>

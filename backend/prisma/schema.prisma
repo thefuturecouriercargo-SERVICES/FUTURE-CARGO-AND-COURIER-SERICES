@@ -365,6 +365,9 @@ model Booking {
   orderId       String?       @unique
   order         Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
   labelPrintedAt DateTime?
+  // True when the order was read from a photo (handwritten slip); the photo is in BookingPhoto.
+  hasPhoto      Boolean       @default(false)
+  photo         BookingPhoto?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -373,4 +376,19 @@ model Booking {
   @@index([status])
   @@index([createdAt])
   @@map("bookings")
+}
+
+// Small copy of a handwritten order slip that was read by the photo reader.
+// Kept separate so booking lists never load image bytes. Pruned after 60 days.
+model BookingPhoto {
+  id        String   @id @default(cuid())
+  vendorId  String
+  bookingId String?  @unique
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  mime      String   @default("image/jpeg")
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("booking_photos")
 }

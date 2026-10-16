@@ -7,6 +7,7 @@ import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorNav from "@/components/VendorNav";
 import BookingForm from "@/components/BookingForm";
+import PhotoBulkEntry from "@/components/PhotoBulkEntry";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
 import OrderDetails from "@/components/OrderDetails";
 import { Booking, BookingInput } from "@/types";
@@ -37,6 +38,7 @@ function ConsignmentsContent() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<Filter>("AWAITING_PICKUP");
   const [search, setSearch] = useState("");
+  const [showPhotos, setShowPhotos] = useState(false);
   const [date, setDate] = useState(today());
   const [source, setSource] = useState<Source>("MANUAL");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -155,6 +157,20 @@ function ConsignmentsContent() {
                 Close
               </button>
             </span>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <button
+            onClick={() => setShowPhotos(!showPhotos)}
+            className={`rounded px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide ${showPhotos ? "border border-navy bg-white text-navy" : "bg-navy text-paper hover:bg-navy-2"}`}
+          >
+            {showPhotos ? "✕ Close photos" : "📷 Enter orders from photos"}
+          </button>
+        </div>
+        {showPhotos && (
+          <div className="mb-8">
+            <PhotoBulkEntry mode="vendor" vendorName={vendor.name} onSaved={load} onPrint={printLabels} />
           </div>
         )}
 
@@ -327,6 +343,11 @@ function ConsignmentsContent() {
                         {new Date(b.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
                       </td>
                       <td className="whitespace-nowrap">
+                        {b.hasPhoto && (
+                          <a href={`/api/vendor-portal/bookings/${b.id}/photo`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
+                            📷
+                          </a>
+                        )}
                         <button onClick={() => printLabels([b.id])} className="mr-2 text-xs text-brass hover:underline">
                           Label
                         </button>

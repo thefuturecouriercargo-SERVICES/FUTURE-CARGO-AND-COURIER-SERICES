@@ -5,6 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
+import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan, scanBillVendors } from "../services/booking.service";
 
 // Office side of vendor bookings: the "Awaiting Pickup" queue.
@@ -55,6 +56,45 @@ router.get(
   })
 );
 
+const photoReadSchema = z.object({
+  vendorId: z.string().min(1, "Choose a vendor"),
+  image: z.string().min(100), // data URL sent to the reader
+  thumb: z.string().optional(), // smaller copy kept with the order
+});
+
+router.get(
+  "/photo-reader/status",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (_req, res) => {
+    res.json({ configured: photoReaderConfigured() });
+  })
+);
+
+// Read one handwritten slip photo → suggested fields (nothing is saved as an order yet).
+router.post(
+  "/photo-read",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const data = photoReadSchema.parse(req.body);
+    const m = data.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+    if (!m) throw new ApiError(400, "Unsupported image");
+    const orders = await readOrderPhoto(m[2], m[1]);
+    const photoId = await storeSlipPhoto(data.vendorId, data.thumb);
+    res.json({ orders, photoId });
+  })
+);
+
+router.get(
+  "/:id/photo",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const photo = await getBookingPhoto(req.params.id);
+    res.setHeader("Content-Type", photo.mime);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.send(Buffer.from(photo.data));
+  })
+);
+
 // Office enters a consignment on a vendor's behalf.
 router.post(
   "/",
@@ -66,6 +106,7 @@ router.post(
     if (!vendor || !vendor.active) throw new ApiError(404, "Vendor not found or inactive");
     const input = bookingInputSchema.parse(rest);
     const booking = await createBooking(vendorId, input, "ADMIN");
+    await attachSlipPhoto(req.body?.photoId, booking.id, vendorId);
     await writeAuditLog({ userId: req.user!.sub, action: "BOOKING_CREATE", entity: "Booking", entityId: booking.id, meta: { vendor: vendor.name, cnNo: booking.cnNo, by: "ADMIN" } });
     emitGlobal("booking:changed", { type: "created", id: booking.id });
     res.status(201).json(booking);
