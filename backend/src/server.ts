@@ -5,7 +5,7 @@ import { initSocket } from "./lib/socket";
 import { prisma } from "./lib/prisma";
 import { backfillResolvedAt } from "./services/resolvedAt.backfill";
 import { startWeeklyBackupScheduler } from "./services/backup.service";
-import { startInspiredSyncScheduler } from "./services/inspiredWoo.service";
+import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 
 async function main() {
   const app = createApp();
@@ -25,7 +25,7 @@ async function main() {
   startWeeklyBackupScheduler();
 
   // Inspired website orders → Awaiting Pickup every 5 min (no-op until configured).
-  startInspiredSyncScheduler();
+  startWooSyncScheduler();
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console

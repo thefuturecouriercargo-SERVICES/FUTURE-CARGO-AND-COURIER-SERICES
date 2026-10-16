@@ -20,21 +20,38 @@ import { createBooking, phoneDigits, isCnFree, CN_START } from "./booking.servic
  *   INSPIRED_WC_DAYS     how far back the first sync looks (default 2 days)
  */
 
-export function inspiredConfig() {
-  const url = (process.env.INSPIRED_WC_URL || "").replace(/\/+$/, "");
-  const key = process.env.INSPIRED_WC_KEY || "";
-  const secret = process.env.INSPIRED_WC_SECRET || "";
+/**
+ * Connected vendor websites. WOO_VENDORS lists the connection keys (default
+ * INSPIRED,ESCALO); each key reads <KEY>_WC_URL, <KEY>_WC_KEY, <KEY>_WC_SECRET
+ * and optionally <KEY>_VENDOR_NAME, <KEY>_WC_STATUSES, <KEY>_WC_DAYS.
+ */
+export function wooConnections(): string[] {
+  return (process.env.WOO_VENDORS || "INSPIRED,ESCALO")
+    .split(",")
+    .map((k) => k.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+export function wooConfig(conn: string) {
+  const env = (k: string) => process.env[`${conn}_${k}`] || "";
+  const url = env("WC_URL").replace(/\/+$/, "");
+  const key = env("WC_KEY");
+  const secret = env("WC_SECRET");
   return {
+    conn,
     url,
     key,
     secret,
-    vendorName: process.env.INSPIRED_VENDOR_NAME || "INSPIRED",
+    vendorName: env("VENDOR_NAME") || conn,
     // Inspired marks an order "completed" when it is confirmed (ready to ship), not when delivered.
-    statuses: (process.env.INSPIRED_WC_STATUSES || "processing,on-hold,completed").split(",").map((s) => s.trim()).filter(Boolean),
-    days: Math.max(1, parseInt(process.env.INSPIRED_WC_DAYS || "2", 10) || 2),
+    statuses: (env("WC_STATUSES") || "processing,on-hold,completed").split(",").map((x) => x.trim()).filter(Boolean),
+    days: Math.max(1, parseInt(env("WC_DAYS") || "2", 10) || 2),
     configured: Boolean(url && key && secret),
   };
 }
+
+/** Back-compat helper used elsewhere. */
+export const inspiredConfig = () => wooConfig("INSPIRED");
 
 interface WooAddress {
   first_name?: string;
@@ -64,9 +81,9 @@ export interface WooOrder {
   line_items?: { name: string; quantity: number }[];
 }
 
-async function wooGet<T>(path: string, params: Record<string, string>): Promise<T> {
-  const cfg = inspiredConfig();
-  if (!cfg.configured) throw new Error("Inspired website not connected — add INSPIRED_WC_URL, INSPIRED_WC_KEY and INSPIRED_WC_SECRET in Railway");
+async function wooGet<T>(conn: string, path: string, params: Record<string, string>): Promise<T> {
+  const cfg = wooConfig(conn);
+  if (!cfg.configured) throw new Error(`${cfg.vendorName} website not connected — add ${conn}_WC_URL, ${conn}_WC_KEY and ${conn}_WC_SECRET in Railway`);
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${cfg.url}/wp-json/wc/v3/${path}?${qs}`, {
     headers: {
@@ -84,7 +101,7 @@ async function wooGet<T>(path: string, params: Record<string, string>): Promise<
     } catch {
       /* not JSON */
     }
-    throw new Error(`Inspired website answered ${res.status}: ${msg}`);
+    throw new Error(`${cfg.vendorName} website answered ${res.status}: ${msg}`);
   }
   return (await res.json()) as T;
 }
@@ -142,8 +159,8 @@ export function mapWooOrder(o: WooOrder) {
 }
 
 /** Latest orders, for the "Test connection" button — shows what the website sends. */
-export async function testInspiredConnection() {
-  const orders = await wooGet<WooOrder[]>("orders", { per_page: "3", orderby: "date", order: "desc" });
+export async function testWooConnection(conn: string) {
+  const orders = await wooGet<WooOrder[]>(conn, "orders", { per_page: "3", orderby: "date", order: "desc" });
   return orders.map((o) => ({
     id: o.id,
     number: o.number ?? String(o.id),
@@ -176,19 +193,26 @@ async function linkToManualTwin(vendorId: string, data: ReturnType<typeof mapWoo
   const twin = candidates.find((c) => phoneDigits(c.customerPhone) === phone);
   if (!twin) return false;
   await prisma.booking.update({ where: { id: twin.id }, data: { vendorRef: data.vendorRef } });
-  await writeAuditLog({ action: "INSPIRED_LINK_MANUAL", entity: "Booking", entityId: twin.id, meta: { cnNo: twin.cnNo, websiteOrder: data.vendorRef } });
+  await writeAuditLog({ action: "WEBSITE_LINK_MANUAL", entity: "Booking", entityId: twin.id, meta: { cnNo: twin.cnNo, websiteOrder: data.vendorRef } });
   return true;
 }
 
-/** True if this vendor is the one connected to the Inspired website. */
-export async function isInspiredVendor(vendorId: string) {
-  if (!inspiredConfig().configured) return false;
-  const v = await findInspiredVendor();
-  return v?.id === vendorId;
+/** The website connection key for this vendor, or null if its website isn't connected. */
+export async function wooConnForVendor(vendorId: string): Promise<string | null> {
+  for (const conn of wooConnections()) {
+    if (!wooConfig(conn).configured) continue;
+    const v = await findWooVendor(conn);
+    if (v?.id === vendorId) return conn;
+  }
+  return null;
 }
 
-async function findInspiredVendor() {
-  const cfg = inspiredConfig();
+export async function isInspiredVendor(vendorId: string) {
+  return (await wooConnForVendor(vendorId)) !== null;
+}
+
+async function findWooVendor(conn: string) {
+  const cfg = wooConfig(conn);
   return prisma.vendor.findFirst({ where: { name: { equals: cfg.vendorName, mode: "insensitive" } } });
 }
 
@@ -198,21 +222,21 @@ async function findInspiredVendor() {
  * Awaiting Pickup (imported, or it already was). Throws if the website says the
  * order is cancelled, so the scan shows why instead of "not found".
  */
-export async function importInspiredOrderByNumber(num: string): Promise<boolean> {
-  const cfg = inspiredConfig();
+export async function importWooOrderByNumber(conn: string, num: string): Promise<boolean> {
+  const cfg = wooConfig(conn);
   if (!cfg.configured) return false;
-  const vendor = await findInspiredVendor();
+  const vendor = await findWooVendor(conn);
   if (!vendor) return false;
 
   let o: WooOrder | null = null;
   try {
-    o = await wooGet<WooOrder>(`orders/${encodeURIComponent(num)}`, {});
+    o = await wooGet<WooOrder>(conn, `orders/${encodeURIComponent(num)}`, {});
   } catch {
     o = null;
   }
   if (!o || String(o.number || o.id) !== num) {
     try {
-      const list = await wooGet<WooOrder[]>("orders", { search: num, per_page: "10", status: "any" });
+      const list = await wooGet<WooOrder[]>(conn, "orders", { search: num, per_page: "10", status: "any" });
       o = list.find((x) => String(x.number || x.id) === num) ?? null;
     } catch {
       o = null;
@@ -223,7 +247,7 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
   // equal an old Inspired order number (e.g. Escalo #9563) — never import those.
   const ageMs = Date.now() - new Date(o.date_created).getTime();
   if (!(ageMs >= 0 && ageMs <= 3 * 24 * 60 * 60 * 1000)) return false;
-  if (CANCELLED_STATUSES.includes(o.status)) throw new Error(`Inspired order #${num} is ${o.status} on their website — don't pick it up`);
+  if (CANCELLED_STATUSES.includes(o.status)) throw new Error(`${cfg.vendorName} order #${num} is ${o.status} on their website — don't pick it up`);
   if (!cfg.statuses.includes(o.status)) return false;
 
   const data = mapWooOrder(o);
@@ -232,7 +256,7 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
   if (await linkToManualTwin(vendor.id, data)) return true;
   await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { preferredCn: Number(data.vendorRef) });
   emitGlobal("booking:changed", { type: "imported", count: 1 });
-  await writeAuditLog({ action: "INSPIRED_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
+  await writeAuditLog({ action: "WEBSITE_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
   return true;
 }
 
@@ -243,7 +267,7 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
  *  - already with a driver (Pending/Transfer) + cancelled or amount changed on
  *    website → a ⚠ warning is put in the order's remarks so the driver and office see it
  */
-async function refreshImportedInspiredOrders(vendorId: string) {
+async function refreshImportedWooOrders(conn: string, vendorId: string) {
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   const bookings = await prisma.booking.findMany({
     // Website imports and hand-entered orders linked to a website order.
@@ -255,7 +279,7 @@ async function refreshImportedInspiredOrders(vendorId: string) {
   const web = new Map<string, WooOrder>();
   for (let i = 0; i < refs.length; i += 100) {
     const chunk = refs.slice(i, i + 100);
-    const list = await wooGet<WooOrder[]>("orders", { include: chunk.join(","), per_page: "100", status: "any" });
+    const list = await wooGet<WooOrder[]>(conn, "orders", { include: chunk.join(","), per_page: "100", status: "any" });
     for (const o of list) web.set(String(o.number || o.id), o);
   }
 
@@ -364,7 +388,7 @@ async function refreshImportedInspiredOrders(vendorId: string) {
   return { updated, rejected, flagged };
 }
 
-let lastSync: {
+type SyncResult = {
   at: Date;
   imported: number;
   skipped: number;
@@ -373,19 +397,20 @@ let lastSync: {
   rejected?: number;
   flagged?: number;
   errors: string[];
-} | null = null;
-export const lastInspiredSync = () => lastSync;
+};
+const lastSyncs = new Map<string, SyncResult>();
+export const lastWooSync = (conn: string) => lastSyncs.get(conn) ?? null;
 
 /** Imports new website orders as Awaiting Pickup bookings. Safe to run repeatedly. */
-export async function syncInspiredOrders(triggeredBy: string | null = null) {
-  const cfg = inspiredConfig();
-  const vendor = await findInspiredVendor();
+export async function syncWooOrders(conn: string, triggeredBy: string | null = null) {
+  const cfg = wooConfig(conn);
+  const vendor = await findWooVendor(conn);
   if (!vendor) throw new Error(`No vendor named "${cfg.vendorName}" in the Vendors list`);
 
   const after = new Date(Date.now() - cfg.days * 24 * 60 * 60 * 1000).toISOString();
   const orders: WooOrder[] = [];
   for (let page = 1; page <= 5; page++) {
-    const batch = await wooGet<WooOrder[]>("orders", {
+    const batch = await wooGet<WooOrder[]>(conn, "orders", {
       status: cfg.statuses.join(","),
       after,
       per_page: "50",
@@ -437,36 +462,38 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
 
   let refresh = { updated: 0, rejected: 0, flagged: 0 };
   try {
-    refresh = await refreshImportedInspiredOrders(vendor.id);
+    refresh = await refreshImportedWooOrders(conn, vendor.id);
   } catch (err) {
     errors.push(`re-check: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  lastSync = { at: new Date(), imported, skipped, linked, ...refresh, errors };
+  const lastSync: SyncResult = { at: new Date(), imported, skipped, linked, ...refresh, errors };
+  lastSyncs.set(conn, lastSync);
   if (refresh.updated || refresh.rejected || refresh.flagged) {
-    await writeAuditLog({ userId: triggeredBy, action: "INSPIRED_RECHECK", entity: "Booking", meta: refresh });
+    await writeAuditLog({ userId: triggeredBy, action: `${conn}_RECHECK`, entity: "Booking", meta: refresh });
   }
   if (imported > 0) {
     emitGlobal("booking:changed", { type: "imported", count: imported });
-    await writeAuditLog({ userId: triggeredBy, action: "INSPIRED_SYNC", entity: "Booking", meta: { imported, skipped, errors: errors.length } });
+    await writeAuditLog({ userId: triggeredBy, action: `${conn}_SYNC`, entity: "Booking", meta: { imported, skipped, errors: errors.length } });
   }
   return lastSync;
 }
 
-/** Every 5 minutes while the connection is configured. */
-export function startInspiredSyncScheduler() {
+/** Every 5 minutes, for each connected vendor website. */
+export function startWooSyncScheduler() {
   const tick = async () => {
-    if (!inspiredConfig().configured) return;
-    try {
-      const r = await syncInspiredOrders(null);
-      // eslint-disable-next-line no-console
-      if (r.imported || r.updated || r.rejected || r.flagged || r.errors.length)
+    for (const conn of wooConnections()) {
+      if (!wooConfig(conn).configured) continue;
+      try {
+        const r = await syncWooOrders(conn, null);
+        if (r.imported || r.updated || r.rejected || r.flagged || r.errors.length)
+          // eslint-disable-next-line no-console
+          console.log(`[${conn.toLowerCase()}] imported ${r.imported}, updated ${r.updated}, rejected ${r.rejected}, flagged ${r.flagged}, errors ${r.errors.length}`);
+      } catch (err) {
+        lastSyncs.set(conn, { at: new Date(), imported: 0, skipped: 0, errors: [err instanceof Error ? err.message : String(err)] });
         // eslint-disable-next-line no-console
-        console.log(`[inspired] imported ${r.imported}, updated ${r.updated}, rejected ${r.rejected}, flagged ${r.flagged}, errors ${r.errors.length}`);
-    } catch (err) {
-      lastSync = { at: new Date(), imported: 0, skipped: 0, errors: [err instanceof Error ? err.message : String(err)] };
-      // eslint-disable-next-line no-console
-      console.error("[inspired] sync failed", err);
+        console.error(`[${conn.toLowerCase()}] sync failed`, err);
+      }
     }
   };
   setTimeout(tick, 90 * 1000);

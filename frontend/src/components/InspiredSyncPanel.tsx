@@ -23,23 +23,24 @@ interface TestOrder {
 }
 
 /** Inspired website connection: status, Sync now, and a Test that shows what the website sends. */
-export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void }) {
+export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onSynced?: () => void; conn?: string }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState<"" | "sync" | "test">("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [sample, setSample] = useState<TestOrder[] | null>(null);
 
-  const loadStatus = () => apiFetch<Status>("/integrations/inspired/status").then(setStatus).catch(() => {});
+  const loadStatus = () => apiFetch<Status>(`/integrations/${conn}/status`).then(setStatus).catch(() => {});
   useEffect(() => {
     loadStatus();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conn]);
 
   async function sync() {
     setBusy("sync");
     setMsg(null);
     try {
       const r = await apiFetch<{ imported: number; skipped: number; linked?: number; updated?: number; rejected?: number; flagged?: number; errors: string[] }>(
-        "/integrations/inspired/sync",
+        `/integrations/${conn}/sync`,
         { method: "POST" }
       );
       const extra = [
@@ -68,7 +69,7 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
     setMsg(null);
     setSample(null);
     try {
-      const r = await apiFetch<{ orders: TestOrder[] }>("/integrations/inspired/test", { method: "POST" });
+      const r = await apiFetch<{ orders: TestOrder[] }>(`/integrations/${conn}/test`, { method: "POST" });
       setSample(r.orders);
       setMsg({ ok: true, text: `Connected ✓ — latest ${r.orders.length} website orders below (nothing imported).` });
     } catch (err) {
@@ -84,7 +85,7 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
     <div className="mb-5 max-w-3xl border border-line bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="font-display text-[15px] font-semibold text-navy">Inspired website orders</span>{" "}
+          <span className="font-display text-[15px] font-semibold text-navy">{status.vendorName} website orders</span>{" "}
           {status.configured ? (
             <span className="text-xs text-delivered">● connected — checks every 5 min</span>
           ) : (
@@ -113,7 +114,7 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
 
       {!status.configured && (
         <p className="mt-2 text-xs text-ink-soft">
-          Add <code>INSPIRED_WC_URL</code>, <code>INSPIRED_WC_KEY</code> and <code>INSPIRED_WC_SECRET</code> to the backend variables in Railway.
+          Add <code>{conn.toUpperCase()}_WC_URL</code>, <code>{conn.toUpperCase()}_WC_KEY</code> and <code>{conn.toUpperCase()}_WC_SECRET</code> to the backend variables in Railway.
         </p>
       )}
 
@@ -137,5 +138,23 @@ export default function InspiredSyncPanel({ onSynced }: { onSynced?: () => void 
         </div>
       )}
     </div>
+  );
+}
+
+
+/** One box per connected vendor website (Inspired, Escalo, …). */
+export function WebsiteSyncPanels({ onSynced }: { onSynced?: () => void }) {
+  const [conns, setConns] = useState<string[]>([]);
+  useEffect(() => {
+    apiFetch<{ conn: string }[]>("/integrations")
+      .then((list) => setConns(list.map((c) => c.conn.toLowerCase())))
+      .catch(() => setConns(["inspired"]));
+  }, []);
+  return (
+    <>
+      {conns.map((c) => (
+        <InspiredSyncPanel key={c} conn={c} onSynced={onSynced} />
+      ))}
+    </>
   );
 }

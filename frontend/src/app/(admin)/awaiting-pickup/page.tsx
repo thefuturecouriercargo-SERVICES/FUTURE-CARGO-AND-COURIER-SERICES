@@ -8,7 +8,7 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
-import InspiredSyncPanel from "@/components/InspiredSyncPanel";
+import { WebsiteSyncPanels } from "@/components/InspiredSyncPanel";
 import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
 
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
@@ -206,7 +206,7 @@ export default function AwaitingPickupPage() {
         tick, pick a driver and accept — they then appear in Daily Entry as Pending, payment Cash. Scan or type a CN to select it.
       </p>
 
-      <InspiredSyncPanel onSynced={load} />
+      <WebsiteSyncPanels onSynced={load} />
 
       {justSaved && (
         <div className="mb-4 flex max-w-2xl flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">

@@ -301,12 +301,13 @@ export async function assignByScan(
       orderBy: { createdAt: "desc" },
     });
     if (!byRef && !opts.retried) {
-      // Inspired: an order placed minutes ago may not be synced yet — fetch that
-      // one order now (recent orders only, never old ones).
-      const { importInspiredOrderByNumber, isInspiredVendor } = await import("./inspiredWoo.service");
-      if (await isInspiredVendor(vendor.id)) {
+      // Connected website (Inspired, Escalo…): an order placed minutes ago may not
+      // be synced yet — fetch that one order now (recent orders only).
+      const { importWooOrderByNumber, wooConnForVendor } = await import("./inspiredWoo.service");
+      const conn = await wooConnForVendor(vendor.id);
+      if (conn) {
         try {
-          if (await importInspiredOrderByNumber(digits)) return assignByScan(code, employeeId, { ...opts, retried: true });
+          if (await importWooOrderByNumber(conn, digits)) return assignByScan(code, employeeId, { ...opts, retried: true });
         } catch (err) {
           throw new ApiError(400, err instanceof Error ? err.message : "Lookup failed");
         }
