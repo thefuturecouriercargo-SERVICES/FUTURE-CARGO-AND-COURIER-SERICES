@@ -279,6 +279,31 @@ async function refreshImportedInspiredOrders(vendorId: string) {
     }
   }
 
+  // Website orders already in Daily Entry with a generated CN → their own order No.
+  const acceptedGenerated = await prisma.booking.findMany({
+    where: { vendorId, createdBy: "WEBSITE", cnSource: "SYSTEM", status: "ACCEPTED", orderId: { not: null }, vendorRef: { not: null }, createdAt: { gte: since } },
+    select: { id: true, orderId: true, vendorRef: true, cnNo: true },
+  });
+  let renumbered = 0;
+  for (const b of acceptedGenerated) {
+    const own = Number(b.vendorRef);
+    if (!Number.isSafeInteger(own) || own <= 0 || own >= CN_START || own === b.cnNo) continue;
+    if (!(await isCnFree(own))) continue;
+    try {
+      await prisma.$transaction([
+        prisma.order.update({ where: { id: b.orderId! }, data: { cnNo: own } }),
+        prisma.booking.update({ where: { id: b.id }, data: { cnNo: own, cnSource: "VENDOR" } }),
+      ]);
+      renumbered++;
+    } catch {
+      /* taken meanwhile — keep the generated CN */
+    }
+  }
+  if (renumbered) {
+    updated += renumbered;
+    emitGlobal("order:changed", { type: "renumbered" });
+  }
+
   for (const b of open) {
     const o = web.get(b.vendorRef!);
     if (!o) continue;

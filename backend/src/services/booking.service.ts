@@ -203,12 +203,27 @@ export async function acceptBooking(
     const dup = await tx.order.findFirst({ where: { cnNo: booking.cnNo }, select: { id: true } });
     if (dup) throw new ApiError(409, `CN No. ${booking.cnNo} is already in Daily Entry`);
 
+    // Website orders go into Daily Entry with the vendor's own order No. as CN
+    // (their printed barcode), if a generated CN was given earlier and that
+    // number is free.
+    let cnNo = booking.cnNo;
+    const own = Number(booking.vendorRef);
+    if (booking.createdBy === "WEBSITE" && booking.cnSource === "SYSTEM" && Number.isSafeInteger(own) && own > 0 && own < CN_START) {
+      const taken =
+        (await tx.order.findFirst({ where: { cnNo: own }, select: { id: true } })) ??
+        (await tx.booking.findFirst({ where: { cnNo: own, id: { not: booking.id } }, select: { id: true } }));
+      if (!taken) {
+        await tx.booking.update({ where: { id: booking.id }, data: { cnNo: own, cnSource: "VENDOR" } });
+        cnNo = own;
+      }
+    }
+
     const lastSl = await tx.order.aggregate({ where: { date }, _max: { slNo: true } });
     const order = await tx.order.create({
       data: {
         date,
         slNo: (lastSl._max.slNo ?? 0) + 1,
-        cnNo: booking.cnNo,
+        cnNo,
         vendorId: booking.vendorId,
         brandName: booking.vendor.name,
         deliveryCharge: booking.vendor.deliveryCharge,
@@ -300,9 +315,9 @@ export async function assignByScan(
   const booking = await prisma.booking.findUnique({ where: { cnNo } });
 
   if (booking?.status === "AWAITING_PICKUP") {
-    await acceptBooking(booking.id, { employeeId });
-    const order = await prisma.order.findFirstOrThrow({ where: { cnNo }, include, orderBy: { createdAt: "desc" } });
-    return { result: "ACCEPTED", message: `CN ${cnNo} added — ${order.vendor.name}, AED ${order.total}`, order };
+    const created = await acceptBooking(booking.id, { employeeId });
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id }, include });
+    return { result: "ACCEPTED", message: `CN ${order.cnNo} added — ${order.vendor.name}, AED ${order.total}`, order };
   }
   if (booking?.status === "REJECTED") throw new ApiError(400, `CN ${cnNo} was rejected by the office`);
 
