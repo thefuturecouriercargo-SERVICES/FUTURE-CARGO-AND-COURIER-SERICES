@@ -62,18 +62,83 @@ function cleanPhone(raw: string): string {
   return d;
 }
 
+const EXPLICIT_EMIRATES: [RegExp, string][] = [
+  [/\bal\s*ain\b|\balain\b/i, "AL AIN"],
+  [/\babu\s*dh?abi\b|\babudh?abi\b/i, "ABUDHABI"],
+  [/\bras\s*al\s*kh?aima?h?\b/i, "RAS AL KHAIMAH"],
+  [/\bumm\s*al\s*q[a-z]*\b/i, "UMM AL QUWAIN"],
+  [/\bfuj[ae]i?rah?\b/i, "FUJAIRAH"],
+  [/\bajm[a]+n\b/i, "AJMAN"],
+  [/\bsh[a]?r[a]?j[a]?h\b|\bsharjha\b/i, "SHARJAH"],
+  [/\bdub[a]?[iy]\b/i, "DUBAI"],
+];
+
 function detectEmirate(text: string): string | undefined {
+  for (const [re, name] of EXPLICIT_EMIRATES) if (re.test(text)) return name;
   for (const [re, name] of EMIRATE_WORDS) if (re.test(text)) return name;
   return undefined;
 }
 
-/** "Akoya 2pc" / "2 pcs Akoya" / "Akoya x2" → "2 × Akoya" (so the label shows the quantity). */
-function withQty(name: string): string {
-  const tail = name.match(/^(.+?)\s*[-–(]?\s*(?:x\s*)?(\d{1,3})\s*(?:pcs?|pieces?|nos?|qty|bottles?|x)?\s*\)?$/i);
-  if (tail && /[a-z]/i.test(tail[1]) && /(?:pcs?|pieces?|nos?|qty|bottles?|x)\s*\)?$|x\s*\d+$/i.test(name)) return `${tail[2]} × ${tail[1].trim()}`;
-  const head = name.match(/^(\d{1,3})\s*(?:pcs?|pieces?|nos?|x|×)\s+(.+)$/i);
-  if (head) return `${head[1]} × ${head[2].trim()}`;
-  return name;
+const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, dozen: 12 };
+const UNIT = String.raw`(?:pcs|pc|pieces?|pce|nos|no|numbers?|bottles?|btls?|btl|units?|packs?|pkts?|boxes|box|sets?|qty|quantity)`;
+const CUR = String.raw`(?:aed|dhs|dh|dirhams?|drhm)`;
+const SIZE_RE = /\b\d+(?:\.\d+)?\s*(?:ml|m\.l|ltr|l|g|gm|gms|grams?|kg|oz|cm|mm|inch|in)\b/gi;
+const ADDRESS_WORDS = /\b(street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp)\b/i;
+
+export interface ParsedItem { qty: number; name: string; price?: number }
+
+/**
+ * One manual item line in any of the ways customers type it, e.g.
+ *   "Akoya 2pc-AED 80", "2 Akoya 80aed", "Akoya x2 = 80", "Akoya (2) 80 dhs",
+ *   "Akoya qty 2 aed 80", "Akoya*2", "two Akoya", "Akoya 100ml 2 bottles 160",
+ *   "Akoya - 2 - 80", "2×Akoya", "Akoya 2nos".
+ * Bottle sizes (100ml, 50 g) are kept in the name, never read as the quantity.
+ * `strict` (default) only accepts lines with a clear price or quantity marker.
+ */
+export function parseItemLine(raw: string, strict = true): ParsedItem | null {
+  let t = ` ${raw.replace(/[,;.]+\s*$/, "").replace(/\s+/g, " ").trim()} `;
+  if (!/[a-z]/i.test(t)) return null;
+  let price: number | undefined;
+  let qty: number | undefined;
+  let marked = false;
+  const take = (re: RegExp, f: (m: RegExpMatchArray) => void) => {
+    const m = t.match(re);
+    if (m) { f(m); t = t.replace(m[0], " "); return true; }
+    return false;
+  };
+
+  // Protect sizes like "100ml" so they are not read as qty/price.
+  const sizes: string[] = [];
+  t = t.replace(SIZE_RE, (m) => { sizes.push(m); return ` §${sizes.length - 1}§ `; });
+
+  // Price with currency: "AED 80", "80aed", "80/- dhs"
+  take(new RegExp(String.raw`[-–:=@]?\s*\b${CUR}\.?\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)`, "i"), (m) => (price = num(m[1]))) ||
+    take(new RegExp(String.raw`[-–:=@]?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:\/-)?\s*${CUR}\b\.?`, "i"), (m) => (price = num(m[1])));
+
+  // Quantity with a marker
+  take(new RegExp(String.raw`\b(?:qty|quantity)\s*[:\-=]?\s*(\d{1,3})\b`, "i"), (m) => (qty = Number(m[1]))) ||
+    take(new RegExp(String.raw`(?:^|\s|[-–(])(\d{1,3})\s*${UNIT}\b\.?`, "i"), (m) => (qty = Number(m[1]))) ||
+    take(/(?:(?:^|\s)x|[×*])\s*(\d{1,3})\b/i, (m) => (qty = Number(m[1]))) ||
+    take(/\b(\d{1,3})\s*[x×*](?=\s|[a-z])/i, (m) => (qty = Number(m[1]))) ||
+    take(/\(\s*(\d{1,3})\s*\)/, (m) => (qty = Number(m[1]))) ||
+    take(new RegExp(String.raw`^\s*(${Object.keys(WORD_NUM).join("|")})\b\s*(?:${UNIT}\b)?`, "i"), (m) => (qty = WORD_NUM[m[1].toLowerCase()]));
+  if (qty !== undefined || price !== undefined) marked = true;
+
+  // Remaining bare numbers: "2 Akoya 80", "Akoya - 2 - 80", "Akoya 80"
+  const bare = [...t.matchAll(/(?:^|[\s\-–:=@])(\d[\d,]*(?:\.\d+)?)(?=\s|$|[\-–:=,])/g)].map((m) => ({ s: m[0], n: num(m[1]) ?? 0 }));
+  for (const b of bare) {
+    if (qty === undefined && b.n >= 1 && b.n <= 20 && (price !== undefined || bare.length > 1 || b === bare[0] && /^\s*\d/.test(t))) {
+      qty = b.n; t = t.replace(b.s, " "); marked = true;
+    } else if (price === undefined && b.n >= 5) {
+      price = b.n; t = t.replace(b.s, " "); marked = true;
+    }
+  }
+
+  let name = t.replace(/§(\d+)§/g, (_, i) => sizes[Number(i)]).replace(/[\s\-–:=@,*()]+$/g, "").replace(/^[\s\-–:=@,*()]+/g, "").replace(/\s+/g, " ").trim();
+  name = name.replace(/\s*[-–]\s*$/, "").replace(/^(?:inspired\s+by\s*:?\s*)/i, "").trim();
+  if (!/[a-z]{2}/i.test(name) || name.length > 70) return null;
+  if (strict && !marked) return null;
+  return { qty: qty && qty > 0 ? qty : 1, name, price };
 }
 
 /** Drop "United Arab Emirates" / "UAE" and repeated parts ("Sharjah, Sharjah"). */
@@ -117,7 +182,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   const leftovers: string[] = [];
   let pendingItem: { name: string; qty: number } | null = null;
   let totalFromLabel: number | undefined;
-  let lastAedAmount: number | undefined;
+  const itemPrices: number[] = [];
 
   const flushItem = () => {
     if (pendingItem) items.push(`${pendingItem.qty} × ${pendingItem.name}`);
@@ -180,7 +245,11 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       } else if (/^(emirate|city|state)/.test(key)) {
         out.emirate = detectEmirate(value) ?? value.toUpperCase();
       } else if (/^(item|product|order)/.test(key)) {
-        items.push(value);
+        for (const part of value.split(/\s*[,;]\s*/).filter(Boolean)) {
+          const it = parseItemLine(part, false);
+          items.push(it ? `${it.qty} × ${it.name}` : part);
+          if (it?.price !== undefined) itemPrices.push(it.price);
+        }
       } else {
         notes.push(value);
       }
@@ -208,21 +277,32 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       continue;
     }
 
-    // --- Manual item lines: "Akoya-AED 40,", "Noir - 40 AED", "Ahl 40 dhs"
-    const itemLine =
-      line.match(/^(.{2,60}?)\s*[-–:=]?\s*(?:aed|dhs?|dirhams?)\s*\.?\s*(\d[\d,]*(?:\.\d+)?)\s*,?$/i) ||
-      line.match(/^(.{2,60}?)\s*[-–:=]\s*(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)?\s*,?$/i) ||
-      line.match(/^(.{2,60}?)\s+(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)\s*,?$/i);
-    if (itemLine && !PHONE_RE.test(line) && /[a-z]/i.test(itemLine[1])) {
-      items.push(withQty(itemLine[1].replace(/[-–:=,\s]+$/, "").trim()));
-      lastAedAmount = num(itemLine[2]);
-      continue;
-    }
-
-    // --- "2 x Abaya", "1 pc perfume"
-    if (/^\d+\s*(?:x|×|pcs?|pieces?|nos?|qty)\b/i.test(line) || /\b(?:x|×)\s*\d+\b/i.test(line)) {
-      items.push(line);
-      continue;
+    // --- Manual item lines in any common style ("Akoya 2pc-AED 80", "2 Akoya 80aed", "Akoya x2", …)
+    if (!PHONE_RE.test(line) && !ADDRESS_WORDS.test(line) && !(detectEmirate(line) && !/\d/.test(line))) {
+      // several items on one line: "Akoya 2pc, Noir 1pc", "akoya 2 noir 1", "1 Noir 1 Akoya"
+      const noComma = !/[,;]/.test(line) && !detectEmirate(line);
+      const trailing = noComma && /^(?:\s*[a-z][^\d]*?\s+\d{1,2})(?:\s+[a-z][^\d]*?\s+\d{1,2}){1,}\s*$/i.test(line);
+      const leading = noComma && /^(?:\s*\d{1,2}\s+[a-z][^\d]*?)(?:\s+\d{1,2}\s+[a-z][^\d]*?){1,}\s*$/i.test(line);
+      if (trailing || leading) {
+        const re = trailing ? /([a-z][^\d]*?)\s+(\d{1,2})/gi : /(\d{1,2})\s+([a-z][^\d]*?)(?=\s+\d|\s*$)/gi;
+        for (const m of line.matchAll(re)) items.push(trailing ? `${m[2]} × ${m[1].trim()}` : `${m[1]} × ${m[2].trim()}`);
+        continue;
+      }
+      // a lone "Akoya 2" (name then a small number)
+      const lone = !detectEmirate(line) && line.match(/^([a-z][a-z\s'’&.-]{1,50}?)\s+(\d{1,2})$/i);
+      if (lone && Number(lone[2]) >= 1 && Number(lone[2]) <= 20) {
+        items.push(`${lone[2]} × ${lone[1].trim()}`);
+        continue;
+      }
+      const parts = line.split(/\s*[,;]\s*|\s+\+\s+|\s+&\s+/).filter(Boolean);
+      const parsed = parts.map((p) => parseItemLine(p));
+      if (parsed.length && parsed.every(Boolean)) {
+        for (const it of parsed as ParsedItem[]) {
+          items.push(`${it.qty} × ${it.name}`);
+          if (it.price !== undefined) itemPrices.push(it.price);
+        }
+        continue;
+      }
     }
 
     // --- Unlabelled phone on its own line
@@ -253,7 +333,8 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   if (items.length) out.items = items.join(", ");
   if (notes.length) out.notes = notes.join("; ");
   if (!out.emirate) out.emirate = detectEmirate([out.address, raw].filter(Boolean).join(" "));
-  out.codAmount = totalFromLabel ?? (items.length <= 1 ? lastAedAmount : undefined);
+  // No "Total" line: add up the item prices (each line's price is that line's amount).
+  out.codAmount = totalFromLabel ?? (itemPrices.length ? itemPrices.reduce((a, b) => a + b, 0) : undefined);
   if (!out.customerPhone) {
     const pm = raw.match(PHONE_RE);
     if (pm) out.customerPhone = cleanPhone(pm[0]);
