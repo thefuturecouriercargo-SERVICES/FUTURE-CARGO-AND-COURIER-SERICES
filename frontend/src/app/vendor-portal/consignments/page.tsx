@@ -20,6 +20,13 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "", label: "All" },
 ];
 
+function dayLabel(day: string) {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
+  const y = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
+  const nice = new Date(`${day}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  return day === today ? `Today · ${nice}` : day === y ? `Yesterday · ${nice}` : nice;
+}
+
 function ConsignmentsContent() {
   const { vendor, loading, logout } = useVendorAuth();
   const router = useRouter();
@@ -53,6 +60,30 @@ function ConsignmentsContent() {
       return true;
     });
   }, [bookings, filter, search]);
+
+  // Group by day (Dubai time), newest day first; inside a day: website orders, then manual, oldest first (serial 1 = first entered).
+  const days = useMemo(() => {
+    const key = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
+    const map = new Map<string, Booking[]>();
+    for (const b of shown) {
+      const k = key(b.createdAt);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(b);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([day, list]) => {
+        const asc = [...list].sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1));
+        return {
+          day,
+          all: asc,
+          sections: [
+            { label: "🌐 From website", rows: asc.filter((b) => b.createdBy === "WEBSITE") },
+            { label: "✍ Manual entry", rows: asc.filter((b) => b.createdBy !== "WEBSITE") },
+          ].filter((sec) => sec.rows.length > 0),
+        };
+      });
+  }, [shown]);
 
   if (loading || !vendor) {
     return <div className="flex min-h-screen items-center justify-center text-ink-soft">Loading…</div>;
@@ -210,6 +241,7 @@ function ConsignmentsContent() {
                       onChange={() => setSelected(allShownSelected ? new Set() : new Set(shown.map((b) => b.id)))}
                     />
                   </th>
+                  <th className="text-right">#</th>
                   <th>CN No.</th>
                   <th>Customer</th>
                   <th>Emirate</th>
@@ -223,17 +255,58 @@ function ConsignmentsContent() {
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-ink-soft">
+                    <td colSpan={10} className="py-8 text-center text-ink-soft">
                       No consignments here.
                     </td>
                   </tr>
                 ) : (
-                  shown.map((b) => (
+                  days.map((d) => (
+                    <Fragment key={d.day}>
+                      <tr>
+                        <td colSpan={10} className="py-2" style={{ background: "#141F33", color: "#fff" }}>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <b className="font-display text-base">{dayLabel(d.day)}</b>
+                            <span className="font-mono text-[11px] uppercase tracking-wide text-brass-light">
+                              Day total: <b className="text-paper">{d.all.length}</b> order{d.all.length === 1 ? "" : "s"}
+                              {" "}({d.all.filter((b) => b.createdBy === "WEBSITE").length} website · {d.all.filter((b) => b.createdBy !== "WEBSITE").length} manual)
+                              {" "}· COD <b className="text-paper">AED {fmtNumber(d.all.reduce((s2, b) => s2 + b.codAmount, 0))}</b>
+                            </span>
+                            <span className="ml-auto flex gap-2">
+                              <button onClick={() => printLabels(d.all.map((b) => b.id))} className="rounded border border-white/30 px-2 py-1 font-mono text-[10px] uppercase hover:border-brass-light">
+                                🖨 Print day ({d.all.length})
+                              </button>
+                              {d.all.some((b) => !b.labelPrintedAt) && (
+                                <button
+                                  onClick={() => printLabels(d.all.filter((b) => !b.labelPrintedAt).map((b) => b.id))}
+                                  className="rounded bg-brass px-2 py-1 font-mono text-[10px] uppercase text-navy hover:bg-brass-light"
+                                >
+                                  New only ({d.all.filter((b) => !b.labelPrintedAt).length})
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                      {d.sections.map((sec) => (
+                        <Fragment key={sec.label}>
+                          <tr>
+                            <td colSpan={10} className="bg-paper-2 py-1.5" style={{ background: "#ECE7D8" }}>
+                              <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-navy">
+                                {sec.label} ({sec.rows.length})
+                              </span>
+                              <span className="ml-3 font-mono text-[11px] text-ink-soft">COD AED {fmtNumber(sec.rows.reduce((s2, b) => s2 + b.codAmount, 0))}</span>
+                              <button onClick={() => printLabels(sec.rows.map((b) => b.id))} className="ml-3 text-xs text-brass hover:underline">
+                                Print these
+                              </button>
+                            </td>
+                          </tr>
+                          {sec.rows.map((b, idx) => (
                     <Fragment key={b.id}>
                     <tr className={openId === b.id ? "bg-paper-2" : ""}>
                       <td>
                         <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
+                      <td className="text-right font-mono text-sm font-bold text-ink-soft">{idx + 1}</td>
                       <td className="font-mono">
                         <button onClick={() => setOpenId(openId === b.id ? null : b.id)} className="whitespace-nowrap text-left hover:text-brass">
                           {openId === b.id ? "▾" : "▸"} <b className="text-base">{b.cnNo}</b>
@@ -278,11 +351,16 @@ function ConsignmentsContent() {
                     {openId === b.id && (
                       <tr className="bg-paper">
                         <td />
+                        <td />
                         <td colSpan={8} className="py-3">
                           <OrderDetails booking={b} cnNo={b.cnNo} vendorName={b.vendor.name} />
                         </td>
                       </tr>
                     )}
+                    </Fragment>
+                          ))}
+                        </Fragment>
+                      ))}
                     </Fragment>
                   ))
                 )}
