@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Booking } from "@/types";
 import ShippingLabel, { LABEL_SIZES, LabelSize, pageCss } from "@/components/ShippingLabel";
@@ -40,6 +40,47 @@ export default function LabelSheet({
     }
   }
 
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [pdfProgress, setPdfProgress] = useState<string | null>(null);
+
+  /** Build one PDF with every label (one per page, or 4 per A4 sheet) and download it. */
+  async function downloadPdf() {
+    const els = Array.from(gridRef.current?.querySelectorAll<HTMLElement>(".label-page") ?? []);
+    if (!els.length) return;
+    setPdfProgress(`0 / ${els.length}`);
+    try {
+      const [{ jsPDF }, { toPng }] = await Promise.all([import("jspdf"), import("html-to-image")]);
+      const pxToMm = (px: number) => (px * 25.4) / 96;
+      let doc: InstanceType<typeof jsPDF> | null = null;
+      for (let i = 0; i < els.length; i++) {
+        const el = els[i];
+        const img = await toPng(el, { pixelRatio: 3, backgroundColor: "#ffffff", skipFonts: true, cacheBust: false });
+        const w = pxToMm(el.offsetWidth);
+        const h = pxToMm(el.offsetHeight);
+        if (size === "a4") {
+          const slot = i % 4;
+          if (!doc) doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+          else if (slot === 0) doc.addPage("a4", "portrait");
+          doc.addImage(img, "PNG", 8 + (slot % 2) * (w + 4), 8 + Math.floor(slot / 2) * (h + 4), w, h, undefined, "FAST");
+        } else {
+          const fmt: [number, number] = size === "4x6" ? [100, 150] : size === "4x4" ? [100, 100] : [80, h];
+          const orient = fmt[0] > fmt[1] ? "landscape" : "portrait";
+          if (!doc) doc = new jsPDF({ unit: "mm", format: fmt, orientation: orient });
+          else doc.addPage(fmt, orient);
+          doc.addImage(img, "PNG", 0, 0, fmt[0], fmt[1], undefined, "FAST");
+        }
+        setPdfProgress(`${i + 1} / ${els.length}`);
+      }
+      const stamp = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Dubai" }).slice(0, 16).replace(/[: ]/g, "-");
+      doc?.save(`labels-${stamp}-${els.length}.pdf`);
+      onPrinted?.(bookings.map((b) => b.id));
+    } catch (err) {
+      alert(`Could not make the PDF: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPdfProgress(null);
+    }
+  }
+
   function print() {
     window.print();
     onPrinted?.(bookings.map((b) => b.id));
@@ -74,15 +115,23 @@ export default function LabelSheet({
           ))}
         </select>
         <button
+          onClick={downloadPdf}
+          disabled={bookings.length === 0 || pdfProgress !== null}
+          className="ml-auto rounded border border-navy bg-white px-4 py-2 font-mono text-xs uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-60"
+        >
+          {pdfProgress ? `Making PDF… ${pdfProgress}` : `⬇ Download PDF (${bookings.length})`}
+        </button>
+        <button
           onClick={print}
           disabled={bookings.length === 0}
-          className="ml-auto rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-50"
+          className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-50"
         >
           🖨 Print
         </button>
       </div>
 
       <div
+        ref={gridRef}
         className={`label-grid mx-auto flex flex-wrap justify-center gap-4 p-4 print:p-0 ${isA4 ? "max-w-[200mm] print:justify-start" : "flex-col items-center print:gap-0"}`}
       >
         {bookings.map((b) => (
