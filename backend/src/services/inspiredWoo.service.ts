@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { writeAuditLog } from "./audit.service";
 import { emitGlobal } from "../lib/socket";
-import { createBooking, phoneDigits } from "./booking.service";
+import { createBooking, phoneDigits, isCnFree, CN_START } from "./booking.service";
 
 /**
  * Inspired Market website (WooCommerce) → Awaiting Pickup.
@@ -230,7 +230,7 @@ export async function importInspiredOrderByNumber(num: string): Promise<boolean>
   const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
   if (exists) return true;
   if (await linkToManualTwin(vendor.id, data)) return true;
-  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
+  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { preferredCn: Number(data.vendorRef) });
   emitGlobal("booking:changed", { type: "imported", count: 1 });
   await writeAuditLog({ action: "INSPIRED_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
   return true;
@@ -262,6 +262,23 @@ async function refreshImportedInspiredOrders(vendorId: string) {
   let updated = 0;
   let rejected = 0;
   let flagged = 0;
+
+  // Earlier imports got a CN from our own range. While still waiting and no
+  // label printed, switch them to the website order No. (if that CN is free).
+  for (const b of open) {
+    if (b.status !== "AWAITING_PICKUP" || b.cnSource !== "SYSTEM" || b.labelPrintedAt || !b.createdBy || b.createdBy !== "WEBSITE") continue;
+    const own = Number(b.vendorRef);
+    if (!Number.isSafeInteger(own) || own <= 0 || own >= CN_START || own === b.cnNo) continue;
+    if (!(await isCnFree(own))) continue;
+    try {
+      await prisma.booking.update({ where: { id: b.id }, data: { cnNo: own, cnSource: "VENDOR" } });
+      b.cnNo = own;
+      updated++;
+    } catch {
+      /* taken meanwhile — keep the generated CN */
+    }
+  }
+
   for (const b of open) {
     const o = web.get(b.vendorRef!);
     if (!o) continue;
@@ -380,7 +397,7 @@ export async function syncInspiredOrders(triggeredBy: string | null = null) {
       continue;
     }
     try {
-      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE");
+      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { preferredCn: Number(data.vendorRef) });
       imported++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

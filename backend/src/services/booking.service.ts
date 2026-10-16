@@ -106,7 +106,26 @@ async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, i
 }
 
 /** Creates a booking with the next CN from our own range. Retries on a race. */
-export async function createBooking(vendorId: string, input: BookingInput, createdBy: "VENDOR" | "ADMIN" | "WEBSITE") {
+/** True if no order and no booking uses this CN. */
+export async function isCnFree(cnNo: number) {
+  const [order, booking] = await Promise.all([
+    prisma.order.findFirst({ where: { cnNo }, select: { id: true } }),
+    prisma.booking.findUnique({ where: { cnNo }, select: { id: true } }),
+  ]);
+  return !order && !booking;
+}
+
+/**
+ * preferredCn: website orders use the vendor's own order No. as our CN (their
+ * printed barcode then IS the CN), when that number is free. If another
+ * consignment already uses it, a CN from our own range is used instead.
+ */
+export async function createBooking(
+  vendorId: string,
+  input: BookingInput,
+  createdBy: "VENDOR" | "ADMIN" | "WEBSITE",
+  opts: { preferredCn?: number } = {}
+) {
   await assertRefFree(vendorId, input.vendorRef || undefined);
   await assertNotLikelyDuplicate(vendorId, input);
   const base = {
@@ -121,6 +140,20 @@ export async function createBooking(vendorId: string, input: BookingInput, creat
     notes: input.notes || null,
     createdBy,
   };
+
+  const pref = opts.preferredCn;
+  if (pref && Number.isSafeInteger(pref) && pref > 0 && pref < CN_START && (await isCnFree(pref))) {
+    try {
+      return await prisma.booking.create({ data: { ...base, cnNo: pref, cnSource: "VENDOR" }, include: { vendor: true } });
+    } catch (err) {
+      const e = err as { code?: string; meta?: { target?: string[] | string } };
+      if (e.code === "P2002" && String(e.meta?.target ?? "").includes("vendorRef")) {
+        throw new ApiError(409, `Order No. ${input.vendorRef} is already entered`);
+      }
+      if (e.code !== "P2002") throw err;
+      // Someone took that CN a moment ago — fall back to our own range below.
+    }
+  }
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const cnNo = await nextSystemCn();
