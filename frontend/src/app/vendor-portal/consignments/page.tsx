@@ -20,12 +20,16 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "", label: "All" },
 ];
 
-function dayLabel(day: string) {
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
-  const y = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
-  const nice = new Date(`${day}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
-  return day === today ? `Today · ${nice}` : day === y ? `Yesterday · ${nice}` : nice;
+type Source = "WEBSITE" | "MANUAL";
+
+const dubaiDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
+const today = () => dubaiDay(new Date().toISOString());
+function addDays(d: string, n: number) {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
 }
+const isWebsite = (b: Booking) => b.createdBy === "WEBSITE";
 
 function ConsignmentsContent() {
   const { vendor, loading, logout } = useVendorAuth();
@@ -33,6 +37,8 @@ function ConsignmentsContent() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<Filter>("AWAITING_PICKUP");
   const [search, setSearch] = useState("");
+  const [date, setDate] = useState(today());
+  const [source, setSource] = useState<Source>("MANUAL");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Booking | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -52,38 +58,22 @@ function ConsignmentsContent() {
     if (vendor) load();
   }, [vendor, load]);
 
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return bookings.filter((b) => {
-      if (filter && b.status !== filter) return false;
-      if (q && !`${b.cnNo} ${b.vendorRef ?? ""} ${b.customerName} ${b.customerPhone}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [bookings, filter, search]);
+  const q = search.trim().toLowerCase();
+  // Orders for the chosen day + status (searching looks across all days).
+  const dayList = useMemo(() => {
+    return bookings
+      .filter((b) => {
+        if (filter && b.status !== filter) return false;
+        if (q) return `${b.cnNo} ${b.vendorRef ?? ""} ${b.customerName} ${b.customerPhone}`.toLowerCase().includes(q);
+        return dubaiDay(b.createdAt) === date;
+      })
+      .sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1)); // serial 1 = first entered
+  }, [bookings, filter, q, date]);
 
-  // Group by day (Dubai time), newest day first; inside a day: website orders, then manual, oldest first (serial 1 = first entered).
-  const days = useMemo(() => {
-    const key = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" });
-    const map = new Map<string, Booking[]>();
-    for (const b of shown) {
-      const k = key(b.createdAt);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(b);
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .map(([day, list]) => {
-        const asc = [...list].sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1));
-        return {
-          day,
-          all: asc,
-          sections: [
-            { label: "🌐 From website", rows: asc.filter((b) => b.createdBy === "WEBSITE") },
-            { label: "✍ Manual entry", rows: asc.filter((b) => b.createdBy !== "WEBSITE") },
-          ].filter((sec) => sec.rows.length > 0),
-        };
-      });
-  }, [shown]);
+  const web = dayList.filter(isWebsite);
+  const manual = dayList.filter((b) => !isWebsite(b));
+  const shown = source === "WEBSITE" ? web : manual;
+  const sum = (list: Booking[]) => list.reduce((s2, b) => s2 + b.codAmount, 0);
 
   if (loading || !vendor) {
     return <div className="flex min-h-screen items-center justify-center text-ink-soft">Loading…</div>;
@@ -173,6 +163,56 @@ function ConsignmentsContent() {
         </div>
 
         <div className="border border-line bg-white p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-semibold text-navy">
+              {q ? "Search results (all days)" : new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
+            </h2>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+                ◀
+              </button>
+              <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm" />
+              <button onClick={() => setDate(addDays(date, 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+                ▶
+              </button>
+              {date !== today() && (
+                <button onClick={() => setDate(today())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper">
+                  Today
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Website / Manual switch — each with its own total */}
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            {([
+              { key: "WEBSITE" as Source, label: "🌐 From website", list: web },
+              { key: "MANUAL" as Source, label: "✍ Manual entry", list: manual },
+            ]).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setSource(t.key);
+                  setSelected(new Set());
+                }}
+                className={`border-2 p-3 text-left transition ${source === t.key ? "border-navy bg-navy text-paper" : "border-line bg-white text-navy hover:border-brass"}`}
+              >
+                <div className="font-mono text-[11px] font-bold uppercase tracking-wide">{t.label}</div>
+                <div className="mt-1 flex items-baseline justify-between gap-2">
+                  <span className="font-display text-2xl font-bold">{t.list.length}</span>
+                  <span className="font-mono text-sm font-bold">AED {fmtNumber(sum(t.list))}</span>
+                </div>
+              </button>
+            ))}
+            <div className="border-2 border-dashed border-line bg-paper p-3 text-navy">
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wide text-ink-soft">Day total</div>
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="font-display text-2xl font-bold">{dayList.length}</span>
+                <span className="font-mono text-sm font-bold">AED {fmtNumber(sum(dayList))}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {FILTERS.map((f) => (
               <button
@@ -186,7 +226,7 @@ function ConsignmentsContent() {
                 }`}
               >
                 {f.label}
-                {f.value === "AWAITING_PICKUP" && ` (${bookings.filter((b) => b.status === "AWAITING_PICKUP").length})`}
+                {f.value === "AWAITING_PICKUP" && ` (${bookings.filter((b) => b.status === "AWAITING_PICKUP" && (q || dubaiDay(b.createdAt) === date) && (source === "WEBSITE") === isWebsite(b)).length})`}
               </button>
             ))}
             <input
@@ -256,51 +296,11 @@ function ConsignmentsContent() {
                 {shown.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="py-8 text-center text-ink-soft">
-                      No consignments here.
+                      No consignments here for this day.
                     </td>
                   </tr>
                 ) : (
-                  days.map((d) => (
-                    <Fragment key={d.day}>
-                      <tr>
-                        <td colSpan={10} className="py-2" style={{ background: "#141F33", color: "#fff" }}>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                            <b className="font-display text-base">{dayLabel(d.day)}</b>
-                            <span className="font-mono text-[11px] uppercase tracking-wide text-brass-light">
-                              Day total: <b className="text-paper">{d.all.length}</b> order{d.all.length === 1 ? "" : "s"}
-                              {" "}({d.all.filter((b) => b.createdBy === "WEBSITE").length} website · {d.all.filter((b) => b.createdBy !== "WEBSITE").length} manual)
-                              {" "}· COD <b className="text-paper">AED {fmtNumber(d.all.reduce((s2, b) => s2 + b.codAmount, 0))}</b>
-                            </span>
-                            <span className="ml-auto flex gap-2">
-                              <button onClick={() => printLabels(d.all.map((b) => b.id))} className="rounded border border-white/30 px-2 py-1 font-mono text-[10px] uppercase hover:border-brass-light">
-                                🖨 Print day ({d.all.length})
-                              </button>
-                              {d.all.some((b) => !b.labelPrintedAt) && (
-                                <button
-                                  onClick={() => printLabels(d.all.filter((b) => !b.labelPrintedAt).map((b) => b.id))}
-                                  className="rounded bg-brass px-2 py-1 font-mono text-[10px] uppercase text-navy hover:bg-brass-light"
-                                >
-                                  New only ({d.all.filter((b) => !b.labelPrintedAt).length})
-                                </button>
-                              )}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                      {d.sections.map((sec) => (
-                        <Fragment key={sec.label}>
-                          <tr>
-                            <td colSpan={10} className="bg-paper-2 py-1.5" style={{ background: "#ECE7D8" }}>
-                              <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-navy">
-                                {sec.label} ({sec.rows.length})
-                              </span>
-                              <span className="ml-3 font-mono text-[11px] text-ink-soft">COD AED {fmtNumber(sec.rows.reduce((s2, b) => s2 + b.codAmount, 0))}</span>
-                              <button onClick={() => printLabels(sec.rows.map((b) => b.id))} className="ml-3 text-xs text-brass hover:underline">
-                                Print these
-                              </button>
-                            </td>
-                          </tr>
-                          {sec.rows.map((b, idx) => (
+                  shown.map((b, idx) => (
                     <Fragment key={b.id}>
                     <tr className={openId === b.id ? "bg-paper-2" : ""}>
                       <td>
@@ -357,10 +357,6 @@ function ConsignmentsContent() {
                         </td>
                       </tr>
                     )}
-                    </Fragment>
-                          ))}
-                        </Fragment>
-                      ))}
                     </Fragment>
                   ))
                 )}
