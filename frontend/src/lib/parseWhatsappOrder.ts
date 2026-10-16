@@ -67,6 +67,30 @@ function detectEmirate(text: string): string | undefined {
   return undefined;
 }
 
+/** "Akoya 2pc" / "2 pcs Akoya" / "Akoya x2" → "2 × Akoya" (so the label shows the quantity). */
+function withQty(name: string): string {
+  const tail = name.match(/^(.+?)\s*[-–(]?\s*(?:x\s*)?(\d{1,3})\s*(?:pcs?|pieces?|nos?|qty|bottles?|x)?\s*\)?$/i);
+  if (tail && /[a-z]/i.test(tail[1]) && /(?:pcs?|pieces?|nos?|qty|bottles?|x)\s*\)?$|x\s*\d+$/i.test(name)) return `${tail[2]} × ${tail[1].trim()}`;
+  const head = name.match(/^(\d{1,3})\s*(?:pcs?|pieces?|nos?|x|×)\s+(.+)$/i);
+  if (head) return `${head[1]} × ${head[2].trim()}`;
+  return name;
+}
+
+/** Drop "United Arab Emirates" / "UAE" and repeated parts ("Sharjah, Sharjah"). */
+function tidyAddress(parts: string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const seg of parts.join(", ").split(/\s*,\s*/)) {
+    const t = seg.replace(/\s+/g, " ").trim();
+    if (!t || /^(united\s+arab\s+emirates|u\.?a\.?e\.?)$/i.test(t)) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out.join(", ");
+}
+
 function num(s: string): number | undefined {
   const n = Number(s.replace(/,/g, ""));
   return Number.isFinite(n) && n >= 0 && n < 1_000_000 ? Math.round(n) : undefined;
@@ -77,6 +101,7 @@ function tidy(line: string): string {
   return line
     .replace(/^\[\d{1,2}\/\d{1,2}\/\d{2,4},?\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?\]\s*[^:]{1,40}:\s*/i, "")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0]/g, " ")
     .replace(/[*_~]/g, "")
     .replace(/^[\s•\-–—>·]+/, "")
     .replace(/\s+/g, " ")
@@ -162,6 +187,20 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       continue;
     }
 
+    // --- "Anurag Cp 566905892, Fire Station Road, Muwaileh, Sharjah" — name, phone, address in one line
+    const inline = line.match(PHONE_RE);
+    if (inline && inline.index !== undefined) {
+      const before = line.slice(0, inline.index).replace(/[,\-–:]+\s*$/, "").trim();
+      const after = line.slice(inline.index + inline[0].length).replace(/^[\s,\-–:]+/, "").trim();
+      const nameLike = before && !/\d/.test(before) && before.split(/\s+/).length <= 5 && !detectEmirate(before);
+      if (nameLike && after.length > 3) {
+        if (!out.customerName) out.customerName = before;
+        if (!out.customerPhone) out.customerPhone = cleanPhone(inline[0]);
+        addressParts.push(after);
+        continue;
+      }
+    }
+
     // --- A line that is only an amount: "120 aed", "AED 120"
     const bare = line.match(/^(?:(?:aed|dhs?)\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?))\s*$/i);
     if (bare) {
@@ -175,7 +214,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       line.match(/^(.{2,60}?)\s*[-–:=]\s*(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)?\s*,?$/i) ||
       line.match(/^(.{2,60}?)\s+(\d[\d,]*(?:\.\d+)?)\s*(?:aed|dhs?|dirhams?)\s*,?$/i);
     if (itemLine && !PHONE_RE.test(line) && /[a-z]/i.test(itemLine[1])) {
-      items.push(itemLine[1].replace(/[-–:=,\s]+$/, "").trim());
+      items.push(withQty(itemLine[1].replace(/[-–:=,\s]+$/, "").trim()));
       lastAedAmount = num(itemLine[2]);
       continue;
     }
@@ -210,7 +249,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   }
   addressParts.push(...leftovers);
 
-  if (addressParts.length) out.address = addressParts.join(", ");
+  if (addressParts.length) out.address = tidyAddress(addressParts);
   if (items.length) out.items = items.join(", ");
   if (notes.length) out.notes = notes.join("; ");
   if (!out.emirate) out.emirate = detectEmirate([out.address, raw].filter(Boolean).join(" "));
