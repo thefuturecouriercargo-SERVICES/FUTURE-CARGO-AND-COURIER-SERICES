@@ -31,7 +31,8 @@ function Barcode({ value, height }: { value: string; height: number }) {
       JsBarcode(ref.current, value, {
         format: "CODE128",
         displayValue: false,
-        margin: 0,
+        // Quiet zone on both sides — phone cameras need it to find the barcode.
+        margin: 8,
         height,
         width: 2,
         background: "#ffffff",
@@ -42,6 +43,22 @@ function Barcode({ value, height }: { value: string; height: number }) {
     }
   }, [value, height]);
   return <svg ref={ref} className="block h-auto w-full" preserveAspectRatio="none" />;
+}
+
+/** QR code of the CN — phone cameras read QR far more reliably than thin barcodes. */
+function QrCode({ value, sizeMm }: { value: string; sizeMm: number }) {
+  const [svg, setSvg] = useState("");
+  useEffect(() => {
+    let alive = true;
+    import("qrcode")
+      .then((QR) => QR.toString(value, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#000000", light: "#ffffff" } }))
+      .then((out) => alive && setSvg(out))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+  return <div className="shrink-0 [&>svg]:block [&>svg]:h-full [&>svg]:w-full" style={{ width: `${sizeMm}mm`, height: `${sizeMm}mm` }} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 function dubaiDate(iso: string) {
@@ -147,14 +164,15 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
     <div ref={rootRef} className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
       {/* Header: brand + date on the left, compact barcode + CN on the right */}
       <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-1.5">
-        <div className="min-w-0">
-          <div style={{ fontSize: narrow ? 13 : 15, fontWeight: 800, letterSpacing: 0.3 }}>FUTURE COURIER</div>
+        <div className="min-w-0 flex-1">
+          <div style={{ fontSize: narrow ? 12 : 14, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
           <div style={{ fontSize: 9 }}>{dubaiDate(booking.createdAt)}</div>
           <div className="mt-0.5" style={{ fontSize: 9 }}>
             From: <b>{booking.vendor.name}</b>
           </div>
         </div>
-        <div className="shrink-0 text-center" style={{ width: sq ? "48%" : "52%" }}>
+        <QrCode value={String(booking.cnNo)} sizeMm={sq ? 13 : 16} />
+        <div className="shrink-0 text-center" style={{ width: sq ? "42%" : "44%" }}>
           <Barcode value={String(booking.cnNo)} height={sq ? 26 : 34} />
           <div className="mt-1" style={{ fontSize: sq ? 13 : 15, fontWeight: 800, letterSpacing: 1.5, fontFamily: "'Courier New', monospace", lineHeight: 1.1 }}>
             CN {booking.cnNo}
