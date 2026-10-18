@@ -290,37 +290,25 @@ router.get(
       const all = await prisma.booking.findMany({ where: { vendorId }, select: { id: true, customerPhone: true } });
       phoneIds = all.filter((b) => b.customerPhone.replace(/\D/g, "").includes(tail)).map((b) => b.id);
     }
-    const phoneMatch = phoneIds.length ? [{ id: { in: phoneIds } }] : [];
-
-    const [orders, bookings] = await Promise.all([
-      prisma.order.findMany({
-        where: {
-          vendorId,
-          OR: [
-            ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
-            { booking: { customerName: text } },
-            ...(phoneIds.length ? [{ booking: { id: { in: phoneIds } } }] : []),
-          ],
-        },
-        include: { booking: { select: PORTAL_BOOKING_SELECT } },
-        orderBy: [{ date: "desc" }],
-        take: 50,
-      }),
-      prisma.booking.findMany({
-        where: {
-          vendorId,
-          status: { not: "ACCEPTED" },
-          OR: [
-            ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
-            { customerName: text },
-            ...phoneMatch,
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-    ]);
-    res.json({ orders, bookings });
+    // Only consignments already in Daily Entry (orders). Search by CN, customer
+    // name, phone, or area (address / driver-set area / emirate).
+    const orders = await prisma.order.findMany({
+      where: {
+        vendorId,
+        OR: [
+          ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
+          { booking: { customerName: text } },
+          ...(phoneIds.length ? [{ booking: { id: { in: phoneIds } } }] : []),
+          { booking: { address: text } },
+          { area: text },
+          { emirate: text },
+        ],
+      },
+      include: { booking: { select: PORTAL_BOOKING_SELECT } },
+      orderBy: [{ date: "desc" }],
+      take: 100,
+    });
+    res.json({ orders, bookings: [] });
   })
 );
 

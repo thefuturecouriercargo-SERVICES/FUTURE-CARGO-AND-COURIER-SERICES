@@ -8,6 +8,7 @@ import VendorShell from "@/components/VendorShell";
 import VendorOrderStatus from "@/components/VendorOrderStatus";
 import OrderDetails from "@/components/OrderDetails";
 import { OrderBookingDetails } from "@/types";
+import { detectArea } from "@/lib/areas";
 
 interface Hit {
   key: string;
@@ -17,6 +18,7 @@ interface Hit {
   amount: number;
   emirate: string;
   note?: string | null;
+  area?: string;
   booking?: OrderBookingDetails | null;
 }
 
@@ -29,6 +31,7 @@ interface SearchResponse {
     total: number;
     emirate: string;
     remarks?: string | null;
+    area?: string | null;
     booking?: OrderBookingDetails | null;
   }[];
   bookings: (OrderBookingDetails & { id: string; cnNo: number; status: string; createdAt: string; rejectReason?: string | null })[];
@@ -55,16 +58,6 @@ function Search() {
       try {
         const r = await apiFetch<SearchResponse>("/vendor-portal/search", { query: { q: term } });
         const list: Hit[] = [
-          ...r.bookings.map((b) => ({
-            key: `b-${b.id}`,
-            cnNo: b.cnNo,
-            date: b.createdAt,
-            status: b.status,
-            amount: b.codAmount,
-            emirate: b.emirate,
-            note: b.rejectReason,
-            booking: b,
-          })),
           ...r.orders.map((o) => ({
             key: `o-${o.id}`,
             cnNo: o.cnNo,
@@ -73,6 +66,7 @@ function Search() {
             amount: o.total,
             emirate: o.emirate,
             note: o.remarks,
+            area: o.area || detectArea(o.booking?.address, o.emirate),
             booking: o.booking,
           })),
         ];
@@ -90,12 +84,13 @@ function Search() {
   return (
     <>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Search</p>
-      <h1 className="mb-4 font-display text-3xl font-semibold text-navy">Find any consignment</h1>
+      <h1 className="mb-1 font-display text-3xl font-semibold text-navy">Find any consignment</h1>
+      <p className="mb-4 text-sm text-ink-soft">Searches consignments already picked up into Daily Entry.</p>
       <input
         ref={inputRef}
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="CN number, customer name or phone…"
+        placeholder="CN number, customer name, phone or area…"
         className="mb-5 w-full rounded border-2 border-brass px-4 py-3 text-base"
       />
 
@@ -110,7 +105,7 @@ function Search() {
                 <b className="font-mono text-base text-navy">CN {h.cnNo}</b>
                 {h.booking && <span className="ml-2">{h.booking.customerName}</span>}
                 <span className="ml-2 text-xs text-ink-soft">
-                  {new Date(h.date).toLocaleDateString("en-GB")} · {h.emirate} · {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
+                  {new Date(h.date).toLocaleDateString("en-GB")} · {h.area ? `${h.area} · ` : ""}{h.emirate} · {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
                 </span>
               </span>
               <VendorOrderStatus status={h.status} />
