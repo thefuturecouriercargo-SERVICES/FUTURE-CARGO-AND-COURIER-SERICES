@@ -53,20 +53,42 @@ function clamp(lines: number): React.CSSProperties {
   return { display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" };
 }
 
-/** "4 × Noir (AED 160), 1 × Akoya" or "Akoya, Noir" → [{qty, name, price}] (qty 1 when not given). */
-export function splitItems(items?: string | null): { qty: string; name: string; price?: string }[] {
+export type LabelItem = { qty: string; name: string; price?: string; header?: boolean };
+
+/**
+ * "4 × Noir (AED 160), 1 × Akoya" or "Akoya, Noir" → rows (qty 1 when not given).
+ * A combo / bundle line ("Signature Combo Offer (ALF+TSUKI)") followed by its
+ * unpriced contents becomes a header row — it is not a separate piece to pack.
+ * Website orders mark such lines with a leading "▸ ".
+ */
+export function splitItems(items?: string | null): LabelItem[] {
   if (!items) return [];
-  const parts = /\d+\s*[×x]\s/i.test(items) ? items.split(/,\s*(?=\d+\s*[×x]\s)/i) : items.split(/\s*,\s*/);
-  return parts
+  const parts = /\d+\s*[×x]\s/i.test(items) ? items.split(/,\s*(?=(?:▸\s*)?\d+\s*[×x]\s)/i) : items.split(/\s*,\s*/);
+  const rows: LabelItem[] = parts
     .map((p) => p.trim())
     .filter(Boolean)
     .map((p) => {
-      const priced = p.match(/^(.*?)\s*\((?:AED|aed)\s*([\d.,]+)\)\s*$/);
-      const body = priced ? priced[1] : p;
+      const marked = p.startsWith("▸");
+      const raw = p.replace(/^▸\s*/, "");
+      const priced = raw.match(/^(.*?)\s*\((?:AED|aed)\s*([\d.,]+)\)\s*$/);
+      const body = priced ? priced[1] : raw;
       const price = priced ? priced[2] : undefined;
       const m = body.match(/^(\d+)\s*[×x]\s*(.+)$/i);
-      return m ? { qty: m[1], name: m[2].trim(), price } : { qty: "1", name: body, price };
+      const row: LabelItem = m ? { qty: m[1], name: m[2].trim(), price } : { qty: "1", name: body, price };
+      if (marked) row.header = true;
+      return row;
     });
+  // Older entries without the marker: a priced combo line whose next rows are unpriced parts of it.
+  for (let i = 0; i < rows.length - 1; i++) {
+    const r = rows[i];
+    if (r.header || !r.price) continue;
+    const next = rows[i + 1];
+    if (next.price) continue;
+    const lname = r.name.toLowerCase();
+    const listsNext = lname.includes(next.name.toLowerCase().trim());
+    if (listsNext || /combo|bundle|\bset\b|\bpack\b|\boffer\b|\+/i.test(r.name)) r.header = true;
+  }
+  return rows;
 }
 
 type Fit = { font: number; row: number; cols: 1 | 2; clampName: number; tick: number; qtyW: number; priceW: number };
@@ -102,7 +124,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           : { width: "92mm", height: "132mm", padding: "4mm", border: "1px dashed #999", overflow: "hidden" };
 
   const items = splitItems(booking.items);
-  const totalQty = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const pieces = items.filter((i) => !i.header);
+  const totalQty = pieces.reduce((s, i) => s + (Number(i.qty) || 0), 0);
   const hasPrices = items.some((i) => i.price);
   const levels = FIT_LEVELS[size];
   // Remember the fitted size per item list, so a new order starts again at the biggest size.
@@ -167,14 +190,30 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
             <span className="flex-1">
               Item
               <span className="ml-2 opacity-90">
-                · {items.length} item{items.length === 1 ? "" : "s"}
-                {totalQty && totalQty !== items.length ? ` · ${totalQty} pcs` : ""}
+                · {pieces.length} item{pieces.length === 1 ? "" : "s"}
+                {totalQty && totalQty !== pieces.length ? ` · ${totalQty} pcs` : ""}
               </span>
             </span>
             {hasPrices && fit.cols === 1 && <span className="text-right" style={{ width: fit.priceW }}>AED</span>}
           </div>
           <div className={fit.cols === 2 ? "grid grid-cols-2" : "flex flex-col"}>
-            {items.map((it, i) => (
+            {items.map((it, i) =>
+              it.header ? (
+                <div
+                  key={i}
+                  className="flex items-center border-b border-black bg-gray-100 px-1.5"
+                  style={{ minHeight: fit.row * 0.8, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined, fontSize: "0.8em" }}
+                >
+                  <span className="min-w-0 flex-1" style={{ fontWeight: 700, fontStyle: "italic", ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
+                    🎁 {it.name}
+                  </span>
+                  {hasPrices && (
+                    <span className="shrink-0 pl-1 text-right" style={{ width: fit.cols === 1 ? fit.priceW : undefined, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {it.price ?? ""}
+                    </span>
+                  )}
+                </div>
+              ) : (
               <div
                 key={i}
                 className="flex items-center border-b border-black px-1.5"
@@ -193,7 +232,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
                   </span>
                 )}
               </div>
-            ))}
+              )
+            )}
           </div>
           {/* empty space stays inside the box */}
           <div className="flex-1" />

@@ -78,7 +78,18 @@ export interface WooOrder {
   customer_note?: string;
   billing?: WooAddress & { email?: string };
   shipping?: WooAddress;
-  line_items?: { name: string; quantity: number; total?: string; total_tax?: string }[];
+  line_items?: {
+    id?: number;
+    name: string;
+    quantity: number;
+    total?: string;
+    total_tax?: string;
+    // WooCommerce Product Bundles / Composite Products
+    bundled_by?: string | number;
+    bundled_items?: (string | number)[];
+    composite_parent?: string | number;
+    composite_children?: (string | number)[];
+  }[];
 }
 
 async function wooGet<T>(conn: string, path: string, params: Record<string, string>): Promise<T> {
@@ -145,7 +156,9 @@ export function mapWooOrder(o: WooOrder) {
   const items = (o.line_items ?? [])
     .map((li) => {
       const amt = Math.round((Number(li.total) || 0) + (Number(li.total_tax) || 0));
-      return `${li.quantity} × ${li.name.replace(/,/g, " ")}${amt > 0 ? ` (AED ${amt})` : ""}`;
+      // A bundle/combo parent is a heading on the label, not a piece to pack.
+      const isParent = (li.bundled_items?.length ?? 0) > 0 || (li.composite_children?.length ?? 0) > 0;
+      return `${isParent ? "▸ " : ""}${li.quantity} × ${li.name.replace(/,/g, " ")}${amt > 0 ? ` (AED ${amt})` : ""}`;
     })
     .join(", ");
   const isCod = (o.payment_method ?? "").toLowerCase() === "cod";
