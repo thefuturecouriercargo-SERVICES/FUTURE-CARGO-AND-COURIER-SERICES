@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, todayStr } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
+import { splitItems } from "@/components/ShippingLabel";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 /** Every scan of a day (office Scan & Assign + drivers taking parcels), with filters, sorting and PDF. */
@@ -23,6 +24,12 @@ interface ScanRow {
   emirate: string | null;
   address: string | null;
   fromDriver: string | null;
+  orderStatus?: string | null;
+  area?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  items?: string | null;
+  notes?: string | null;
 }
 
 type SortKey = "time" | "driver" | "vendor" | "area" | "emirate" | "cn" | "by";
@@ -46,7 +53,13 @@ function addDays(d: string, n: number) {
   return x.toISOString().slice(0, 10);
 }
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Dubai" });
-const areaOfRow = (r: ScanRow) => (r.cnNo ? detectArea(r.address, r.emirate) : "");
+const areaOfRow = (r: ScanRow) => (r.cnNo ? r.area || detectArea(r.address, r.emirate) : "");
+/** Items as plain lines for the PDF: "1 x Alf" — combo headings as "Combo name (AED 220):". */
+function itemsText(items?: string | null) {
+  return splitItems(items)
+    .map((it) => (it.header ? `${it.name}${it.price ? ` (AED ${it.price})` : ""}:` : `${it.qty} x ${it.name}${it.price ? ` (AED ${it.price})` : ""}`))
+    .join("\n");
+}
 const uniq = (list: (string | null | undefined)[]) => Array.from(new Set(list.filter(Boolean) as string[])).sort();
 
 export default function ScanHistory() {
@@ -191,23 +204,40 @@ export default function ScanHistory() {
 
       autoTable(doc, {
         startY: ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 40) + 6,
-        head: [["#", "Time", "CN", "Vendor", "Area", "Emirate", "COD", "Driver", "Scanned by", "Result", "Note"]],
+        head: [["#", "Time", "CN", "Vendor", "Customer", "Phone", "Address / Area", "Items", "COD", "Driver", "Scanned by", "Result / Note"]],
         body: shown.map((r, i) => [
           i + 1,
           timeOf(r.createdAt),
           r.cnNo ?? r.code,
           r.vendorName ?? "",
-          areaOfRow(r),
-          r.emirate ?? "",
+          r.customerName ?? "",
+          r.customerPhone ?? "",
+          [r.address, [areaOfRow(r), r.emirate].filter(Boolean).join(" · ")].filter(Boolean).join("\n"),
+          [itemsText(r.items), r.notes ? `Note: ${r.notes}` : ""].filter(Boolean).join("\n"),
           r.total != null ? fmtNumber(r.total) : "",
           r.driverName ?? "",
           `${r.byName} (${r.byRole === "OFFICE" ? "office" : "driver"})`,
-          RESULT_LABEL[r.result],
-          r.result === "REASSIGNED" && r.fromDriver ? `from ${r.fromDriver}` : r.result === "FAILED" ? r.message : "",
+          [RESULT_LABEL[r.result], r.result === "REASSIGNED" && r.fromDriver ? `from ${r.fromDriver}` : r.result === "FAILED" ? r.message : "", r.orderStatus ? `Now: ${r.orderStatus}` : ""]
+            .filter(Boolean)
+            .join("\n"),
         ]),
-        styles: { fontSize: 7.5, cellPadding: 1.2, overflow: "linebreak" },
+        styles: { fontSize: 7, cellPadding: 1.2, overflow: "linebreak", valign: "top" },
         headStyles: { fillColor: [20, 31, 51] },
-        columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 16 }, 2: { cellWidth: 18 }, 6: { halign: "right", cellWidth: 14 }, 10: { cellWidth: 60 } },
+        columnStyles: {
+          0: { cellWidth: 7 },
+          1: { cellWidth: 14 },
+          2: { cellWidth: 17 },
+          3: { cellWidth: 17 },
+          4: { cellWidth: 26 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 52 },
+          7: { cellWidth: 46 },
+          8: { halign: "right", cellWidth: 12 },
+          9: { cellWidth: 17 },
+          10: { cellWidth: 22 },
+          11: { cellWidth: 21 },
+        },
+        margin: { left: 8, right: 8 },
         didDrawPage: () => {
           const page = doc.getNumberOfPages();
           doc.setFontSize(7);
@@ -354,6 +384,7 @@ export default function ScanHistory() {
               <th>Time</th>
               <th>CN</th>
               <th>Vendor</th>
+              <th>Customer</th>
               <th>Area</th>
               <th className="text-right">COD</th>
               <th>Driver</th>
@@ -364,7 +395,7 @@ export default function ScanHistory() {
           <tbody>
             {shown.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-ink-soft">
+                <td colSpan={10} className="py-8 text-center text-ink-soft">
                   {loading ? "Loading…" : "No scans for this day / filter."}
                 </td>
               </tr>
@@ -375,6 +406,10 @@ export default function ScanHistory() {
                   <td className="whitespace-nowrap font-mono text-xs">{timeOf(r.createdAt)}</td>
                   <td className="font-mono font-bold">{r.cnNo ?? r.code}</td>
                   <td>{r.vendorName ?? "—"}</td>
+                  <td className="text-xs">
+                    {r.customerName ?? "—"}
+                    {r.customerPhone && <div className="font-mono text-ink-soft">{r.customerPhone}</div>}
+                  </td>
                   <td className="text-xs">
                     {areaOfRow(r)}
                     {r.emirate ? <span className="text-ink-soft"> · {r.emirate}</span> : null}

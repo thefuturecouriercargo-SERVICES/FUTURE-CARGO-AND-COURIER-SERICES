@@ -70,6 +70,30 @@ export async function scanLogForDay(day: string) {
   const rows = await prisma.scanLog.findMany({ where: { createdAt: { gte: start, lt: end } }, orderBy: { createdAt: "asc" }, take: 5000 });
   // Hide scans of consignments that were deleted afterwards (e.g. deleted in Daily Entry).
   const ids = Array.from(new Set(rows.map((r) => r.orderId).filter(Boolean) as string[]));
-  const alive = new Set((await prisma.order.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((o) => o.id));
-  return rows.filter((r) => !r.orderId || alive.has(r.orderId));
+  const orders = await prisma.order.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      area: true,
+      status: true,
+      booking: { select: { customerName: true, customerPhone: true, address: true, items: true, notes: true } },
+    },
+  });
+  const byId = new Map(orders.map((o) => [o.id, o]));
+  // Attach customer details (name, phone, address, items, notes) for the report / PDF.
+  return rows
+    .filter((r) => !r.orderId || byId.has(r.orderId))
+    .map((r) => {
+      const o = r.orderId ? byId.get(r.orderId) : undefined;
+      return {
+        ...r,
+        orderStatus: o?.status ?? null,
+        area: o?.area ?? null,
+        customerName: o?.booking?.customerName ?? null,
+        customerPhone: o?.booking?.customerPhone ?? null,
+        address: o?.booking?.address ?? r.address,
+        items: o?.booking?.items ?? null,
+        notes: o?.booking?.notes ?? null,
+      };
+    });
 }
