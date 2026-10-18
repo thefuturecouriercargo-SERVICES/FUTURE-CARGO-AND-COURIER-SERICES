@@ -120,8 +120,22 @@ function waNumber(phone: string) {
 function customerWaLink(o: Order) {
   const b = o.booking!;
   const name = /customer\s*·|^ew customer/i.test(b.customerName) ? "" : ` ${b.customerName}`;
-  const pay = isPrepaid(o) ? "It is already paid — nothing to pay on delivery." : "Please keep the cash ready (cash only — no card payment).";
-  const text = `Hello${name}, this is Future Courier. Your ${o.brandName} order (CN ${o.cnNo}${isPrepaid(o) ? "" : `, AED ${o.total}`}) will be delivered today. ${pay} Please share your location here on WhatsApp so we can reach you easily. Thank you!`;
+  const payLine = isPrepaid(o)
+    ? "💵 Payment: *Already paid* — nothing to pay on delivery"
+    : `💵 Amount: *AED ${o.total}*\n_Cash only — card payment is not accepted_`;
+  const text = [
+    `Hello${name},`,
+    "",
+    `This is *Future Courier*. Your order from *${o.brandName}* is out for delivery today.`,
+    "",
+    `📦 CN: *${o.cnNo}*`,
+    payLine,
+    "",
+    "📍 Kindly share your location here so our driver can reach you easily.",
+    "",
+    "Thank you,",
+    "The Future Courier Service L.L.C",
+  ].join("\n");
   return `https://wa.me/${waNumber(b.customerPhone)}?text=${encodeURIComponent(text)}`;
 }
 
