@@ -9,6 +9,7 @@ import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
+import { detectArea } from "@/lib/areas";
 import BillTypeSelect from "@/components/BillTypeSelect";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 
@@ -133,6 +134,23 @@ export default function DriverPortalPage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [view, setViewState] = useState<"list" | "area">("list");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("driverView") === "area") setViewState("area");
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  function setView(v: "list" | "area") {
+    setViewState(v);
+    try {
+      localStorage.setItem("driverView", v);
+    } catch {
+      /* ignore */
+    }
+  }
   const [fromScan, setFromScan] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
@@ -373,6 +391,98 @@ export default function DriverPortalPage() {
       return true;
     });
   }, [orders, statusTab, search]);
+
+  // Area view: group the driver's parcels by emirate + area (from the address), biggest area first.
+  const areaGroups = useMemo(() => {
+    const map = new Map<string, { key: string; area: string; emirate: string; orders: Order[] }>();
+    for (const o of filtered) {
+      const area = detectArea(o.booking?.address, o.emirate);
+      const key = `${o.emirate}|${area}`;
+      const g = map.get(key) ?? { key, area, emirate: o.emirate, orders: [] };
+      g.orders.push(o);
+      map.set(key, g);
+    }
+    return Array.from(map.values()).sort((a, b) => a.emirate.localeCompare(b.emirate) || b.orders.length - a.orders.length || a.area.localeCompare(b.area));
+  }, [filtered]);
+
+  const renderCard = (o: Order) => (
+            <div key={o.id} className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-line border-l-4 bg-white p-4 ${statusBorderClass(o.status)}`}>
+              <div>
+                <div className="font-mono text-[15px] font-bold text-navy">
+                  CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
+                </div>
+                {isPrepaid(o) && <PrepaidBadge large />}
+                {o.booking && (
+                  <div className="mt-1 text-sm">
+                    👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
+                  </div>
+                )}
+                <div className="mt-1 text-xs text-ink-soft">
+                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
+                </div>
+                {o.remarks && (
+                  <div className="mt-1 text-xs text-cancelled">
+                    Reason: {o.remarks}
+                  </div>
+                )}
+                {o.status === "TRANSFER" && o.transferredBy && (
+                  <div className="mt-1 text-xs text-transferred">
+                    Transferred by {o.transferredBy}
+                  </div>
+                )}
+                {o.vendor.phone && (
+                  <div className="mt-2 flex gap-2">
+                    <a
+                      href={`tel:${o.vendor.phone}`}
+                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
+                    >
+                      📞 Call Vendor
+                    </a>
+                    <a
+                      href={`https://wa.me/${o.vendor.phone.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
+                    >
+                      💬 WhatsApp
+                    </a>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
+                  {o.status}
+                </span>
+                {agingDays(o.status, o.date) !== null && (
+                  <span
+                    className={`rounded px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${agingBadgeClass(agingDays(o.status, o.date)!)}`}
+                    title={`Pending ${agingDays(o.status, o.date)} days`}
+                  >
+                    {agingDays(o.status, o.date)}d old
+                  </span>
+                )}
+                <button
+                  onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
+                  className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide hover:-translate-y-px ${
+                    detailsId === o.id ? "border-navy bg-navy text-paper" : "border-navy text-navy"
+                  }`}
+                >
+                  {detailsId === o.id ? "Hide details" : "Details"}
+                </button>
+                <button
+                  onClick={() => setStatusOrder(o)}
+                  className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
+                >
+                  Update Status
+                </button>
+              </div>
+              {detailsId === o.id && (
+                <div className="w-full basis-full border-t border-line pt-3">
+                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact />
+                </div>
+              )}
+            </div>
+);
 
   // ── Global voice assistant ──────────────────────────────────────────────────
   // Parses a full spoken command and either answers immediately (questions), or
@@ -671,6 +781,27 @@ export default function DriverPortalPage() {
         📦 Assign order — scan barcode
       </button>
 
+      <button
+        onClick={() => setSortOpen(true)}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded border-2 border-navy bg-white px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-navy shadow-sm hover:bg-paper-2"
+      >
+        🗂 Sort my parcels by area — scan each
+      </button>
+
+      <div className="mb-2 flex gap-1">
+        {([
+          ["list", "📋 List"],
+          ["area", "📍 By area"],
+        ] as const).map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded px-3 py-1.5 font-mono text-[11px] font-bold uppercase ${view === v ? "bg-navy text-paper" : "border border-line bg-white text-ink-soft"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
@@ -718,84 +849,21 @@ export default function DriverPortalPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((o) => (
-            <div key={o.id} className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-line border-l-4 bg-white p-4 ${statusBorderClass(o.status)}`}>
-              <div>
-                <div className="font-mono text-[15px] font-bold text-navy">
-                  CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
+          {view === "area"
+            ? areaGroups.map((g, gi) => (
+                <div key={g.key} id={`area-${gi}`} className="space-y-3">
+                  <div className="sticky top-0 z-10 flex flex-wrap items-baseline justify-between gap-2 rounded bg-navy px-3 py-2 text-paper shadow">
+                    <span className="font-display text-base font-bold">
+                      {gi + 1}. {g.area} <span className="font-mono text-[11px] font-normal text-brass-light">· {g.emirate}</span>
+                    </span>
+                    <span className="font-mono text-[11px] uppercase">
+                      {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((s2, o) => s2 + o.total, 0))}
+                    </span>
+                  </div>
+                  {g.orders.map((o) => renderCard(o))}
                 </div>
-                {isPrepaid(o) && <PrepaidBadge large />}
-                {o.booking && (
-                  <div className="mt-1 text-sm">
-                    👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
-                  </div>
-                )}
-                <div className="mt-1 text-xs text-ink-soft">
-                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
-                </div>
-                {o.remarks && (
-                  <div className="mt-1 text-xs text-cancelled">
-                    Reason: {o.remarks}
-                  </div>
-                )}
-                {o.status === "TRANSFER" && o.transferredBy && (
-                  <div className="mt-1 text-xs text-transferred">
-                    Transferred by {o.transferredBy}
-                  </div>
-                )}
-                {o.vendor.phone && (
-                  <div className="mt-2 flex gap-2">
-                    <a
-                      href={`tel:${o.vendor.phone}`}
-                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
-                    >
-                      📞 Call Vendor
-                    </a>
-                    <a
-                      href={`https://wa.me/${o.vendor.phone.replace(/\D/g, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
-                    >
-                      💬 WhatsApp
-                    </a>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
-                  {o.status}
-                </span>
-                {agingDays(o.status, o.date) !== null && (
-                  <span
-                    className={`rounded px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${agingBadgeClass(agingDays(o.status, o.date)!)}`}
-                    title={`Pending ${agingDays(o.status, o.date)} days`}
-                  >
-                    {agingDays(o.status, o.date)}d old
-                  </span>
-                )}
-                <button
-                  onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
-                  className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide hover:-translate-y-px ${
-                    detailsId === o.id ? "border-navy bg-navy text-paper" : "border-navy text-navy"
-                  }`}
-                >
-                  {detailsId === o.id ? "Hide details" : "Details"}
-                </button>
-                <button
-                  onClick={() => setStatusOrder(o)}
-                  className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
-                >
-                  Update Status
-                </button>
-              </div>
-              {detailsId === o.id && (
-                <div className="w-full basis-full border-t border-line pt-3">
-                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact />
-                </div>
-              )}
-            </div>
-          ))}
+              ))
+            : filtered.map((o) => renderCard(o))}
         </div>
       )}
 
@@ -843,6 +911,8 @@ export default function DriverPortalPage() {
           }}
         />
       )}
+
+      {sortOpen && <SortScanModal orders={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER")} onClose={() => setSortOpen(false)} />}
 
       {statusScanOpen && (
         <StatusScanModal
@@ -920,6 +990,91 @@ export default function DriverPortalPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Morning sorting: scan each parcel and the screen says which pile (area) it
+ * goes in, so the driver can arrange 50 parcels by route without reading labels.
+ */
+function SortScanModal({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+  const piles = useMemo(() => {
+    const map = new Map<string, { key: string; area: string; emirate: string; ids: string[] }>();
+    for (const o of orders) {
+      const area = detectArea(o.booking?.address, o.emirate);
+      const key = `${o.emirate}|${area}`;
+      const g = map.get(key) ?? { key, area, emirate: o.emirate, ids: [] };
+      g.ids.push(o.id);
+      map.set(key, g);
+    }
+    return Array.from(map.values()).sort((a, b) => a.emirate.localeCompare(b.emirate) || b.ids.length - a.ids.length || a.area.localeCompare(b.area));
+  }, [orders]);
+  const [sorted, setSorted] = useState<Set<string>>(new Set());
+  const [last, setLast] = useState<{ ok: boolean; pile?: number; area?: string; emirate?: string; cn?: number; text?: string } | null>(null);
+
+  function onCode(raw: string) {
+    const code = raw.trim();
+    const n = Number(code);
+    const o = orders.find((x) => x.cnNo === n) ?? orders.find((x) => x.booking?.vendorRef === code);
+    if (!o) {
+      beep(false);
+      setLast({ ok: false, text: `${code} is not in your pending parcels` });
+      return;
+    }
+    const pi = piles.findIndex((p) => p.ids.includes(o.id));
+    beep(true);
+    setSorted((prev) => new Set(prev).add(o.id));
+    setLast({ ok: true, pile: pi + 1, area: piles[pi]?.area, emirate: piles[pi]?.emirate, cn: o.cnNo });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-4 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-xl font-semibold text-navy">🗂 Sort by area</h2>
+          <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
+            ×
+          </button>
+        </div>
+        <p className="mb-2 text-sm text-ink-soft">
+          Scan each parcel — put it in the pile number shown. {sorted.size} / {orders.length} sorted.
+        </p>
+
+        {last && (
+          <div className={`mb-3 rounded p-4 text-center ${last.ok ? "bg-navy text-paper" : "bg-cancelled-bg text-cancelled"}`}>
+            {last.ok ? (
+              <>
+                <div className="font-mono text-xs uppercase tracking-widest text-brass-light">CN {last.cn} → pile</div>
+                <div className="font-display text-6xl font-bold leading-none">{last.pile}</div>
+                <div className="mt-1 text-lg font-bold">{last.area}</div>
+                <div className="font-mono text-xs uppercase">{last.emirate}</div>
+              </>
+            ) : (
+              <div className="font-bold">{last.text}</div>
+            )}
+          </div>
+        )}
+
+        <BarcodeScanner onCode={onCode} autoCamera />
+
+        <div className="mt-3 space-y-1">
+          {piles.map((p, i) => {
+            const done = p.ids.filter((id) => sorted.has(id)).length;
+            return (
+              <div key={p.key} className={`flex items-center justify-between rounded border px-3 py-1.5 text-sm ${done === p.ids.length ? "border-delivered bg-delivered-bg" : "border-line"}`}>
+                <span>
+                  <b className="mr-2 font-mono">{i + 1}</b>
+                  {p.area} <span className="text-xs text-ink-soft">· {p.emirate}</span>
+                </span>
+                <span className="font-mono text-xs">
+                  {done}/{p.ids.length}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber } from "@/lib/format";
+import { detectArea } from "@/lib/areas";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
 
@@ -151,7 +152,9 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           {booking.customerName} · {booking.customerPhone}
         </div>
         <div style={sq || items.length > 14 ? clamp(2) : clamp(3)}>{booking.address}</div>
-        <div style={{ fontWeight: 700, textTransform: "uppercase" }}>{booking.emirate}</div>
+        <div style={{ fontWeight: 800, textTransform: "uppercase", fontSize: sq ? 12 : 14 }}>
+          📍 {detectArea(booking.address, booking.emirate)} · {booking.emirate}
+        </div>
       </div>
 
       {/* Items — boxed table that fills the label down to the footer.
