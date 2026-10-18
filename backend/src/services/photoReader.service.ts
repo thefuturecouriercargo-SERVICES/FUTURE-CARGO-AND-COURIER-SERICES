@@ -31,7 +31,7 @@ Vendors write these by hand (or send a screenshot/printed bill). Extract every o
 
 How these slips usually look:
 - A number at the top (often underlined), e.g. "1211" = the vendor's own bill/order number → vendorRef.
-- Emirate written as a word or code: DXB/Dubai → DUBAI, SHJ/Sharjah → SHARJAH, AUH/Abu Dhabi → ABUDHABI, AIN/Al Ain → AL AIN, AJM/Ajman → AJMAN, RAK → RAS AL KHAIMAH, FUJ/Fujairah → FUJAIRAH, UAQ → UMM AL QUWAIN. Areas imply the emirate (Business Bay, Deira, JLT, Marina, Al Barsha… → DUBAI; Al Nahda/Muwaileh/Al Majaz → SHARJAH unless the slip says Dubai; Mussafah/Khalifa City → ABUDHABI).
+- Emirate written as a word or code: DXB/Dubai → DUBAI, SHJ/Sharjah → SHARJAH, AD/AUH/Abu Dhabi → ABUDHABI (vendors often write just "AD"), AIN/Al Ain → AL AIN, AJM/Ajman → AJMAN, RAK → RAS AL KHAIMAH, FUJ/Fujairah → FUJAIRAH, UAQ → UMM AL QUWAIN. Areas imply the emirate (Business Bay, Deira, JLT, Marina, Al Barsha… → DUBAI; Al Nahda/Muwaileh/Al Majaz → SHARJAH unless the slip says Dubai; Mussafah/Khalifa City → ABUDHABI).
 - Area / building / street → address (keep the words as written, fix obvious spelling like "Busness bay" → "Business Bay").
 - A UAE phone number, usually 05X XXX XXXX. Write it as "05X XXX XXXX". If a digit is unreadable, give your best reading and add "phone" to unclear.
 - Quantity like "1pce", "2 pcs", "1 pc" and any product name → items, written like "1 × Perfume" or "1 piece" when no product is named.
