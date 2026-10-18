@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { OrderStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { asyncHandler } from "../utils/asyncHandler";
+import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange } from "../utils/dates";
 import { z } from "zod";
@@ -10,6 +10,18 @@ import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
+
+// Driver corrects the delivery area of one of his own parcels (empty = back to automatic).
+router.patch(
+  "/orders/:id/area",
+  asyncHandler(async (req, res) => {
+    const area = typeof req.body?.area === "string" ? req.body.area.trim().toUpperCase().slice(0, 40) : "";
+    const order = await prisma.order.findFirst({ where: { id: req.params.id, employeeId: req.user!.sub }, select: { id: true } });
+    if (!order) throw new ApiError(404, "Order not found in your list");
+    const updated = await prisma.order.update({ where: { id: order.id }, data: { area: area || null }, select: { id: true, area: true } });
+    res.json(updated);
+  })
+);
 
 router.get(
   "/orders",

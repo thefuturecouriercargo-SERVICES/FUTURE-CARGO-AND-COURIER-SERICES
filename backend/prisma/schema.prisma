@@ -182,6 +182,8 @@ model Order {
   cnNo           Int
   vendorId       String
   vendor         Vendor      @relation(fields: [vendorId], references: [id])
+  // Delivery area chosen by the driver (overrides the one guessed from the address).
+  area           String?
   brandName      String
   deliveryCharge Int
   total          Int

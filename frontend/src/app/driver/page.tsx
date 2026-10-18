@@ -107,6 +107,30 @@ function useVoiceAssistant(onResult: (transcript: string) => void) {
   return { listening, supported, start };
 }
 
+/** Area of a parcel: driver's choice first, otherwise guessed from the address. */
+const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
+
+type AreaGroup = { key: string; area: string; emirate: string; orders: Order[] };
+
+/** Group parcels by emirate + area; the driver's saved route order wins, then biggest area first. */
+function groupByArea(list: Order[], savedOrder: string[]): AreaGroup[] {
+  const map = new Map<string, AreaGroup>();
+  for (const o of list) {
+    const area = areaOf(o);
+    const key = `${o.emirate}|${area}`;
+    const g = map.get(key) ?? { key, area, emirate: o.emirate, orders: [] };
+    g.orders.push(o);
+    map.set(key, g);
+  }
+  const rank = (k: string) => {
+    const i = savedOrder.indexOf(k);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return Array.from(map.values()).sort(
+    (a, b) => rank(a.key) - rank(b.key) || a.emirate.localeCompare(b.emirate) || b.orders.length - a.orders.length || a.area.localeCompare(b.area)
+  );
+}
+
 export default function DriverPortalPage() {
   const date = todayStr();
 
@@ -393,17 +417,41 @@ export default function DriverPortalPage() {
   }, [orders, statusTab, search]);
 
   // Area view: group the driver's parcels by emirate + area (from the address), biggest area first.
-  const areaGroups = useMemo(() => {
-    const map = new Map<string, { key: string; area: string; emirate: string; orders: Order[] }>();
-    for (const o of filtered) {
-      const area = detectArea(o.booking?.address, o.emirate);
-      const key = `${o.emirate}|${area}`;
-      const g = map.get(key) ?? { key, area, emirate: o.emirate, orders: [] };
-      g.orders.push(o);
-      map.set(key, g);
+  const [areaOrder, setAreaOrder] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setAreaOrder(JSON.parse(localStorage.getItem("driverAreaOrder") || "[]"));
+    } catch {
+      /* ignore */
     }
-    return Array.from(map.values()).sort((a, b) => a.emirate.localeCompare(b.emirate) || b.orders.length - a.orders.length || a.area.localeCompare(b.area));
-  }, [filtered]);
+  }, []);
+  const areaGroups = useMemo(() => groupByArea(filtered, areaOrder), [filtered, areaOrder]);
+  const [areaEdit, setAreaEdit] = useState<Order | null>(null);
+
+  /** Move an area up/down in the driver's route order (saved on this phone). */
+  function moveArea(key: string, dir: -1 | 1) {
+    const keys = areaGroups.map((g) => g.key);
+    const i = keys.indexOf(key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= keys.length) return;
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+    setAreaOrder(keys);
+    try {
+      localStorage.setItem("driverAreaOrder", JSON.stringify(keys));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function changeArea(o: Order, area: string) {
+    try {
+      await apiFetch(`/driver/orders/${o.id}/area`, { method: "PATCH", body: { area } });
+      setOrders((list) => list.map((x) => (x.id === o.id ? { ...x, area: area ? area.toUpperCase() : null } : x)));
+      showToast(area ? `CN ${o.cnNo} moved to ${area.toUpperCase()}` : `CN ${o.cnNo} back to automatic area`, "info");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not change area", "info");
+    }
+  }
 
   const renderCard = (o: Order) => (
             <div key={o.id} className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-line border-l-4 bg-white p-4 ${statusBorderClass(o.status)}`}>
@@ -417,6 +465,13 @@ export default function DriverPortalPage() {
                     👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
                   </div>
                 )}
+                <button
+                  onClick={() => setAreaEdit(o)}
+                  className="mt-1 rounded border border-navy/30 bg-paper px-2 py-0.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
+                  title="Change area"
+                >
+                  📍 {areaOf(o)} ✎
+                </button>
                 <div className="mt-1 text-xs text-ink-soft">
                   Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
                 </div>
@@ -856,8 +911,14 @@ export default function DriverPortalPage() {
                     <span className="font-display text-base font-bold">
                       {gi + 1}. {g.area} <span className="font-mono text-[11px] font-normal text-brass-light">· {g.emirate}</span>
                     </span>
-                    <span className="font-mono text-[11px] uppercase">
+                    <span className="flex items-center gap-2 font-mono text-[11px] uppercase">
                       {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((s2, o) => s2 + o.total, 0))}
+                      <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="rounded border border-white/40 px-1.5 disabled:opacity-30" title="Move area up">
+                        ▲
+                      </button>
+                      <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="rounded border border-white/40 px-1.5 disabled:opacity-30" title="Move area down">
+                        ▼
+                      </button>
                     </span>
                   </div>
                   {g.orders.map((o) => renderCard(o))}
@@ -912,7 +973,26 @@ export default function DriverPortalPage() {
         />
       )}
 
-      {sortOpen && <SortScanModal orders={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER")} onClose={() => setSortOpen(false)} />}
+      {sortOpen && (
+        <SortScanModal
+          orders={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER")}
+          areaOrder={areaOrder}
+          onClose={() => setSortOpen(false)}
+        />
+      )}
+
+      {areaEdit && (
+        <AreaPickerModal
+          order={areaEdit}
+          areas={Array.from(new Set([...orders.map(areaOf), ...areaGroups.map((g) => g.area)])).sort()}
+          onClose={() => setAreaEdit(null)}
+          onPick={async (area) => {
+            const o = areaEdit;
+            setAreaEdit(null);
+            await changeArea(o, area);
+          }}
+        />
+      )}
 
       {statusScanOpen && (
         <StatusScanModal
@@ -998,18 +1078,11 @@ export default function DriverPortalPage() {
  * Morning sorting: scan each parcel and the screen says which pile (area) it
  * goes in, so the driver can arrange 50 parcels by route without reading labels.
  */
-function SortScanModal({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
-  const piles = useMemo(() => {
-    const map = new Map<string, { key: string; area: string; emirate: string; ids: string[] }>();
-    for (const o of orders) {
-      const area = detectArea(o.booking?.address, o.emirate);
-      const key = `${o.emirate}|${area}`;
-      const g = map.get(key) ?? { key, area, emirate: o.emirate, ids: [] };
-      g.ids.push(o.id);
-      map.set(key, g);
-    }
-    return Array.from(map.values()).sort((a, b) => a.emirate.localeCompare(b.emirate) || b.ids.length - a.ids.length || a.area.localeCompare(b.area));
-  }, [orders]);
+function SortScanModal({ orders, areaOrder, onClose }: { orders: Order[]; areaOrder: string[]; onClose: () => void }) {
+  const piles = useMemo(
+    () => groupByArea(orders, areaOrder).map((g) => ({ key: g.key, area: g.area, emirate: g.emirate, ids: g.orders.map((o) => o.id) })),
+    [orders, areaOrder]
+  );
   const [sorted, setSorted] = useState<Set<string>>(new Set());
   const [last, setLast] = useState<{ ok: boolean; pile?: number; area?: string; emirate?: string; cn?: number; text?: string } | null>(null);
 
@@ -1074,6 +1147,48 @@ function SortScanModal({ orders, onClose }: { orders: Order[]; onClose: () => vo
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Driver picks (or types) the right area for a parcel; "Automatic" goes back to the guessed one. */
+function AreaPickerModal({ order, areas, onClose, onPick }: { order: Order; areas: string[]; onClose: () => void; onPick: (area: string) => void }) {
+  const [typed, setTyped] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-4 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-navy">📍 Area for CN {order.cnNo}</h2>
+          <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
+            ×
+          </button>
+        </div>
+        {order.booking?.address && <p className="mb-3 text-sm text-ink-soft">{order.booking.address}</p>}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (typed.trim()) onPick(typed.trim());
+          }}
+          className="mb-3 flex gap-2"
+        >
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type new area…" className="flex-1 rounded border border-line px-3 py-2 text-sm uppercase" autoFocus />
+          <button type="submit" className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper">
+            Set
+          </button>
+        </form>
+        <div className="flex flex-wrap gap-1.5">
+          {areas.map((a) => (
+            <button key={a} onClick={() => onPick(a)} className="rounded border border-line px-2.5 py-1.5 font-mono text-[11px] font-bold uppercase hover:border-brass">
+              {a}
+            </button>
+          ))}
+        </div>
+        {order.area && (
+          <button onClick={() => onPick("")} className="mt-3 text-xs text-brass underline">
+            Reset to automatic ({detectArea(order.booking?.address, order.emirate)})
+          </button>
+        )}
       </div>
     </div>
   );

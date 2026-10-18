@@ -51,6 +51,8 @@ export interface Order {
   remarks?: string | null;
   transferredBy?: string | null;
   resolvedAt?: string | null;
+  /** Area set by the driver (overrides the one guessed from the address). */
+  area?: string | null;
   /** Customer details, when the order came from a vendor booking. */
   booking?: OrderBookingDetails | null;
   createdAt: string;
