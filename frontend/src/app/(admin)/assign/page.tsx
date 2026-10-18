@@ -5,6 +5,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
 import BillTypeSelect from "@/components/BillTypeSelect";
+import ScanHistory from "@/components/ScanHistory";
 import { Employee } from "@/types";
 
 interface ScanLog {
@@ -171,6 +172,8 @@ export default function AssignPage() {
           </button>
         </>
       )}
+
+      <ScanHistory />
     </div>
   );
 }

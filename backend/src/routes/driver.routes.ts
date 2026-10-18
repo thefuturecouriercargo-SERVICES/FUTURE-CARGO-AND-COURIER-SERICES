@@ -6,6 +6,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange } from "../utils/dates";
 import { z } from "zod";
 import { assignByScan, scanBillVendors } from "../services/booking.service";
+import { withScanLog } from "../services/scanLog.service";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 const router = Router();
@@ -75,7 +76,9 @@ router.post(
     const { code, confirm, vendorId } = z
       .object({ code: z.string().min(1).max(100), confirm: z.boolean().optional(), vendorId: z.string().optional() })
       .parse(req.body);
-    const r = await assignByScan(code, req.user!.sub, { allowReassign: false, confirmed: confirm, vendorId: vendorId || undefined });
+    const r = await withScanLog({ byUserId: req.user!.sub, byRole: "DRIVER", driverId: req.user!.sub, code }, () =>
+      assignByScan(code, req.user!.sub, { allowReassign: false, confirmed: confirm, vendorId: vendorId || undefined })
+    );
     if (r.result !== "ALREADY") {
       await writeAuditLog({ userId: req.user!.sub, action: "DRIVER_SCAN_CLAIM", entity: "Order", entityId: r.order.id, meta: { cnNo: r.order.cnNo } });
       emitGlobal("order:changed", { type: "created", order: r.order });

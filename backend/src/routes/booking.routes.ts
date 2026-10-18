@@ -5,6 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
+import { withScanLog, scanLogForDay } from "../services/scanLog.service";
 import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan, scanBillVendors } from "../services/booking.service";
 
@@ -219,6 +220,16 @@ router.get(
   asyncHandler(async (_req, res) => res.json(await scanBillVendors()))
 );
 
+// Every scan of a Dubai day (office Scan & Assign and drivers taking parcels).
+router.get(
+  "/scan-log",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const day = typeof req.query.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.day) ? req.query.day : new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+    res.json({ day, scans: await scanLogForDay(day) });
+  })
+);
+
 // Scan & Assign: one scanned CN → the chosen driver. Office may move open orders between drivers.
 router.post(
   "/scan-assign",
@@ -227,7 +238,9 @@ router.post(
     const { code, employeeId, confirm, vendorId } = z
       .object({ code: z.string().min(1).max(100), employeeId: z.string().min(1), confirm: z.boolean().optional(), vendorId: z.string().optional() })
       .parse(req.body);
-    const r = await assignByScan(code, employeeId, { allowReassign: true, confirmed: confirm, vendorId: vendorId || undefined });
+    const r = await withScanLog({ byUserId: req.user!.sub, byRole: "OFFICE", driverId: employeeId, code }, () =>
+      assignByScan(code, employeeId, { allowReassign: true, confirmed: confirm, vendorId: vendorId || undefined })
+    );
     if (r.result !== "ALREADY") {
       await writeAuditLog({
         userId: req.user!.sub,

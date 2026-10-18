@@ -398,3 +398,28 @@ model BookingPhoto {
   @@index([createdAt])
   @@map("booking_photos")
 }
+
+// One row per barcode scan on Scan & Assign (office) or by a driver taking a parcel.
+// Kept for the daily scan report / PDF.
+model ScanLog {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  byUserId     String
+  byName       String
+  byRole       String   // "OFFICE" or "DRIVER"
+  driverId     String?
+  driverName   String?
+  code         String
+  result       String   // ACCEPTED | REASSIGNED | ALREADY | FAILED
+  message      String
+  orderId      String?
+  cnNo         Int?
+  vendorName   String?
+  total        Int?
+  emirate      String?
+  address      String?
+  fromDriver   String?
+
+  @@index([createdAt])
+  @@map("scan_logs")
+}
