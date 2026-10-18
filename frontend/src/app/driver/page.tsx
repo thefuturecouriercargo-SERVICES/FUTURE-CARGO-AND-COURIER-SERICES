@@ -107,6 +107,24 @@ function useVoiceAssistant(onResult: (transcript: string) => void) {
   return { listening, supported, start };
 }
 
+/** UAE number → WhatsApp format (9715XXXXXXXX). */
+function waNumber(phone: string) {
+  const d = phone.replace(/[^0-9]/g, "");
+  if (d.startsWith("00")) return d.slice(2);
+  if (d.startsWith("971")) return d;
+  if (d.startsWith("0")) return "971" + d.slice(1);
+  return "971" + d;
+}
+
+/** Pre-filled "delivering today" WhatsApp message for the customer. */
+function customerWaLink(o: Order) {
+  const b = o.booking!;
+  const name = /customer\s*·|^ew customer/i.test(b.customerName) ? "" : ` ${b.customerName}`;
+  const pay = isPrepaid(o) ? "It is already paid — nothing to pay on delivery." : "Please keep the cash ready.";
+  const text = `Hello${name}, this is Future Courier. Your ${o.brandName} order (CN ${o.cnNo}${isPrepaid(o) ? "" : `, AED ${o.total}`}) will be delivered today. ${pay} Thank you!`;
+  return `https://wa.me/${waNumber(b.customerPhone)}?text=${encodeURIComponent(text)}`;
+}
+
 /** Area of a parcel: driver's choice first, otherwise guessed from the address. */
 const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
 
@@ -472,6 +490,24 @@ export default function DriverPortalPage() {
                 >
                   📍 {areaOf(o)} ✎
                 </button>
+                {o.booking?.customerPhone && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <a
+                      href={customerWaLink(o)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded bg-delivered px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-white hover:opacity-90"
+                    >
+                      💬 WhatsApp customer
+                    </a>
+                    <a
+                      href={`tel:${o.booking.customerPhone.replace(/[^0-9+]/g, "")}`}
+                      className="rounded border border-delivered px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
+                    >
+                      📞 Call customer
+                    </a>
+                  </div>
+                )}
                 <div className="mt-1 text-xs text-ink-soft">
                   Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
                 </div>
