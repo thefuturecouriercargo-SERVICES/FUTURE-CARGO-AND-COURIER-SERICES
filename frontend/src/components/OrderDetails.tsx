@@ -19,12 +19,15 @@ export default function OrderDetails({
   vendorName,
   total,
   compact,
+  waHref,
 }: {
   booking?: OrderBookingDetails | null;
   cnNo: number;
   vendorName?: string;
   total?: number;
   compact?: boolean;
+  /** Ready WhatsApp link with a pre-filled message (driver page); default is a short greeting. */
+  waHref?: string;
 }) {
   if (!booking) {
     return (
@@ -85,15 +88,15 @@ export default function OrderDetails({
       </div>
       <div className="flex flex-wrap gap-2 pt-1.5">
         <a href={`tel:${tel}`} className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper">
-          📞 Call
+          📞 Call customer
         </a>
         <a
-          href={`https://wa.me/${waNumber(booking.customerPhone)}?text=${waText}`}
+          href={waHref ?? `https://wa.me/${waNumber(booking.customerPhone)}?text=${waText}`}
           target="_blank"
           rel="noreferrer"
           className="rounded bg-delivered px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-white"
         >
-          WhatsApp
+          💬 WhatsApp customer
         </a>
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${booking.address}, ${booking.emirate}, UAE`)}`}

@@ -504,24 +504,6 @@ export default function DriverPortalPage() {
                 >
                   📍 {areaOf(o)} ✎
                 </button>
-                {o.booking?.customerPhone && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <a
-                      href={customerWaLink(o)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded bg-delivered px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-white hover:opacity-90"
-                    >
-                      💬 WhatsApp customer
-                    </a>
-                    <a
-                      href={`tel:${o.booking.customerPhone.replace(/[^0-9+]/g, "")}`}
-                      className="rounded border border-delivered px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
-                    >
-                      📞 Call customer
-                    </a>
-                  </div>
-                )}
                 <div className="mt-1 text-xs text-ink-soft">
                   Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
                 </div>
@@ -583,7 +565,7 @@ export default function DriverPortalPage() {
               </div>
               {detailsId === o.id && (
                 <div className="w-full basis-full border-t border-line pt-3">
-                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact />
+                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
                 </div>
               )}
             </div>
