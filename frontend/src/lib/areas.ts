@@ -8,6 +8,7 @@ type AreaRule = [RegExp, string];
 
 const DUBAI: AreaRule[] = [
   [/\bbusiness\s*bay\b/i, "BUSINESS BAY"],
+  [/\bdubai\s*hills?\b|\bpark\s*lane\b/i, "DUBAI HILLS"],
   [/\bdown\s*town\b|\bburj\s*khalifa\b|\bdubai\s*mall\b/i, "DOWNTOWN"],
   [/\bjlt\b|\bjumeirah\s*lake/i, "JLT"],
   [/\bjbr\b|\bjumeirah\s*beach\s*res/i, "JBR"],
@@ -131,7 +132,7 @@ const ALAIN: AreaRule[] = [
   [/\bkhabisi\b/i, "AL KHABISI"],
   [/\bal\s*mutaredh\b|\bmutaredh\b|\bmutawaa\b/i, "AL MUTAREDH"],
   [/\bal\s*maqam\b|\bmaqam\b/i, "AL MAQAM"],
-  [/\bfalaj\s*hazza\b/i, "FALAJ HAZZA"],
+  [/\bfalaj\s*hazz?a\b|\bfalajaz+a\b|\bfalaj\b/i, "FALAJ HAZZA"],
   [/\bzakher\b/i, "ZAKHER"],
   [/\bsanaiya\b|\bsanaiyah\b|\bindustrial\b/i, "SANAIYA"],
 ];

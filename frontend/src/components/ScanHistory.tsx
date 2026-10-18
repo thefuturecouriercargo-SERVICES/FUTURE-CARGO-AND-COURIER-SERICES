@@ -195,7 +195,8 @@ export default function ScanHistory() {
         startY: 29,
         head: [["Driver", "Parcels", "COD (AED)", "By office", "By driver"]],
         body: perDriver.map((d) => [d.name, d.count, fmtNumber(d.cod), d.office, d.self]),
-        foot: [["Total", ok.length, fmtNumber(cod), perDriver.reduce((s, d) => s + d.office, 0), perDriver.reduce((s, d) => s + d.self, 0)]],
+        // With one driver the total row would just repeat his row — only show it for 2+ drivers.
+        foot: perDriver.length > 1 ? [["Total", ok.length, fmtNumber(cod), perDriver.reduce((s, d) => s + d.office, 0), perDriver.reduce((s, d) => s + d.self, 0)]] : undefined,
         styles: { fontSize: 8, cellPadding: 1.5 },
         headStyles: { fillColor: [20, 31, 51] },
         footStyles: { fillColor: [236, 231, 216], textColor: 20 },
