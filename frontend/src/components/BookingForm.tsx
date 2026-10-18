@@ -190,7 +190,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Items</label>
-          <input value={form.items} onChange={set("items")} className={input} maxLength={500} placeholder="e.g. 2 × T-shirt, 1 × perfume" />
+          <textarea value={form.items} onChange={set("items")} className={input} rows={2} maxLength={1500} placeholder="e.g. 2 × Akoya (AED 80), 1 × Noir (AED 40)" />
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Notes for driver</label>

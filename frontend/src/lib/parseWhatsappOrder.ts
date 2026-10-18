@@ -85,6 +85,11 @@ const CUR = String.raw`(?:aed|dhs|dh|dirhams?|drhm)`;
 const SIZE_RE = /\b\d+(?:\.\d+)?\s*(?:ml|m\.l|ltr|l|g|gm|gms|grams?|kg|oz|cm|mm|inch|in)\b/gi;
 const ADDRESS_WORDS = /\b(street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp)\b/i;
 
+/** "2 × Akoya (AED 80)" — the label and order details read this back with splitItems(). */
+export function fmtItem(qty: number, name: string, price?: number): string {
+  return `${qty} × ${name}${price !== undefined && price > 0 ? ` (AED ${price})` : ""}`;
+}
+
 export interface ParsedItem { qty: number; name: string; price?: number }
 
 /**
@@ -180,12 +185,16 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   const addressParts: string[] = [];
   const notes: string[] = [];
   const leftovers: string[] = [];
-  let pendingItem: { name: string; qty: number } | null = null;
+  let pendingItem: { name: string; qty: number; rate?: number; amt?: number } | null = null;
   let totalFromLabel: number | undefined;
   const itemPrices: number[] = [];
 
   const flushItem = () => {
-    if (pendingItem) items.push(`${pendingItem.qty} × ${pendingItem.name}`);
+    if (pendingItem) {
+      const price = pendingItem.amt ?? (pendingItem.rate !== undefined ? pendingItem.rate * pendingItem.qty : undefined);
+      items.push(fmtItem(pendingItem.qty, pendingItem.name, price));
+      if (price !== undefined) itemPrices.push(price);
+    }
     pendingItem = null;
   };
 
@@ -199,6 +208,13 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     const qty = line.match(/^qty\s*[:\-]?\s*(\d+)/i);
     if (qty) {
       if (pendingItem) pendingItem.qty = Number(qty[1]);
+      continue;
+    }
+    const money = line.match(/^(rate|amt|amount|price|unit\s*price)\s*[:\-]\s*(?:aed|dhs?)?\s*(\d[\d,]*(?:\.\d+)?)/i);
+    if (money && pendingItem) {
+      const v = num(money[2]);
+      if (/^(amt|amount)/i.test(money[1])) pendingItem.amt = v;
+      else pendingItem.rate = v;
       continue;
     }
     if (/^(rate|amt|amount|price|unit\s*price)\s*[:\-]/i.test(line) && pendingItem) continue;
@@ -247,7 +263,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       } else if (/^(item|product|order)/.test(key)) {
         for (const part of value.split(/\s*[,;]\s*/).filter(Boolean)) {
           const it = parseItemLine(part, false);
-          items.push(it ? `${it.qty} × ${it.name}` : part);
+          items.push(it ? fmtItem(it.qty, it.name, it.price) : part);
           if (it?.price !== undefined) itemPrices.push(it.price);
         }
       } else {
@@ -298,7 +314,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       const parsed = parts.map((p) => parseItemLine(p));
       if (parsed.length && parsed.every(Boolean)) {
         for (const it of parsed as ParsedItem[]) {
-          items.push(`${it.qty} × ${it.name}`);
+          items.push(fmtItem(it.qty, it.name, it.price));
           if (it.price !== undefined) itemPrices.push(it.price);
         }
         continue;

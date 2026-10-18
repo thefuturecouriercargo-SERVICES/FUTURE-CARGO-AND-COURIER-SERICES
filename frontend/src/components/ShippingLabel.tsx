@@ -52,22 +52,26 @@ function clamp(lines: number): React.CSSProperties {
   return { display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" };
 }
 
-/** "4 × Noir, 1 × Akoya" or "Akoya, Noir" → [{qty, name}] (qty 1 when not given). */
-export function splitItems(items?: string | null): { qty: string; name: string }[] {
+/** "4 × Noir (AED 160), 1 × Akoya" or "Akoya, Noir" → [{qty, name, price}] (qty 1 when not given). */
+export function splitItems(items?: string | null): { qty: string; name: string; price?: string }[] {
   if (!items) return [];
   const parts = /\d+\s*[×x]\s/i.test(items) ? items.split(/,\s*(?=\d+\s*[×x]\s)/i) : items.split(/\s*,\s*/);
   return parts
     .map((p) => p.trim())
     .filter(Boolean)
     .map((p) => {
-      const m = p.match(/^(\d+)\s*[×x]\s*(.+)$/i);
-      return m ? { qty: m[1], name: m[2].trim() } : { qty: "1", name: p };
+      const priced = p.match(/^(.*?)\s*\((?:AED|aed)\s*([\d.,]+)\)\s*$/);
+      const body = priced ? priced[1] : p;
+      const price = priced ? priced[2] : undefined;
+      const m = body.match(/^(\d+)\s*[×x]\s*(.+)$/i);
+      return m ? { qty: m[1], name: m[2].trim(), price } : { qty: "1", name: body, price };
     });
 }
 
-type Fit = { font: number; row: number; cols: 1 | 2; clampName: number; tick: number; qtyW: number };
+type Fit = { font: number; row: number; cols: 1 | 2; clampName: number; tick: number; qtyW: number; priceW: number };
 const fitLevel = (font: number, row: number, cols: 1 | 2, clampName = 1): Fit => ({
   font, row, cols, clampName, tick: font <= 7 ? 7 : font <= 10 ? 9 : font <= 12 ? 10 : 12, qtyW: font <= 7 ? 14 : font <= 9 ? 18 : font <= 12 ? 24 : 30,
+  priceW: font <= 9 ? 34 : font <= 12 ? 44 : 54,
 });
 /** Item-list sizes from biggest to smallest. The label steps down until every item fits. */
 const FIT_LEVELS: Record<LabelSize, Fit[]> = {
@@ -98,6 +102,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
 
   const items = splitItems(booking.items);
   const totalQty = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const hasPrices = items.some((i) => i.price);
   const levels = FIT_LEVELS[size];
   // Remember the fitted size per item list, so a new order starts again at the biggest size.
   const fitKey = `${size}|${booking.items ?? ""}|${booking.address ?? ""}|${booking.notes ?? ""}`;
@@ -156,8 +161,14 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           <div className="flex border-b-2 border-black bg-black px-1.5 py-0.5 text-white" style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>
             <span style={{ width: fit.tick + 6 }}>✓</span>
             <span style={{ width: fit.qtyW }}>{fit.qtyW < 24 ? "#" : "Qty"}</span>
-            <span className="flex-1">Item</span>
-            <span>{items.length} item{items.length === 1 ? "" : "s"}{totalQty && totalQty !== items.length ? ` · ${totalQty} pcs` : ""}</span>
+            <span className="flex-1">
+              Item
+              <span className="ml-2 opacity-90">
+                · {items.length} item{items.length === 1 ? "" : "s"}
+                {totalQty && totalQty !== items.length ? ` · ${totalQty} pcs` : ""}
+              </span>
+            </span>
+            {hasPrices && fit.cols === 1 && <span className="text-right" style={{ width: fit.priceW }}>AED</span>}
           </div>
           <div className={fit.cols === 2 ? "grid grid-cols-2" : "flex flex-col"}>
             {items.map((it, i) => (
@@ -173,6 +184,11 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
                 <span className="min-w-0 flex-1" style={{ fontWeight: 700, lineHeight: 1.1, ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
                   {it.name}
                 </span>
+                {hasPrices && (
+                  <span className="shrink-0 pl-1 text-right" style={{ width: fit.cols === 1 ? fit.priceW : undefined, fontWeight: 700, fontSize: "0.9em", whiteSpace: "nowrap" }}>
+                    {it.price ?? ""}
+                  </span>
+                )}
               </div>
             ))}
           </div>

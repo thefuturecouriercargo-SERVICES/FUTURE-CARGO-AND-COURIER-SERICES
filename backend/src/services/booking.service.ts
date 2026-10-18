@@ -32,7 +32,7 @@ export const bookingInputSchema = z.object({
     .regex(/^[0-9+()\-\s]+$/, "Phone can only contain digits, spaces, + - ( )"),
   address: z.string().trim().min(1, "Address is required").max(500),
   emirate: z.string().trim().min(1).max(30),
-  items: z.string().trim().max(500).optional(),
+  items: z.string().trim().max(1500).optional(),
   codAmount: z.number().int().min(0, "COD amount can't be negative"),
   notes: z.string().trim().max(500).optional(),
   // Set after the user saw the "possible duplicate" warning and chose to save anyway.

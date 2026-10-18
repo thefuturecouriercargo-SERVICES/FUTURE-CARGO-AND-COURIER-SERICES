@@ -78,7 +78,7 @@ export interface WooOrder {
   customer_note?: string;
   billing?: WooAddress & { email?: string };
   shipping?: WooAddress;
-  line_items?: { name: string; quantity: number }[];
+  line_items?: { name: string; quantity: number; total?: string; total_tax?: string }[];
 }
 
 async function wooGet<T>(conn: string, path: string, params: Record<string, string>): Promise<T> {
@@ -141,7 +141,13 @@ export function mapWooOrder(o: WooOrder) {
   const name = `${ship.first_name || bill.first_name || ""} ${ship.last_name || bill.last_name || ""}`.trim() || "Customer";
   const phone = (ship.phone || bill.phone || "").trim();
   const address = [ship.address_1, ship.address_2, ship.city].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
-  const items = (o.line_items ?? []).map((li) => `${li.quantity} × ${li.name}`).join(", ");
+  // "2 × Akoya (AED 80)" — line total incl. tax, so the label shows each item's price.
+  const items = (o.line_items ?? [])
+    .map((li) => {
+      const amt = Math.round((Number(li.total) || 0) + (Number(li.total_tax) || 0));
+      return `${li.quantity} × ${li.name.replace(/,/g, " ")}${amt > 0 ? ` (AED ${amt})` : ""}`;
+    })
+    .join(", ");
   const isCod = (o.payment_method ?? "").toLowerCase() === "cod";
   return {
     vendorRef: String(o.number || o.id),
@@ -149,7 +155,7 @@ export function mapWooOrder(o: WooOrder) {
     customerPhone: (phone || "(no phone)").slice(0, 30),
     address: (address || "(no address on website order)").slice(0, 500),
     emirate: detectEmirate(ship),
-    items: items.slice(0, 500) || undefined,
+    items: items.slice(0, 1500) || undefined,
     codAmount: isCod ? Math.round(Number(o.total) || 0) : 0,
     notes: [o.customer_note?.trim(), isCod ? "" : `Paid online (${o.payment_method_title || o.payment_method || "website"})`]
       .filter(Boolean)
