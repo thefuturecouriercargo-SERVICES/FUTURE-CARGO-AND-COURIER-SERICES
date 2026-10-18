@@ -67,5 +67,9 @@ export async function scanLogForDay(day: string) {
   const [y, m, d] = day.split("-").map(Number);
   const start = new Date(Date.UTC(y, m - 1, d) - 4 * 60 * 60 * 1000);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return prisma.scanLog.findMany({ where: { createdAt: { gte: start, lt: end } }, orderBy: { createdAt: "asc" }, take: 5000 });
+  const rows = await prisma.scanLog.findMany({ where: { createdAt: { gte: start, lt: end } }, orderBy: { createdAt: "asc" }, take: 5000 });
+  // Hide scans of consignments that were deleted afterwards (e.g. deleted in Daily Entry).
+  const ids = Array.from(new Set(rows.map((r) => r.orderId).filter(Boolean) as string[]));
+  const alive = new Set((await prisma.order.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((o) => o.id));
+  return rows.filter((r) => !r.orderId || alive.has(r.orderId));
 }

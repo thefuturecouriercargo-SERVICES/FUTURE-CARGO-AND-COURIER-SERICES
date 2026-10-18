@@ -358,6 +358,8 @@ router.delete(
     // Awaiting Pickup rather than leaving it marked accepted with no order.
     await prisma.booking.updateMany({ where: { orderId: req.params.id }, data: { status: "AWAITING_PICKUP", orderId: null } });
     await prisma.order.delete({ where: { id: req.params.id } });
+    // A deleted consignment disappears from the Scan & Assign history too.
+    await prisma.scanLog.deleteMany({ where: { orderId: req.params.id } });
     await writeAuditLog({ userId: req.user!.sub, action: "DELETE", entity: "Order", entityId: req.params.id });
     emitGlobal("order:changed", { type: "deleted", id: req.params.id });
     res.json({ deleted: true });
