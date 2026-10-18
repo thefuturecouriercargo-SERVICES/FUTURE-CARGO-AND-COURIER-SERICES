@@ -62,6 +62,7 @@ export default function ScanHistory() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("time");
   const [making, setMaking] = useState(false);
+  const [everyScan, setEveryScan] = useState(false); // false = one row per CN (its latest scan)
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,7 +83,25 @@ export default function ScanHistory() {
 
   const shown = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    const list = rows.filter((r) => {
+    // A parcel scanned twice (e.g. driver took it, office moved it, or scanned again)
+    // counts once: keep only its latest successful scan unless "every scan" is on.
+    let base = rows;
+    if (!everyScan) {
+      const latest = new Map<string, ScanRow>();
+      const failed: ScanRow[] = [];
+      for (const r of rows) {
+        if (r.result === "FAILED" || r.cnNo == null) {
+          failed.push(r);
+          continue;
+        }
+        const k = String(r.cnNo);
+        const prev = latest.get(k);
+        // "Already" never replaces a real assignment.
+        if (!prev || r.result !== "ALREADY" || prev.result === "ALREADY") latest.set(k, r);
+      }
+      base = [...latest.values(), ...failed];
+    }
+    const list = base.filter((r) => {
       if (by && r.byRole !== by) return false;
       if (driver && r.driverName !== driver) return false;
       if (result === "OK" ? r.result !== "ACCEPTED" && r.result !== "REASSIGNED" : result && r.result !== result) return false;
@@ -115,7 +134,7 @@ export default function ScanHistory() {
       const kb = key(b);
       return typeof ka === "number" && typeof kb === "number" ? ka - kb : String(ka).localeCompare(String(kb));
     });
-  }, [rows, by, driver, result, vendor, emirate, area, q, sort]);
+  }, [rows, by, driver, result, vendor, emirate, area, q, sort, everyScan]);
 
   const ok = shown.filter((r) => r.result === "ACCEPTED" || r.result === "REASSIGNED");
   const cod = ok.reduce((s, r) => s + (r.total ?? 0), 0);
@@ -157,7 +176,7 @@ export default function ScanHistory() {
       doc.text(`Future Courier — Scan report · ${nice}`, 12, 14);
       doc.setFontSize(9);
       doc.text(`${shown.length} scans · ${ok.length} assigned/moved · COD AED ${fmtNumber(cod)}${filterText ? ` · ${filterText}` : ""}`, 12, 20);
-      doc.text(`Sorted by: ${sort}`, 12, 25);
+      doc.text(`Sorted by: ${sort} · ${everyScan ? "every scan" : "one row per CN (latest scan)"}`, 12, 25);
 
       autoTable(doc, {
         startY: 29,
@@ -280,6 +299,10 @@ export default function ScanHistory() {
           <option value="by">Sort: scanned by</option>
         </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search CN…" className={`${sel} w-32`} />
+        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <input type="checkbox" checked={everyScan} onChange={(e) => setEveryScan(e.target.checked)} />
+          Show every scan (repeats too)
+        </label>
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
