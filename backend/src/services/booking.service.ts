@@ -23,6 +23,8 @@ export async function lockOrderCreation(tx: Prisma.TransactionClient) {
 export const bookingInputSchema = z.object({
   // Optional — the vendor's own order/bill number, kept as a reference only.
   vendorRef: z.string().trim().max(50).optional(),
+  // Bill No. from a slip (repeats over time; used only for the repeat-entry block).
+  billNo: z.string().trim().max(30).optional(),
   customerName: z.string().trim().min(1, "Customer name is required").max(120),
   customerPhone: z
     .string()
@@ -81,6 +83,37 @@ export const phoneDigits = (p: string) => p.replace(/\D/g, "").replace(/^(?:00)?
  * code POSSIBLE_DUPLICATE) when this vendor already has a non-rejected booking
  * in the last 24h with the same customer phone and the same COD amount.
  */
+/**
+ * Hard block (no "save anyway"): same vendor + same bill No. + same phone + same
+ * COD within 60 days is the same slip entered twice.
+ */
+async function assertBillNotRepeated(vendorId: string, input: BookingInput, ignoreBookingId?: string) {
+  const bill = input.billNo?.trim();
+  if (!bill) return;
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const same = await prisma.booking.findMany({
+    where: {
+      vendorId,
+      billNo: { equals: bill, mode: "insensitive" },
+      codAmount: input.codAmount,
+      status: { not: "REJECTED" },
+      createdAt: { gte: since },
+      ...(ignoreBookingId ? { id: { not: ignoreBookingId } } : {}),
+    },
+    select: { cnNo: true, customerPhone: true, createdAt: true },
+  });
+  const phone = phoneDigits(input.customerPhone);
+  const hit = same.find((b) => phoneDigits(b.customerPhone) === phone);
+  if (hit) {
+    const d = new Date(hit.createdAt.getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+    throw new ApiError(
+      409,
+      `Already entered: bill ${bill}, same phone and AED ${input.codAmount} is CN ${hit.cnNo} (${d}). Not saved again.`,
+      { code: "BILL_REPEAT", cnNo: hit.cnNo }
+    );
+  }
+}
+
 async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, ignoreBookingId?: string) {
   if (input.confirmDuplicate) return;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -135,10 +168,12 @@ export async function createBooking(
   opts: { preferredCn?: number } = {}
 ) {
   await assertRefFree(vendorId, input.vendorRef || undefined);
+  await assertBillNotRepeated(vendorId, input);
   await assertNotLikelyDuplicate(vendorId, input);
   const base = {
     vendorId,
     vendorRef: input.vendorRef || null,
+    billNo: input.billNo?.trim() || null,
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     address: input.address,

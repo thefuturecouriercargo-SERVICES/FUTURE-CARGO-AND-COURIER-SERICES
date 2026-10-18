@@ -351,6 +351,9 @@ model Booking {
   // The vendor's own order/bill number (e.g. their website order 20308). Reference
   // only — never used as our CN, so it can't clash with our existing CNs.
   vendorRef     String?
+  // Bill number written on a handwritten slip. Repeats over time (not unique) —
+  // same vendor + bill + phone + COD is blocked as a repeat entry.
+  billNo        String?
   customerName  String
   customerPhone String
   address       String
@@ -372,6 +375,7 @@ model Booking {
   updatedAt     DateTime      @updatedAt
 
   @@unique([vendorId, vendorRef])
+  @@index([vendorId, billNo])
   @@index([vendorId])
   @@index([status])
   @@index([createdAt])

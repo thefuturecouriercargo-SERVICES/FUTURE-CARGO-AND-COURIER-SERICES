@@ -10,7 +10,7 @@ import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
  * next to its suggested fields for checking, then saved as consignments.
  */
 
-type Status = "queued" | "reading" | "ready" | "error" | "saving" | "saved" | "duplicate";
+type Status = "queued" | "reading" | "ready" | "error" | "saving" | "saved" | "duplicate" | "blocked";
 
 interface Fields {
   vendorRef: string;
@@ -226,6 +226,7 @@ export default function PhotoBulkEntry({
       // Slip bill numbers repeat (like names), so they are not stored as a unique
       // order No. — only shown in the name and notes to identify the parcel.
       vendorRef: undefined,
+      billNo: f.vendorRef.trim() || undefined,
       customerName: f.customerName.trim(),
       customerPhone: f.customerPhone.trim(),
       address: f.address.trim(),
@@ -243,7 +244,9 @@ export default function PhotoBulkEntry({
       return true;
     } catch (err) {
       const details = err instanceof ApiClientError ? (err.details as { code?: string } | undefined) : undefined;
-      if (details?.code === "POSSIBLE_DUPLICATE") {
+      if (details?.code === "BILL_REPEAT") {
+        patch(card.key, { status: "blocked", message: err instanceof Error ? err.message : "Already entered" });
+      } else if (details?.code === "POSSIBLE_DUPLICATE") {
         patch(card.key, { status: "duplicate", message: err instanceof Error ? err.message : "Possible duplicate" });
       } else {
         patch(card.key, { status: "ready", message: err instanceof Error ? err.message : "Could not save" });
@@ -362,7 +365,7 @@ export default function PhotoBulkEntry({
           <div
             key={c.key}
             className={`flex flex-col gap-3 border p-3 md:flex-row ${
-              c.status === "saved" ? "border-delivered bg-delivered-bg" : c.status === "error" || c.status === "duplicate" ? "border-cancelled" : "border-line"
+              c.status === "saved" ? "border-delivered bg-delivered-bg" : c.status === "error" || c.status === "duplicate" || c.status === "blocked" ? "border-cancelled bg-cancelled-bg" : "border-line"
             }`}
           >
             <div className="shrink-0 md:w-40">
@@ -384,6 +387,15 @@ export default function PhotoBulkEntry({
                   <p className="text-cancelled">{c.message}</p>
                   <button onClick={() => patch(c.key, { status: "ready", message: undefined })} className="mt-1 text-xs text-brass hover:underline">
                     Type it in by hand instead
+                  </button>
+                </div>
+              )}
+
+              {c.status === "blocked" && (
+                <div className="py-2 text-sm">
+                  <p className="font-bold text-cancelled">⛔ {c.message}</p>
+                  <button onClick={() => setCards((l) => l.filter((x) => x.key !== c.key))} className="mt-1 text-xs text-cancelled hover:underline">
+                    Remove this card
                   </button>
                 </div>
               )}
