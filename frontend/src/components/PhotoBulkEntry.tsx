@@ -223,14 +223,16 @@ export default function PhotoBulkEntry({
     }
     patch(card.key, { status: "saving", message: undefined });
     const payload: BookingInput & { photoId?: string; vendorId?: string } = {
-      vendorRef: f.vendorRef.trim() || undefined,
+      // Slip bill numbers repeat (like names), so they are not stored as a unique
+      // order No. — only shown in the name and notes to identify the parcel.
+      vendorRef: undefined,
       customerName: f.customerName.trim(),
       customerPhone: f.customerPhone.trim(),
       address: f.address.trim(),
       emirate: f.emirate,
       items: f.items.trim() || undefined,
       codAmount: Math.round(Number(f.codAmount)),
-      notes: f.notes.trim() || undefined,
+      notes: [f.vendorRef.trim() ? `Bill ${f.vendorRef.trim()}` : "", f.notes.trim()].filter(Boolean).join(" · ") || undefined,
       ...(confirmDuplicate ? { confirmDuplicate: true } : {}),
       ...(card.photoId ? { photoId: card.photoId } : {}),
       ...(mode === "admin" ? { vendorId } : {}),
@@ -399,7 +401,7 @@ export default function PhotoBulkEntry({
                 <>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                     <div>
-                      <label className={lbl}>Bill / ref no.</label>
+                      <label className={lbl}>Bill no.</label>
                       <input value={c.fields.vendorRef} onChange={(e) => setField(c.key, "vendorRef", e.target.value)} className={cls(c, "vendorRef")} />
                     </div>
                     <div>
