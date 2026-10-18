@@ -39,6 +39,7 @@ const DUBAI: AreaRule[] = [
   [/\bal\s*rashidiya\b.*\bdubai\b|\brashidiya\b.*\bdubai\b/i, "AL RASHIDIYA"],
   [/\bgarhoud\b/i, "AL GARHOUD"],
   [/\bal\s*mamzar\b|\bmamzar\b/i, "AL MAMZAR"],
+  [/\bnad\s*al\s*hamar\b/i, "NAD AL HAMAR"],
   [/\bhor\s*al\s*anz\b/i, "HOR AL ANZ"],
   [/\babu\s*hail\b/i, "ABU HAIL"],
   [/\bal\s*muraqqabat\b|\bmuraqabat\b|\bal\s*rigga\b|\brigga\b|\bnaif\b|\bal\s*ras\b|\bdeira\b|\bport\s*saeed\b|\bal\s*muteena\b/i, "DEIRA"],
@@ -59,6 +60,26 @@ const DUBAI: AreaRule[] = [
 ];
 
 const SHARJAH: AreaRule[] = [
+  [/\bmusall?ah?\b|\bmusala\b/i, "AL MUSALLA"],
+  [/\bal\s*ghubaiba\b|\bghubaiba\b/i, "AL GHUBAIBA"],
+  [/\bal\s*soor\b|\bsoor\b/i, "AL SOOR"],
+  [/\bshuwaihean\b|\bshuwaihein\b/i, "AL SHUWAIHEAN"],
+  [/\bmujarrah\b|\bmujarra\b/i, "AL MUJARRAH"],
+  [/\bal\s*heera\b|\bheera\b/i, "AL HEERA"],
+  [/\bal\s*fisht\b|\bfisht\b/i, "AL FISHT"],
+  [/\bal\s*ramla\b|\bramla\b/i, "AL RAMLA"],
+  [/\bqadisiya\b|\bqadisiyah\b/i, "AL QADISIYA"],
+  [/\bal\s*azra\b|\bazra\b/i, "AL AZRA"],
+  [/\bsamnan\b/i, "SAMNAN"],
+  [/\bhalwan\b/i, "HALWAN"],
+  [/\bal\s*ramtha\b|\bramtha\b/i, "AL RAMTHA"],
+  [/\bal\s*layyeh\b|\blayyeh\b/i, "AL LAYYEH"],
+  [/\bal\s*jazzat\b|\bjazzat\b/i, "AL JAZZAT"],
+  [/\bal\s*ghafia\b|\bghafia\b/i, "AL GHAFIA"],
+  [/\bnekhailat\b/i, "AL NEKHAILAT"],
+  [/\bal\s*sabkha\b|\bsabkha\b/i, "AL SABKHA"],
+  [/\bal\s*darari\b|\bdarari\b/i, "AL DARARI"],
+  [/\bal\s*mirgab\b|\bmirgab\b/i, "AL MIRGAB"],
   [/\bmuwaileh\b|\bmuweilah\b|\buniversity\s*city\b/i, "MUWAILEH"],
   [/\bal\s*taawun\b|\btaawun\b|\btaawon\b/i, "AL TAAWUN"],
   [/\bal\s*khan\b/i, "AL KHAN"],
@@ -148,5 +169,21 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   // Fallback: first chunk of the address that has letters (e.g. "Villa 12, Al Something" → "AL SOMETHING").
   const parts = text.split(/[,\n\-–]+/).map((p) => p.trim()).filter((p) => /[a-z]{3}/i.test(p));
   const named = parts.find((p) => p.length <= 25 && !/\d/.test(p) && !/\b(villa|flat|apt|apartment|room|building|bldg|tower|floor|street|st|road|near|opp|behind|makani|plot|house|no|office|shop)\b/i.test(p));
-  return named ? named.replace(/[^\w\s'’]/g, "").trim().toUpperCase() : "OTHER AREA";
+  return named ? canonical(named) : "OTHER AREA";
+}
+
+/**
+ * Same unknown area written differently ("Al Musalla", "Sharjah Musallah",
+ * "musalla") → one name: drop emirate words, a leading "Al", and a trailing "h".
+ */
+function canonical(name: string): string {
+  let t = name
+    .replace(/[^\w\s'’]/g, " ")
+    .replace(/\b(sharjah|sharja|sharjha|shj|dubai|dxb|abu\s*dhabi|auh|ajman|ajm|al\s*ain|uae|united\s*arab\s*emirates|rak|uaq|fujairah)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  // Comparable form: no leading "Al", no trailing "h" after a vowel, no doubled final vowel.
+  t = t.replace(/^AL\s+/, "").replace(/(?<=[AEIOU])H\b/g, "").replace(/([AEIOU])\1\b/g, "$1").trim();
+  return t || "OTHER AREA";
 }
