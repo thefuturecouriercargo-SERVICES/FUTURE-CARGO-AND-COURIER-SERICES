@@ -81,20 +81,21 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg"): 
       model: MODEL(),
       max_tokens: 1500,
       tools: [TOOL],
-      tool_choice: { type: "tool", name: TOOL.name },
+      // Some models don't allow a forced tool choice, so ask for it in the prompt instead.
+      tool_choice: { type: "auto" },
       messages: [
         {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: mime, data: imageBase64 } },
-            { type: "text", text: PROMPT },
+            { type: "text", text: `${PROMPT}\n\nReply only by calling the ${TOOL.name} tool.` },
           ],
         },
       ],
     }),
   });
   const body = (await res.json().catch(() => ({}))) as {
-    content?: { type: string; name?: string; input?: { orders?: ReadOrder[] } }[];
+    content?: { type: string; name?: string; text?: string; input?: { orders?: ReadOrder[] } }[];
     error?: { type?: string; message?: string };
   };
   if (!res.ok) {
@@ -105,7 +106,18 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg"): 
     throw new ApiError(502, `Photo reader error: ${msg}`);
   }
   const tool = body.content?.find((c) => c.type === "tool_use" && c.name === TOOL.name);
-  const orders = tool?.input?.orders ?? [];
+  let orders = tool?.input?.orders ?? [];
+  if (!tool) {
+    // Fallback: the model answered with JSON text instead of the tool.
+    const text = body.content?.filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n") ?? "";
+    const json = text.match(/\{[\s\S]*\}/);
+    try {
+      const parsed = json ? JSON.parse(json[0]) : null;
+      orders = Array.isArray(parsed?.orders) ? parsed.orders : [];
+    } catch {
+      orders = [];
+    }
+  }
   return orders.map((o) => ({
     vendorRef: o.vendorRef ? String(o.vendorRef).trim() : null,
     customerName: o.customerName?.trim() || null,
