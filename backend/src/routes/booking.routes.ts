@@ -19,6 +19,13 @@ const INCLUDE = {
 
 type BookingStatus = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED";
 
+/** Start/end (UTC) of a Dubai calendar day "YYYY-MM-DD". */
+function dubaiDay(day: string) {
+  const [y, m, d] = day.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d) - 4 * 60 * 60 * 1000);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
 router.get(
   "/",
   requireRole("SUPER_ADMIN", "MANAGER"),
@@ -26,18 +33,41 @@ router.get(
     const ids = typeof req.query.ids === "string" && req.query.ids ? req.query.ids.split(",") : undefined;
     const status = req.query.status as BookingStatus | undefined;
     const vendorId = req.query.vendorId as string | undefined;
+    const day = typeof req.query.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.day) ? req.query.day : undefined;
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const qNum = Number(q);
+    const range = day ? dubaiDay(day) : undefined;
     const bookings = await prisma.booking.findMany({
       where: {
         ...(ids ? { id: { in: ids } } : {}),
         ...(status ? { status } : {}),
         ...(vendorId ? { vendorId } : {}),
+        ...(range && !q ? { createdAt: { gte: range.start, lt: range.end } } : {}),
+        ...(q
+          ? {
+              OR: [
+                ...(Number.isSafeInteger(qNum) && qNum > 0 ? [{ cnNo: qNum }] : []),
+                { vendorRef: { contains: q, mode: "insensitive" as const } },
+                { customerName: { contains: q, mode: "insensitive" as const } },
+                { customerPhone: { contains: q } },
+                { vendor: { name: { contains: q, mode: "insensitive" as const } } },
+              ],
+            }
+          : {}),
       },
       include: INCLUDE,
       orderBy: { createdAt: status === "AWAITING_PICKUP" ? "asc" : "desc" },
-      take: ids ? undefined : 500,
+      take: ids ? undefined : range && !q ? 3000 : 500,
     });
     const awaitingCount = await prisma.booking.count({ where: { status: "AWAITING_PICKUP" } });
-    res.json({ bookings, awaitingCount });
+    // Still-waiting orders per Dubai day, so older unpicked ones are never forgotten.
+    const awaitingDays = await prisma.$queryRaw<{ day: string; count: bigint }[]>`
+      SELECT to_char("createdAt" + interval '4 hours', 'YYYY-MM-DD') AS day, count(*) AS count
+      FROM bookings WHERE status = 'AWAITING_PICKUP' GROUP BY 1 ORDER BY 1`.catch((err) => {
+      console.error("[bookings] awaitingDays query failed:", err);
+      return [] as { day: string; count: bigint }[];
+    });
+    res.json({ bookings, awaitingCount, awaitingDays: awaitingDays.map((r) => ({ day: r.day, count: Number(r.count) })) });
   })
 );
 

@@ -21,6 +21,17 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "", label: "All" },
 ];
 
+type Source = "" | "WEBSITE" | "MANUAL";
+const isWebsite = (b: Booking) => b.createdBy === "WEBSITE";
+function addDays(d: string, n: number) {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+}
+const niceDay = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const sumCod = (list: Booking[]) => list.reduce((s, b) => s + b.codAmount, 0);
+
 export default function AwaitingPickupPage() {
   const { user } = useAuth();
   const canEdit = user?.role === "SUPER_ADMIN";
@@ -32,6 +43,11 @@ export default function AwaitingPickupPage() {
   const [filter, setFilter] = useState<Filter>("AWAITING_PICKUP");
   const [vendorFilter, setVendorFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [q, setQ] = useState(""); // debounced search (looks across all days)
+  const [viewDay, setViewDay] = useState(todayStr()); // "" = all days
+  const [source, setSource] = useState<Source>("");
+  const [awaitingDays, setAwaitingDays] = useState<{ day: string; count: number }[]>([]);
+  const [totalAwaiting, setTotalAwaiting] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -50,38 +66,66 @@ export default function AwaitingPickupPage() {
   const [scan, setScan] = useState("");
   const scanRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const t = setTimeout(() => setQ(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const load = useCallback(async () => {
-    const res = await apiFetch<{ bookings: Booking[] }>("/bookings");
+    const res = await apiFetch<{ bookings: Booking[]; awaitingCount: number; awaitingDays?: { day: string; count: number }[] }>("/bookings", {
+      query: { day: q ? undefined : viewDay || undefined, q: q || undefined },
+    });
     setBookings(res.bookings);
-  }, []);
+    setTotalAwaiting(res.awaitingCount);
+    setAwaitingDays(res.awaitingDays ?? []);
+  }, [viewDay, q]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
     apiFetch<Vendor[]>("/vendors").then(setVendors).catch(() => {});
     apiFetch<Employee[]>("/employees")
       .then((list) => setDrivers(list.filter((e) => e.active && (e.role ?? "DRIVER") === "DRIVER")))
       .catch(() => {});
-  }, [load]);
+  }, []);
 
   useSocketEvent("booking:changed", () => load());
 
-  const awaitingCount = bookings.filter((b) => b.status === "AWAITING_PICKUP").length;
+  // Day list for the chosen status (all vendors, both sources) — drives the totals.
+  const statusList = useMemo(
+    () => bookings.filter((b) => !filter || b.status === filter).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
+    [bookings, filter]
+  );
+  const statusCount = (f: Filter) => bookings.filter((b) => !f || b.status === f).length;
 
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return bookings
-      .filter((b) => {
-        if (filter && b.status !== filter) return false;
+  const shown = useMemo(
+    () =>
+      statusList.filter((b) => {
         if (vendorFilter && b.vendorId !== vendorFilter) return false;
-        if (q && !`${b.cnNo} ${b.vendorRef ?? ""} ${b.customerName} ${b.customerPhone} ${b.vendor.name}`.toLowerCase().includes(q)) return false;
+        if (source === "WEBSITE" && !isWebsite(b)) return false;
+        if (source === "MANUAL" && isWebsite(b)) return false;
         return true;
-      })
-      .sort((a, b) =>
-        filter === "AWAITING_PICKUP"
-          ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  }, [bookings, filter, vendorFilter, search]);
+      }),
+    [statusList, vendorFilter, source]
+  );
+
+  // Vendor-wise totals for the day (respecting the status filter).
+  const vendorRows = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; web: Booking[]; manual: Booking[] }>();
+    for (const b of statusList) {
+      const row = map.get(b.vendorId) ?? { id: b.vendorId, name: b.vendor.name, web: [], manual: [] };
+      (isWebsite(b) ? row.web : row.manual).push(b);
+      map.set(b.vendorId, row);
+    }
+    return Array.from(map.values()).sort((a, b) => b.web.length + b.manual.length - (a.web.length + a.manual.length));
+  }, [statusList]);
+
+  const webAll = statusList.filter(isWebsite);
+  const manualAll = statusList.filter((b) => !isWebsite(b));
+  const olderAwaiting = viewDay && !q ? awaitingDays.filter((d) => d.day < viewDay) : [];
+  const olderCount = olderAwaiting.reduce((s2, d) => s2 + d.count, 0);
 
   const selectedAwaiting = Array.from(selected).filter((id) => bookings.find((b) => b.id === id)?.status === "AWAITING_PICKUP");
 
@@ -100,7 +144,21 @@ export default function AwaitingPickupPage() {
     const cn = Number(code);
     const b = bookings.find((x) => x.cnNo === cn) ?? bookings.find((x) => x.vendorRef === code);
     if (!b) {
-      setMsg({ ok: false, text: `${code} is not a vendor booking (checked CN and vendor order No.).` });
+      // Not on this day — look it up anywhere and jump to its day.
+      apiFetch<Booking>(`/bookings/by-cn/${encodeURIComponent(code)}`)
+        .then((found) => {
+          if (found.status !== "AWAITING_PICKUP") {
+            setMsg({ ok: false, text: `CN ${found.cnNo} (${found.customerName}) is already ${found.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
+            return;
+          }
+          const d = new Date(new Date(found.createdAt).getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+          setSearch("");
+          setViewDay(d);
+          setFilter("AWAITING_PICKUP");
+          setSelected((prev) => new Set(prev).add(found.id));
+          setMsg({ ok: true, text: `✓ CN ${found.cnNo} — ${found.vendor.name}, ${found.customerName} selected (entered ${d}).` });
+        })
+        .catch(() => setMsg({ ok: false, text: `${code} is not a vendor booking (checked CN and vendor order No.).` }));
     } else if (b.status !== "AWAITING_PICKUP") {
       setMsg({ ok: false, text: `CN ${b.cnNo} (${b.customerName}) is already ${b.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
     } else {
@@ -280,6 +338,116 @@ export default function AwaitingPickupPage() {
       {msg && <p className={`mb-4 text-sm ${msg.ok ? "text-delivered" : "text-cancelled"}`}>{msg.text}</p>}
 
       <div className="border border-line bg-white p-5">
+        {/* Date */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-2xl font-semibold text-navy">{q ? `Search: “${q}” (all days)` : viewDay ? niceDay(viewDay) : "All days"}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              ◀
+            </button>
+            <input type="date" value={viewDay} onChange={(e) => e.target.value && setViewDay(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm" />
+            <button onClick={() => setViewDay(addDays(viewDay || todayStr(), 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+              ▶
+            </button>
+            {viewDay !== todayStr() && (
+              <button onClick={() => setViewDay(todayStr())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper">
+                Today
+              </button>
+            )}
+            <button
+              onClick={() => setViewDay("")}
+              className={`rounded px-3 py-2 font-mono text-xs uppercase ${viewDay === "" ? "bg-navy text-paper" : "border border-line hover:border-brass"}`}
+              title="Every day (latest 500)"
+            >
+              All days
+            </button>
+          </div>
+        </div>
+
+        {olderCount > 0 && filter === "AWAITING_PICKUP" && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 border border-pending bg-pending-bg px-3 py-2 text-sm text-pending">
+            <b>⚠ {olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
+            {olderAwaiting.map((d) => (
+              <button key={d.day} onClick={() => setViewDay(d.day)} className="rounded border border-pending bg-white px-2 py-0.5 font-mono text-xs hover:bg-pending-bg">
+                {d.day.slice(8)}/{d.day.slice(5, 7)} ({d.count})
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Website / Manual / Day total — click to filter */}
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          {([
+            { key: "WEBSITE" as Source, label: "🌐 From website", list: webAll },
+            { key: "MANUAL" as Source, label: "✍ Manual (portal + office)", list: manualAll },
+            { key: "" as Source, label: "Day total", list: statusList },
+          ]).map((t) => (
+            <button
+              key={t.label}
+              onClick={() => {
+                setSource(t.key);
+                setSelected(new Set());
+              }}
+              className={`border-2 p-3 text-left transition ${source === t.key ? "border-navy bg-navy text-paper" : "border-line bg-white text-navy hover:border-brass"}`}
+            >
+              <div className="font-mono text-[11px] font-bold uppercase tracking-wide">{t.label}</div>
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <span className="font-display text-2xl font-bold">{t.list.length}</span>
+                <span className="font-mono text-sm font-bold">AED {fmtNumber(sumCod(t.list))}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Vendor-wise totals */}
+        {vendorRows.length > 0 && (
+          <div className="table-scroll mb-5">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th className="text-right">Website</th>
+                  <th className="text-right">Web COD</th>
+                  <th className="text-right">Manual</th>
+                  <th className="text-right">Manual COD</th>
+                  <th className="text-right">Total</th>
+                  <th className="text-right">Total COD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorRows.map((v) => (
+                  <tr
+                    key={v.id}
+                    onClick={() => setVendorFilter(vendorFilter === v.id ? "" : v.id)}
+                    className={`cursor-pointer ${vendorFilter === v.id ? "bg-paper-2 font-bold" : "hover:bg-paper"}`}
+                    title="Click to show only this vendor"
+                  >
+                    <td>
+                      {vendorFilter === v.id ? "▸ " : ""}
+                      {v.name}
+                    </td>
+                    <td className="text-right font-mono">{v.web.length || "—"}</td>
+                    <td className="text-right font-mono">{v.web.length ? fmtNumber(sumCod(v.web)) : "—"}</td>
+                    <td className="text-right font-mono">{v.manual.length || "—"}</td>
+                    <td className="text-right font-mono">{v.manual.length ? fmtNumber(sumCod(v.manual)) : "—"}</td>
+                    <td className="text-right font-mono font-bold">{v.web.length + v.manual.length}</td>
+                    <td className="text-right font-mono font-bold">{fmtNumber(sumCod([...v.web, ...v.manual]))}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-navy font-bold">
+                  <td>All vendors</td>
+                  <td className="text-right font-mono">{webAll.length}</td>
+                  <td className="text-right font-mono">{fmtNumber(sumCod(webAll))}</td>
+                  <td className="text-right font-mono">{manualAll.length}</td>
+                  <td className="text-right font-mono">{fmtNumber(sumCod(manualAll))}</td>
+                  <td className="text-right font-mono">{statusList.length}</td>
+                  <td className="text-right font-mono">{fmtNumber(sumCod(statusList))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {FILTERS.map((f) => (
             <button
@@ -293,7 +461,7 @@ export default function AwaitingPickupPage() {
               }`}
             >
               {f.label}
-              {f.value === "AWAITING_PICKUP" && ` (${awaitingCount})`}
+              {` (${statusCount(f.value)})`}
             </button>
           ))}
           <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm">
@@ -384,6 +552,7 @@ export default function AwaitingPickupPage() {
                     onChange={() => setSelected(allShownSelected ? new Set() : new Set(shown.map((b) => b.id)))}
                   />
                 </th>
+                <th className="text-right">#</th>
                 <th>CN No.</th>
                 <th>Vendor</th>
                 <th>Customer</th>
@@ -397,17 +566,18 @@ export default function AwaitingPickupPage() {
             <tbody>
               {shown.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-ink-soft">
-                    {filter === "AWAITING_PICKUP" ? "Nothing waiting — all vendor bookings are picked up." : "No bookings here."}
+                  <td colSpan={10} className="py-8 text-center text-ink-soft">
+                    {filter === "AWAITING_PICKUP" ? `Nothing waiting for this day${totalAwaiting ? ` (${totalAwaiting} awaiting in total)` : ""}.` : "No bookings here."}
                   </td>
                 </tr>
               ) : (
-                shown.flatMap((b) => {
+                shown.flatMap((b, idx) => {
                   const rows = [
                     <tr key={b.id} className={selected.has(b.id) ? "bg-paper-2" : ""}>
                       <td>
                         <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
                       </td>
+                      <td className="text-right font-mono text-sm font-bold text-ink-soft">{idx + 1}</td>
                       <td className="font-mono">
                         <b>{b.cnNo}</b>
                       </td>
@@ -475,6 +645,7 @@ export default function AwaitingPickupPage() {
                   if (expanded === b.id) {
                     rows.push(
                       <tr key={`${b.id}-details`} className="bg-paper">
+                        <td />
                         <td />
                         <td colSpan={8} className="py-3 text-sm">
                           <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
