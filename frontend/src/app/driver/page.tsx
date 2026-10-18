@@ -132,6 +132,8 @@ export default function DriverPortalPage() {
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
+  const [statusScanOpen, setStatusScanOpen] = useState(false);
+  const [fromScan, setFromScan] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
 
   // Data the voice assistant needs beyond what's already loaded — fetched once.
@@ -688,6 +690,13 @@ export default function DriverPortalPage() {
             placeholder="Search CN No…"
             className="rounded border border-line px-3 py-1.5 text-sm"
           />
+          <button
+            onClick={() => setStatusScanOpen(true)}
+            title="Scan a label to update its status"
+            className="flex h-9 items-center justify-center gap-1 rounded-full bg-brass px-3 font-mono text-[11px] font-bold uppercase text-white shadow hover:opacity-90"
+          >
+            📷 Scan
+          </button>
           {voiceAssistant.supported && (
             <button
               onClick={voiceAssistant.start}
@@ -835,19 +844,42 @@ export default function DriverPortalPage() {
         />
       )}
 
+      {statusScanOpen && (
+        <StatusScanModal
+          orders={orders}
+          onClose={() => setStatusScanOpen(false)}
+          onFound={(o) => {
+            setStatusScanOpen(false);
+            setFromScan(true);
+            setStatusOrder(o);
+          }}
+          onClaim={() => {
+            setStatusScanOpen(false);
+            setClaimOpen(true);
+          }}
+        />
+      )}
+
       {transferOrder && <TransferModal order={transferOrder} onClose={() => setTransferOrder(null)} onDone={() => { setTransferOrder(null); load(); }} />}
 
       {statusOrder && (
         <StatusModal
           order={statusOrder}
-          onClose={() => setStatusOrder(null)}
+          onClose={() => {
+            setStatusOrder(null);
+            setFromScan(false);
+          }}
           onTransfer={() => {
             setTransferOrder(statusOrder);
             setStatusOrder(null);
+            setFromScan(false);
           }}
           onConfirm={async (status, payment, reason, bankPaymentConfirmed) => {
             await updateStatus(statusOrder, status, payment, reason, bankPaymentConfirmed);
             setStatusOrder(null);
+            // Came from a scan → straight back to the scanner for the next parcel.
+            if (fromScan) setStatusScanOpen(true);
+            setFromScan(false);
           }}
         />
       )}
@@ -888,6 +920,60 @@ export default function DriverPortalPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Scan a label (or type the CN) → opens Update Status for that consignment. */
+function StatusScanModal({
+  orders,
+  onClose,
+  onFound,
+  onClaim,
+}: {
+  orders: Order[];
+  onClose: () => void;
+  onFound: (o: Order) => void;
+  onClaim: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+
+  function onCode(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    const n = Number(code);
+    const o =
+      orders.find((x) => Number.isFinite(n) && x.cnNo === n) ??
+      orders.find((x) => x.booking?.vendorRef && x.booking.vendorRef === code);
+    if (o) {
+      beep(true);
+      onFound(o);
+    } else {
+      beep(false);
+      setError(`${code} is not in your list.`);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-5 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-xl font-semibold text-navy">📷 Scan to update status</h2>
+          <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
+            ×
+          </button>
+        </div>
+        <p className="mb-3 text-sm text-ink-soft">Scan the parcel label (or type the CN). The status screen opens for that parcel.</p>
+        <BarcodeScanner onCode={onCode} autoCamera />
+        {error && (
+          <div className="mt-3 rounded border border-cancelled bg-cancelled-bg px-3 py-2 text-sm text-cancelled">
+            {error}
+            <button onClick={onClaim} className="ml-2 font-bold underline">
+              Assign it to me
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
