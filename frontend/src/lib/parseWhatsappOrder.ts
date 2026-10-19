@@ -35,7 +35,7 @@ const EMIRATE_WORDS: [RegExp, string][] = [
   [/\bfuj[ae]i?rah?\b|\bkhor\s*fakk?an\b|\bkalba\b/i, "FUJAIRAH"],
   [/\bajm[a]+n\b/i, "AJMAN"],
   [/\bsh[a]?r[a]?j[a]?h?\b|\bsharjha\b|\bshj\b|\bal\s*nahda\b|\bmuwaileh\b|\bal\s*majaz\b|\bal\s*taawun\b|\babu\s*shagara\b|\bal\s*qasimia\b/i, "SHARJAH"],
-  [/\bdub[a]?[iy]\b|\bdxb\b|\bdeira\b|\bbur\s*dubai\b|\bjlt\b|\bmarina\b|\bal\s*barsha\b|\bkarama\b|\bqusais\b|\bjvc\b|\bmirdif\b|\binternational\s*city\b|\bsilicon\s*oasis\b|\bal\s*nahda\s*1\b/i, "DUBAI"],
+  [/\bdub[a]?[iy]\b|\bdxb\b|\bdeira\b|\bbur\s*dubai\b|\bjlt\b|\bmarina\b|\bal\s*barsha\b|\bkarama\b|\bqusais\b|\bjvc\b|\bmirdif\b|\binternational\s*city\b|\bsilicon\s*oasis\b|\bal\s*nahda\s*1\b|\bdip\b|\bdic\b|\bdso\b|\bjafza\b|\bdafza\b|\bimpz\b|\btecom\b|\bdmcc\b|\bjvt\b|\bjbr\b|\bdifc\b|\bal\s*quoz\b|\bjebel\s*ali\b|\bdubai\s*investment/i, "DUBAI"],
 ];
 
 // UAE mobiles/landlines in their common written forms.
@@ -103,7 +103,7 @@ const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, fi
 const UNIT = String.raw`(?:pcs|pc|pieces?|pce|nos|no|numbers?|bottles?|btls?|btl|units?|packs?|pkts?|boxes|box|sets?|qty|quantity)`;
 const CUR = String.raw`(?:aed|dhs|dh|dirhams?|drhm)`;
 const SIZE_RE = /\b\d+(?:\.\d+)?\s*(?:ml|m\.l|ltr|l|g|gm|gms|grams?|kg|oz|cm|mm|inch|in)\b/gi;
-const ADDRESS_WORDS = /\b(street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp|office|shop|unit|suite|warehouse|store|house|home|gate|cluster|plaza|residence|residency|compound|mall|camp|hotel|school|hospital|clinic|masjid|mosque|signal|roundabout|parking|po\s*box)\b/i;
+const ADDRESS_WORDS = /\b(dip|dic|dso|jafza|dafza|impz|tecom|dmcc|jvt|jvc|jlt|jbr|difc|street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp|office|shop|unit|suite|warehouse|store|house|home|gate|cluster|plaza|residence|residency|compound|mall|camp|hotel|school|hospital|clinic|masjid|mosque|signal|roundabout|parking|po\s*box)\b/i;
 
 /** "2 × Akoya (AED 80)" — the label and order details read this back with splitItems(). */
 export function fmtItem(qty: number, name: string, price?: number): string {
@@ -221,6 +221,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   const itemLineIdx = new Set<number>();
   let li = -1;
   let itemsSection = false;
+  let inAddress = false; // lines right under "Address:" continue the address
   let seenItems = 0;
   let seenTotal: number | undefined;
   let seenPending: unknown = null;
@@ -238,6 +239,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   const itemPrices: number[] = [];
   const altPhones: string[] = [];
   const addPhone = (p: string) => {
+    inAddress = false;
     const c = cleanPhone(p);
     if (!out.customerPhone) out.customerPhone = c;
     else if (c !== out.customerPhone && !altPhones.includes(c)) altPhones.push(c);
@@ -258,6 +260,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     if (!line) continue;
     if (ITEMS_HEADING.test(line)) {
       itemsSection = true;
+      inAddress = false;
       continue;
     }
     if (BOILERPLATE.some((re) => re.test(line))) continue;
@@ -340,8 +343,16 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
 
     // --- Labelled fields: "Label: value", "Label - value", or "Emirate sharjha"
     const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|loc|area|building|landmark|delivery\s*address|delivery\s*time|preferred\s*time|timing|time|emirate|city|state|items?|products?|fragrances?|perfumes?|scents?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
+    // "No: +971…" — phone
+    const noLab = line.match(/^(?:no|num|nmbr|nbr)\.?\s*[:：]\s*(.+)$/i);
+    if (noLab && PHONE_RE.test(noLab[1])) {
+      for (const pm of noLab[1].matchAll(new RegExp(PHONE_RE.source, "g"))) addPhone(pm[0]);
+      continue;
+    }
+
     if (lab) {
       const key = lab[1].toLowerCase();
+      inAddress = /^(address|addr|location|loc|delivery\s*address)$/.test(key);
       const value = lab[2].trim().replace(/,$/, "");
       if (/^(ph|phone|mobile|mob|contact|tel|whats|number)/.test(key)) {
         const all = [...value.matchAll(new RegExp(PHONE_RE.source, "g"))];
@@ -407,6 +418,17 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       if (totalFromLabel === undefined) totalFromLabel = num(bare[1] ?? bare[2]);
       continue;
     }
+
+    // --- Lines under "Address:" ("Dip 1", "Dubai") are more address, unless clearly an item
+    // Stops once the address already names an emirate/area, unless this line is itself one.
+    if (inAddress && !itemsSection && !isProductBullet && !PHONE_RE.test(line) &&
+        (!emirateForOrder(addressParts.join(" ")) || !!emirateForOrder(line)) &&
+        !/[-–=]\s*\d{2,}\s*$/.test(line) &&
+        !new RegExp(String.raw`\b${CUR}\b|[x×*]\s*\d|\d\s*[x×*]\s|\d\s*${UNIT}\b|\b(?:qty|quantity)\b`, "i").test(line)) {
+      addressParts.push(line);
+      continue;
+    }
+    inAddress = false;
 
     // --- Manual item lines in any common style ("Akoya 2pc-AED 80", "2 Akoya 80aed", "Akoya x2", …)
     // A list number ("1.", "2)") in front is not a quantity.
