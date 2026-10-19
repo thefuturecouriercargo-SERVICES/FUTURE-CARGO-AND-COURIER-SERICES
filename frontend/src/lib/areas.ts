@@ -33,7 +33,7 @@ const DUBAI: AreaRule[] = [
   [/\bbarsha[\s\-']*heights?\b|\btecom\b|\btecomm\b/i, "BARSHA HEIGHTS"],
   [/\b(?:al[\s\-]*)?barsha\b|\bmall[\s\-']*of[\s\-']*the[\s\-']*emirates\b|\bmoe\b|\bbarsha[\s\-']*\d\b/i, "AL BARSHA"],
   [/\b(?:al[\s\-]*)?sufouh\b|\bknowledge[\s\-']*village\b|\bmedia[\s\-']*city\b|\binternet[\s\-']*city\b|\bdubai[\s\-']*media[\s\-']*city\b|\bdmc\b|\bdic\b|\bdubai[\s\-']*internet[\s\-']*city\b/i, "MEDIA CITY / SUFOUH"],
-  [/\bproduction[\s\-']*city\b|\bimpz\b|\bdpc\b/i, "DUBAI PRODUCTION CITY"],
+  [/\bprod[ue]ction[\s\-']*city\b|\bimpz\b|\bdpc\b/i, "DUBAI PRODUCTION CITY"],
   [/\bstudio[\s\-']*city\b/i, "DUBAI STUDIO CITY"],
   [/\bsports[\s\-']*city\b|\bdsc\b/i, "SPORTS CITY"],
   [/\bmotor[\s\-']*city\b|\buptown[\s\-']*motor[\s\-']*city\b|\bgreen[\s\-']*community[\s\-']*motor[\s\-']*city\b/i, "MOTOR CITY"],
@@ -56,7 +56,7 @@ const DUBAI: AreaRule[] = [
   [/\bwarsan\b/i, "WARSAN"],
   [/\b(?:al[\s\-]*)?aweer\b|\bal[\s\-]*awir\b|\bras[\s\-']*al[\s\-']*khor[\s\-']*industrial\b/i, "AL AWIR"],
   [/\bras[\s\-']*al[\s\-']*khor\b/i, "RAS AL KHOR"],
-  [/\bnad[\s\-']*al[\s\-']*hamar\b|\bnadd[\s\-']*al[\s\-']*hamar\b/i, "NAD AL HAMAR"],
+  [/\bnad[\s\-']*al[\s\-']*hamm?ar\b|\bnadd[\s\-']*al[\s\-']*hamm?ar\b|\bnadal[\s\-']*hamm?ar\b|\bnad[\s\-']*alhamm?ar\b/i, "NAD AL HAMAR"],
   [/\b(?:al[\s\-]*)?warqa'?a?\b|\bwarqaa\b/i, "AL WARQA"],
   [/\bmirdif+\b|\bmirdiff\b|\buptown[\s\-']*mirdif\b|\bmirdif[\s\-']*city[\s\-']*cent(re|er)\b/i, "MIRDIF"],
   [/\b(?:al[\s\-]*)?mizhar\b/i, "AL MIZHAR"],
@@ -66,7 +66,7 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)/i, "AL QUSAIS"],
   [/\bal[\s\-]*twar\b|\btawar\b/i, "AL TWAR"],
   [/\b(?:al[\s\-]*)?nahda\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
-  [/(?:\b(al\s*)?rashidiy?a\b.*\bdubai\b)|(?:\bdubai\b.*\b(al\s*)?rashidiy?a\b)/i, "AL RASHIDIYA"],
+  [/\b(?:al[\s\-]*)?rashidiy?a\b|\brashidiyah\b|\brashidia\b/i, "AL RASHIDIYA"],
   [/\bgarhoud\b|\bgarhood\b|\bairport[\s\-']*terminal\b|\bdubai[\s\-']*airport\b|\bdxb[\s\-']*airport\b/i, "AL GARHOUD"],
   [/\b(?:al[\s\-]*)?mamzar\b/i, "AL MAMZAR"],
   [/\b(?:al[\s\-]*)?waheda\b|\bwuhaida\b/i, "AL WAHEDA"],
@@ -92,7 +92,9 @@ const DUBAI: AreaRule[] = [
   [/\bal[\s\-]*safa\b/i, "AL SAFA"],
   [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
   [/\bal[\s\-]*quoz\b|\bal[\s\-']*qouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
-  [/\b(?:al[\s\-]*)?khail\b|\bnad[\s\-']*al[\s\-']*sheba\b|\bnad[\s\-']*alsheba\b|\bmeydan\b|\bsobha[\s\-']*hartland\b|\bhartland\b|\bmbr[\s\-']*city\b|\bmohammed[\s\-']*bin[\s\-']*rashid[\s\-']*city\b|\bdistrict[\s\-']*one\b/i, "MEYDAN / NAD AL SHEBA"],
+  [/\bsobha[\s\-']*hartland\b|\bshoba[\s\-']*hartland\b|\bsobha\b|\bshoba\b|\bhartland\b/i, "SOBHA HARTLAND"],
+  [/\bnad[\s\-']*al[\s\-']*sheba\b|\bnad[\s\-']*alsheba\b|\bnadal[\s\-']*sheba\b|\bnadal[\s\-']*shiba\b|\bnad[\s\-']*al[\s\-']*shiba\b|\bnad[\s\-']*el[\s\-']*sheba\b|\bnadd[\s\-']*al[\s\-']*sheba\b/i, "NAD AL SHEBA"],
+  [/\b(?:al[\s\-]*)?khail\b|\bmeydan\b|\bmbr[\s\-']*city\b|\bmohammed[\s\-']*bin[\s\-']*rashid[\s\-']*city\b|\bdistrict[\s\-']*one\b/i, "MEYDAN / NAD AL SHEBA"],
   [/\bumm[\s\-']*ramool\b/i, "UMM RAMOOL"],
   [/\bdiscovery[\s\-']*gardens?\b/i, "DISCOVERY GARDENS"],
   [/\b(?:al[\s\-]*)?furjan\b|\bfurjan[\s\-']*west\b|\bfurjan[\s\-']*east\b/i, "AL FURJAN"],
@@ -347,8 +349,8 @@ const BY_EMIRATE: Record<string, AreaRule[]> = {
 };
 
 /**
- * Default driving order for "By area" (office's route, Deira side → Bur Dubai side).
- * A driver's own saved order (drag ▲▼ on the driver page) still comes first.
+ * Default driving order for "By area" (office's route list).
+ * A driver's own saved order (▲▼ on the driver page) still comes first.
  */
 export const DEFAULT_AREA_ROUTE: string[] = [
   "DUBAI|MUHAISNAH",
@@ -368,6 +370,26 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "DUBAI|KARAMA",
   "DUBAI|MANKHOOL",
   "DUBAI|OUD METHA",
+  "DUBAI|AL RASHIDIYA",
+  "DUBAI|UMM RAMOOL",
+  "DUBAI|AL WARQA",
+  "DUBAI|MIRDIF",
+  "DUBAI|NAD AL HAMAR",
+  "DUBAI|INTERNATIONAL CITY",
+  "DUBAI|SILICON OASIS",
+  "DUBAI|AL QUOZ",
+  "DUBAI|AL BARSHA",
+  "DUBAI|JVC",
+  "DUBAI|DUBAI PRODUCTION CITY",
+  "DUBAI|JEBEL ALI",
+  "DUBAI|DISCOVERY GARDENS",
+  "DUBAI|DIP",
+  "DUBAI|DUBAILAND",
+  "DUBAI|NAD AL SHEBA",
+  "DUBAI|RAS AL KHOR",
+  "DUBAI|AL MIZHAR",
+  "DUBAI|AL FURJAN",
+  "DUBAI|SOBHA HARTLAND",
 ];
 
 /** Best-guess area name, or the first part of the address when no known area matches. */
