@@ -75,6 +75,7 @@ export default function ScanHistory() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("time");
   const [making, setMaking] = useState(false);
+  const [makingXl, setMakingXl] = useState(false);
   const [everyScan, setEveryScan] = useState(false); // false = one row per CN (its latest scan)
 
   const load = useCallback(async () => {
@@ -253,6 +254,104 @@ export default function ScanHistory() {
     }
   }
 
+  async function downloadExcel() {
+    setMakingXl(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Future Courier";
+      const head = (ws: import("exceljs").Worksheet) => {
+        const r = ws.getRow(1);
+        r.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        r.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF141F33" } };
+        r.alignment = { vertical: "middle" };
+        ws.views = [{ state: "frozen", ySplit: 1 }];
+      };
+
+      const ws = wb.addWorksheet("Scans");
+      ws.columns = [
+        { header: "#", key: "n", width: 5 },
+        { header: "Date", key: "date", width: 11 },
+        { header: "Time", key: "time", width: 9 },
+        { header: "CN", key: "cn", width: 11 },
+        { header: "Vendor", key: "vendor", width: 16 },
+        { header: "Customer", key: "customer", width: 22 },
+        { header: "Phone", key: "phone", width: 15 },
+        { header: "Address", key: "address", width: 40 },
+        { header: "Area", key: "area", width: 18 },
+        { header: "Emirate", key: "emirate", width: 13 },
+        { header: "Items", key: "items", width: 36 },
+        { header: "Notes", key: "notes", width: 24 },
+        { header: "COD (AED)", key: "cod", width: 11 },
+        { header: "Driver", key: "driver", width: 16 },
+        { header: "Scanned by", key: "by", width: 16 },
+        { header: "By", key: "role", width: 8 },
+        { header: "Result", key: "result", width: 14 },
+        { header: "From driver / error", key: "msg", width: 22 },
+        { header: "Status now", key: "status", width: 14 },
+      ];
+      shown.forEach((r, i) =>
+        ws.addRow({
+          n: i + 1,
+          date: day,
+          time: timeOf(r.createdAt),
+          cn: r.cnNo ?? r.code,
+          vendor: r.vendorName ?? "",
+          customer: r.customerName ?? "",
+          phone: r.customerPhone ?? "",
+          address: r.address ?? "",
+          area: areaOfRow(r) ?? "",
+          emirate: r.emirate ?? "",
+          items: itemsText(r.items),
+          notes: r.notes ?? "",
+          cod: r.total ?? null,
+          driver: r.driverName ?? "",
+          by: r.byName,
+          role: r.byRole === "OFFICE" ? "office" : "driver",
+          result: RESULT_LABEL[r.result],
+          msg: r.result === "REASSIGNED" && r.fromDriver ? r.fromDriver : r.result === "FAILED" ? r.message ?? "" : "",
+          status: r.orderStatus ?? "",
+        })
+      );
+      head(ws);
+      ws.getColumn("cod").numFmt = "#,##0";
+      ws.getColumn("items").alignment = { wrapText: true, vertical: "top" };
+      ws.getColumn("address").alignment = { wrapText: true, vertical: "top" };
+      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+
+      const ds = wb.addWorksheet("By driver");
+      ds.columns = [
+        { header: "Driver", key: "name", width: 20 },
+        { header: "Parcels", key: "count", width: 10 },
+        { header: "COD (AED)", key: "cod", width: 12 },
+        { header: "By office", key: "office", width: 10 },
+        { header: "By driver", key: "self", width: 10 },
+      ];
+      perDriver.forEach((d) => ds.addRow({ name: d.name, count: d.count, cod: d.cod, office: d.office, self: d.self }));
+      if (perDriver.length > 1) {
+        const t = ds.addRow({ name: "Total", count: ok.length, cod, office: perDriver.reduce((s, d) => s + d.office, 0), self: perDriver.reduce((s, d) => s + d.self, 0) });
+        t.font = { bold: true };
+      }
+      head(ds);
+      ds.getColumn("cod").numFmt = "#,##0";
+      if (filterText) ds.addRow([]).getCell(1).value = `Filters: ${filterText}`;
+
+      const buf = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `scan-report-${day}${driver ? `-${driver.replace(/\s+/g, "_")}` : ""}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) {
+      alert(`Could not make the Excel file: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setMakingXl(false);
+    }
+  }
+
   const sel = "rounded border border-line px-2 py-1.5 text-sm";
 
   return (
@@ -278,6 +377,13 @@ export default function ScanHistory() {
             className="rounded border border-navy bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-navy hover:bg-paper-2 disabled:opacity-50"
           >
             {making ? "Making PDF…" : `⬇ PDF (${shown.length})`}
+          </button>
+          <button
+            onClick={downloadExcel}
+            disabled={makingXl || shown.length === 0}
+            className="rounded border border-green-700 bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-green-800 hover:bg-green-50 disabled:opacity-50"
+          >
+            {makingXl ? "Making Excel…" : `⬇ Excel (${shown.length})`}
           </button>
         </div>
       </div>
