@@ -6,9 +6,19 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { hashPassword } from "../utils/password";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
+import { defaultVendorLogin, resetAllVendorLogins } from "../services/vendorLogin.service";
 
 const router = Router();
 router.use(authenticate);
+
+// Give every vendor the standard portal login: NAME / NAME321 (can be changed per vendor later).
+router.post(
+  "/reset-logins",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    res.json({ logins: await resetAllVendorLogins(req.user!.sub) });
+  })
+);
 
 router.get(
   "/",
@@ -40,7 +50,14 @@ router.post(
   "/",
   requireRole("SUPER_ADMIN"),
   asyncHandler(async (req, res) => {
-    const { username, password, ...data } = createVendorSchema.parse(req.body);
+    const parsed = createVendorSchema.parse(req.body);
+    const { ...data } = parsed;
+    delete (data as { username?: string }).username;
+    delete (data as { password?: string }).password;
+    // New vendors get the standard login (NAME / NAME321) unless one is typed in.
+    const std = defaultVendorLogin(parsed.name);
+    const username = parsed.username || std.username;
+    const password = parsed.username ? parsed.password : std.password;
     const passwordHash = password ? await hashPassword(password) : undefined;
     const vendor = await prisma.vendor.create({
       data: { ...data, username, passwordHash },

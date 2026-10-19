@@ -7,6 +7,7 @@ import { backfillResolvedAt } from "./services/resolvedAt.backfill";
 import { startWeeklyBackupScheduler } from "./services/backup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
+import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
 
 async function main() {
   const app = createApp();
@@ -28,6 +29,7 @@ async function main() {
   // Inspired website orders → Awaiting Pickup every 5 min (no-op until configured).
   startWooSyncScheduler();
   startPhotoPruneScheduler();
+  void runVendorLoginResetOnce();
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console

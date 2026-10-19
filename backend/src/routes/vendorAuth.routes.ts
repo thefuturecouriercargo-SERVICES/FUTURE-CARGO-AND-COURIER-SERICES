@@ -29,7 +29,8 @@ router.post(
     const { username, password } = loginSchema.parse(req.body);
 
     const vendor = await prisma.vendor.findFirst({
-      where: { active: true, username: username.trim() },
+      // Username is not case-sensitive ("inspired" = "INSPIRED"); the password is.
+      where: { active: true, username: { equals: username.trim(), mode: "insensitive" } },
     });
 
     if (!vendor || !vendor.passwordHash) throw new ApiError(401, "Invalid username or password");

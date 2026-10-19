@@ -76,6 +76,23 @@ export default function VendorsPage() {
         delivery charge is populated automatically. Set a portal username and password to give a vendor their
         own login — they can then view their own consignments and credit balance at <b>/vendor-login</b>.
       </p>
+      <div className="mb-6 flex flex-wrap items-center gap-3 border border-brass bg-paper-2 px-4 py-3 text-sm">
+        <span>
+          Default login for every vendor: <b className="font-mono">NAME</b> / <b className="font-mono">NAME321</b> (capitals, no spaces — e.g.{" "}
+          <span className="font-mono">INSPIRED</span> / <span className="font-mono">INSPIRED321</span>). Change any vendor with Edit.
+        </span>
+        <button
+          onClick={async () => {
+            if (!confirm("Reset EVERY vendor's portal login to NAME / NAME321? Any custom passwords will be replaced.")) return;
+            await apiFetch("/vendors/reset-logins", { method: "POST" });
+            await load();
+            alert("Done — all vendors now use NAME / NAME321.");
+          }}
+          className="ml-auto rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase text-navy hover:bg-paper"
+        >
+          🔑 Reset all to default
+        </button>
+      </div>
 
       <div className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Vendor" : "Add Vendor"}</h2>
@@ -144,7 +161,10 @@ export default function VendorsPage() {
               <tr key={v.id} className={v.active ? "" : "opacity-50"}>
                 <td>{v.name}</td>
                 <td className="text-right font-mono">{v.deliveryCharge}</td>
-                <td className="font-mono text-ink-soft">{v.username || "—"}</td>
+                <td className="font-mono text-ink-soft">
+                  {v.username || "—"}
+                  {v.username && <div className="text-[10px]">default pw: {v.username}321</div>}
+                </td>
                 <td>
                   <span className={`stamp ${v.active ? "delivered" : "cancelled"}`}>{v.active ? "Active" : "Inactive"}</span>
                 </td>
