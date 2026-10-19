@@ -326,7 +326,9 @@ export async function assignByScan(
 
   const include = { vendor: { select: { name: true } }, employee: { select: { id: true, name: true } } } as const;
 
-  if (opts.vendorId) {
+  // vendorId "OWN" = the office/driver picked "our CN" after a clash with a vendor bill No.
+  const ownOnly = opts.vendorId === "OWN";
+  if (opts.vendorId && !ownOnly) {
     // Vendor bill mode: their numbers overlap with other vendors' numbers, so
     // look only inside this one vendor's orders.
     const vendor = await prisma.vendor.findUnique({ where: { id: opts.vendorId } });
@@ -360,7 +362,7 @@ export async function assignByScan(
   // (CN_REUSE_CUTOFF) is ignored, so old paper-era numbers never match.
   const booking = await prisma.booking.findUnique({ where: { cnNo } });
   const billVendors = await scanBillVendors();
-  const refHits = billVendors.length
+  const refHits = billVendors.length && !ownOnly
     ? await prisma.booking.findMany({
         where: {
           vendorRef: digits,
@@ -369,13 +371,19 @@ export async function assignByScan(
           createdAt: { gte: CN_REUSE_CUTOFF },
           ...(booking ? { id: { not: booking.id } } : {}),
         },
-        select: { cnNo: true, vendor: { select: { name: true } } },
+        select: { cnNo: true, vendorId: true, customerName: true, vendor: { select: { name: true } } },
       })
     : [];
   const ownLive = booking && booking.status !== "REJECTED" && (booking.status === "AWAITING_PICKUP" || booking.createdAt >= CN_REUSE_CUTOFF);
   if ((ownLive && refHits.length) || refHits.length > 1) {
     const names = [...(ownLive ? ["our CN"] : []), ...refHits.map((h) => `${h.vendor.name} bill`)];
-    throw new ApiError(409, `${digits} matches ${names.join(" and ")} — choose the bill type and scan again`, { code: "CHOOSE_VENDOR" });
+    // Let the scanner screen ask which one it is (no bill-type selector any more).
+    const ownVendor = ownLive ? await prisma.vendor.findUnique({ where: { id: booking!.vendorId }, select: { name: true } }) : null;
+    const choices = [
+      ...(ownLive ? [{ vendorId: "OWN", label: `Our CN ${digits} — ${ownVendor?.name ?? ""} · ${booking!.customerName}` }] : []),
+      ...refHits.map((h) => ({ vendorId: h.vendorId, label: `${h.vendor.name} bill #${digits} — ${h.customerName} (CN ${h.cnNo})` })),
+    ];
+    throw new ApiError(409, `${digits} matches ${names.join(" and ")} — which parcel is it?`, { code: "CHOOSE_VENDOR", choices });
   }
   if (!ownLive && refHits.length === 1) {
     const r = await assignByScan(String(refHits[0].cnNo), employeeId, { ...opts, vendorId: undefined });

@@ -8,9 +8,8 @@ import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
-import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
+import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
-import BillTypeSelect from "@/components/BillTypeSelect";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 
 interface Summary {
@@ -1234,7 +1233,7 @@ function StatusScanModal({
   onFound: (o: Order) => void;
   onClaim: () => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; id: number } | null>(null);
 
   function onCode(raw: string) {
     const code = raw.trim();
@@ -1248,7 +1247,7 @@ function StatusScanModal({
       onFound(o);
     } else {
       beep(false);
-      setError(`${code} is not in your list.`);
+      setError({ text: `${code} is not in your list.`, id: Date.now() });
     }
   }
 
@@ -1262,10 +1261,10 @@ function StatusScanModal({
           </button>
         </div>
         <p className="mb-3 text-sm text-ink-soft">Scan the parcel label (or type the CN). The status screen opens for that parcel.</p>
-        <BarcodeScanner onCode={onCode} autoCamera />
+        <BarcodeScanner onCode={onCode} autoCamera lastResult={error ? { ...error, tone: "bad" } : null} />
         {error && (
           <div className="mt-3 rounded border border-cancelled bg-cancelled-bg px-3 py-2 text-sm text-cancelled">
-            {error}
+            Not your parcel?
             <button onClick={onClaim} className="ml-2 font-bold underline">
               Assign it to me
             </button>
@@ -1743,13 +1742,12 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
 // orders straight away; only the office can remove or move an order afterwards.
 function ClaimModal({ onClose }: { onClose: () => void }) {
   const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date }[]>([]);
-  const [billVendorId, setBillVendorId] = useState("");
 
-  async function onCode(code: string, confirm = false): Promise<void> {
+  async function onCode(code: string, confirm = false, vendorId?: string): Promise<void> {
     try {
       const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string }>("/driver/scan-claim", {
         method: "POST",
-        body: { code, ...(billVendorId ? { vendorId: billVendorId } : {}), ...(confirm ? { confirm: true } : {}) },
+        body: { code, ...(vendorId ? { vendorId } : {}), ...(confirm ? { confirm: true } : {}) },
       });
       beep(r.result !== "ALREADY");
       setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date() }, ...prev]);
@@ -1757,12 +1755,15 @@ function ClaimModal({ onClose }: { onClose: () => void }) {
       // Matched only by the vendor's own bill No. — show what it is and ask.
       if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
         beep(true);
-        if (window.confirm(err.message)) return onCode(code, true);
+        if (window.confirm(err.message)) return onCode(code, true, vendorId);
         setLog((prev) => [{ ok: false, text: `Skipped — ${err.message}`, at: new Date() }, ...prev]);
         return;
       }
+      // Same number is our CN and a vendor bill No. — ask which one.
+      const pick = !vendorId ? pickClashChoice(err) : undefined;
+      if (pick) return onCode(code, confirm, pick);
       beep(false);
-      setLog((prev) => [{ ok: false, text: err instanceof Error ? err.message : "Failed", at: new Date() }, ...prev]);
+      setLog((prev) => [{ ok: false, text: pick === null ? `Skipped — ${code}` : err instanceof Error ? err.message : "Failed", at: new Date() }, ...prev]);
     }
   }
 
@@ -1777,8 +1778,11 @@ function ClaimModal({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mb-4 text-sm text-ink-soft">Scan each parcel&apos;s barcode. It is added to your Pending list straight away.</p>
 
-        <BillTypeSelect source="/driver/scan-vendors" value={billVendorId} onChange={setBillVendorId} />
-        <BarcodeScanner onCode={onCode} autoCamera />
+        <BarcodeScanner
+          onCode={(c) => onCode(c)}
+          autoCamera
+          lastResult={log[0] ? { text: log[0].text, tone: !log[0].ok ? "bad" : log[0].already ? "warn" : "ok", id: log[0].at.getTime() } : null}
+        />
 
         <div className="mt-4 space-y-1.5">
           {log.map((l, i) => (

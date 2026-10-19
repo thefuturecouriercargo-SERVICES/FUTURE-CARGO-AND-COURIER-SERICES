@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
-import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
-import BillTypeSelect from "@/components/BillTypeSelect";
+import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import ScanHistory from "@/components/ScanHistory";
 import { Employee } from "@/types";
 
@@ -26,7 +25,6 @@ export default function AssignPage() {
   const [drivers, setDrivers] = useState<Employee[]>([]);
   const [driverId, setDriverId] = useState("");
   const [log, setLog] = useState<ScanLog[]>([]);
-  const [billVendorId, setBillVendorId] = useState("");
 
   useEffect(() => {
     apiFetch<Employee[]>("/employees")
@@ -54,14 +52,14 @@ export default function AssignPage() {
 
   const driverName = drivers.find((d) => d.id === driverId)?.name ?? "";
 
-  async function onCode(code: string, confirm = false): Promise<void> {
+  async function onCode(code: string, confirm = false, vendorId?: string): Promise<void> {
     if (!driverId) return;
     try {
       const r = await apiFetch<{
         result: "ACCEPTED" | "REASSIGNED" | "ALREADY";
         message: string;
         order: { cnNo: number; total: number; vendor: { name: string }; booking?: { customerName: string } | null };
-      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(billVendorId ? { vendorId: billVendorId } : {}), ...(confirm ? { confirm: true } : {}) } });
+      }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(vendorId ? { vendorId } : {}), ...(confirm ? { confirm: true } : {}) } });
       beep(r.result !== "ALREADY");
       setLog((prev) => [
         {
@@ -80,13 +78,16 @@ export default function AssignPage() {
       // A match by vendor bill No., or moving a parcel from another driver: ask first.
       if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
         beep(true);
-        if (window.confirm(err.message)) return onCode(code, true);
+        if (window.confirm(err.message)) return onCode(code, true, vendorId);
         setLog((prev) => [{ at: new Date(), code, ok: false, kind: "ERROR", message: `Skipped — ${err.message}`, driver: driverName }, ...prev]);
         return;
       }
+      // Same number is our CN and a vendor bill No. — ask which one.
+      const pick = !vendorId ? pickClashChoice(err) : undefined;
+      if (pick) return onCode(code, confirm, pick);
       beep(false);
       setLog((prev) => [
-        { at: new Date(), code, ok: false, kind: "ERROR", message: err instanceof Error ? err.message : "Failed", driver: driverName },
+        { at: new Date(), code, ok: false, kind: "ERROR", message: pick === null ? `Skipped — ${code}` : err instanceof Error ? err.message : "Failed", driver: driverName },
         ...prev,
       ]);
     }
@@ -129,10 +130,12 @@ export default function AssignPage() {
         ))}
       </select>
 
-      <BillTypeSelect source="/bookings/scan-vendors" value={billVendorId} onChange={setBillVendorId} />
 
       <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">2. Scan parcels{driverName ? ` for ${driverName}` : ""}</label>
-      <BarcodeScanner onCode={onCode} disabled={!driverId} placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"} />
+      <BarcodeScanner
+        onCode={(c) => onCode(c)}
+        lastResult={log[0] ? { text: `${log[0].kind === "ERROR" ? "" : `CN ${log[0].code} · `}${log[0].message}`, tone: log[0].kind === "ERROR" ? "bad" : log[0].kind === "ACCEPTED" ? "ok" : "warn", id: log[0].at.getTime() } : null}
+        disabled={!driverId} placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"} />
 
       {log.length > 0 && (
         <>

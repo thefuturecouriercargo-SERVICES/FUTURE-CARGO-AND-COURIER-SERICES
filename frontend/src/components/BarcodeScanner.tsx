@@ -18,6 +18,30 @@ export function beep(ok = true) {
   }
 }
 
+/** Phones/tablets: don't focus the CN box by itself — that pops the keyboard over the camera. */
+export function isTouchDevice() {
+  try {
+    return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Same-number clash (our CN = a vendor's bill No.): ask which parcel it is.
+ * Returns the vendorId to scan again with ("OWN" = our CN), or null to skip.
+ */
+export function pickClashChoice(err: unknown): string | null | undefined {
+  const d = (err as { details?: { code?: string; choices?: { vendorId: string; label: string }[] } } | null)?.details;
+  if (d?.code !== "CHOOSE_VENDOR" || !d.choices?.length) return undefined;
+  const list = d.choices.map((c, i) => `${i + 1}. ${c.label}`).join("\n");
+  const ans = window.prompt(`${(err as Error).message}\n\n${list}\n\nType the number:`, "1");
+  const n = Number(ans);
+  return Number.isInteger(n) && n >= 1 && n <= d.choices.length ? d.choices[n - 1].vendorId : null;
+}
+
+export type ScanResult = { text: string; tone: "ok" | "warn" | "bad"; id: number };
+
 /**
  * Two ways to scan, both calling onCode with the barcode text:
  *  - a text box that a USB barcode scanner types into (it presses Enter after each code)
@@ -29,11 +53,14 @@ export default function BarcodeScanner({
   disabled,
   autoCamera,
   placeholder = "Scan barcode or type CN, then Enter",
+  lastResult,
 }: {
   onCode: (code: string) => Promise<void> | void;
   disabled?: boolean;
   autoCamera?: boolean;
   placeholder?: string;
+  /** Latest scan's result — flashes just above the camera so it's seen while scanning. */
+  lastResult?: ScanResult | null;
 }) {
   const [typed, setTyped] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
@@ -49,8 +76,10 @@ export default function BarcodeScanner({
   const onCodeRef = useRef(onCode);
   onCodeRef.current = onCode;
 
+  // USB scanner on a computer types into the box, so keep it focused there — but not on
+  // phones, where focusing would pop the keyboard up while the camera is scanning.
   useEffect(() => {
-    if (!disabled) inputRef.current?.focus();
+    if (!disabled && !isTouchDevice()) inputRef.current?.focus();
   }, [disabled]);
 
   useEffect(() => {
@@ -70,7 +99,7 @@ export default function BarcodeScanner({
       await onCodeRef.current(code);
     } finally {
       busyRef.current = false;
-      inputRef.current?.focus();
+      if (!isTouchDevice()) inputRef.current?.focus();
     }
   }
 
@@ -234,6 +263,23 @@ export default function BarcodeScanner({
           </button>
         )}
       </div>
+      {lastResult && (
+        <div
+          key={lastResult.id}
+          role="status"
+          className={`scan-flash mt-3 rounded border-2 px-3 py-2.5 text-center text-base font-bold ${
+            lastResult.tone === "ok"
+              ? "border-delivered bg-delivered-bg text-delivered"
+              : lastResult.tone === "warn"
+                ? "border-brass bg-paper-2 text-navy"
+                : "border-cancelled bg-cancelled-bg text-cancelled"
+          }`}
+        >
+          {lastResult.tone === "ok" ? "✓ " : lastResult.tone === "warn" ? "• " : "✕ "}
+          {lastResult.text}
+          <style>{`@keyframes scanflash{0%,40%,80%{opacity:1;transform:scale(1.02)}20%,60%{opacity:.25;transform:scale(1)}100%{opacity:1;transform:scale(1)}} .scan-flash{animation:scanflash 1.2s ease-in-out 1}`}</style>
+        </div>
+      )}
       <div className={`mt-3 overflow-hidden border border-line bg-black ${cameraOn ? "" : "hidden"}`}>
         <div className="relative">
           {/* No object-cover: the picture isn't cropped, so the guide box matches what is read. */}

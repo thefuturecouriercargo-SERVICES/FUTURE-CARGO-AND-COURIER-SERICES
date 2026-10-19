@@ -1,5 +1,7 @@
 "use client";
 
+import { isTouchDevice } from "@/components/BarcodeScanner";
+
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -166,7 +168,7 @@ export default function AwaitingPickupPage() {
       setSelected((prev) => new Set(prev).add(b.id));
       setMsg({ ok: true, text: `✓ CN ${b.cnNo} — ${b.vendor.name}, ${b.customerName} selected.` });
     }
-    scanRef.current?.focus();
+    if (!isTouchDevice()) scanRef.current?.focus();
   }
 
   async function accept() {
