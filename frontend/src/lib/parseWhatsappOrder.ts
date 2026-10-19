@@ -83,7 +83,7 @@ const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, fi
 const UNIT = String.raw`(?:pcs|pc|pieces?|pce|nos|no|numbers?|bottles?|btls?|btl|units?|packs?|pkts?|boxes|box|sets?|qty|quantity)`;
 const CUR = String.raw`(?:aed|dhs|dh|dirhams?|drhm)`;
 const SIZE_RE = /\b\d+(?:\.\d+)?\s*(?:ml|m\.l|ltr|l|g|gm|gms|grams?|kg|oz|cm|mm|inch|in)\b/gi;
-const ADDRESS_WORDS = /\b(street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp)\b/i;
+const ADDRESS_WORDS = /\b(street|st\.|road|rd|building|bldg|villa|flat|floor|room|near|tower|apartment|apt|block|plot|area|makani|behind|opposite|opp|office|shop|unit|suite|warehouse|store|house|home|gate|cluster|plaza|residence|residency|compound|mall|camp|hotel|school|hospital|clinic|masjid|mosque|signal|roundabout|parking|po\s*box)\b/i;
 
 /** "2 × Akoya (AED 80)" — the label and order details read this back with splitItems(). */
 export function fmtItem(qty: number, name: string, price?: number): string {

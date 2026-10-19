@@ -191,7 +191,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           Every item is printed: rows shrink, then split into 2 columns for big orders. */}
       {items.length > 0 && (
         <div ref={boxRef} className={`mt-1.5 flex flex-col border-2 border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font }}>
-          <div className="flex border-b-2 border-black bg-black px-1.5 py-0.5 text-white" style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>
+          {/* No background colour here: many browsers drop backgrounds when printing, which left this row blank. */}
+          <div className="flex border-b-2 border-black bg-white px-1.5 py-0.5 text-black" style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase" }}>
             <span style={{ width: fit.tick + 6 }}>✓</span>
             <span style={{ width: fit.qtyW }}>{fit.qtyW < 24 ? "#" : "Qty"}</span>
             <span className="flex-1">
@@ -208,7 +209,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
               it.header ? (
                 <div
                   key={i}
-                  className="flex items-center border-b border-black bg-gray-100 px-1.5"
+                  className="flex items-center border-b border-dashed border-black px-1.5"
                   style={{ minHeight: fit.row * 0.8, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined, fontSize: "0.8em" }}
                 >
                   <span className="min-w-0 flex-1" style={{ fontWeight: 700, fontStyle: "italic", ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
