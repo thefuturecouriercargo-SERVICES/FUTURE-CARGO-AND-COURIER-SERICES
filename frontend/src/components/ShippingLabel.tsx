@@ -45,6 +45,12 @@ function Barcode({ value, height }: { value: string; height: number }) {
   return <svg ref={ref} className="block h-auto w-full" preserveAspectRatio="none" />;
 }
 
+/** Name printed on the label when a vendor wants its brand shown differently. */
+const LABEL_VENDOR_NAMES: Record<string, string> = {
+  INSPIRED: "Inspired.market",
+};
+const labelVendorName = (name: string) => LABEL_VENDOR_NAMES[name.trim().toUpperCase()] ?? name;
+
 function dubaiDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dubai" });
 }
@@ -152,7 +158,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           <div style={{ fontSize: narrow ? 13 : 15, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
           <div style={{ fontSize: 9 }}>{dubaiDate(booking.createdAt)}</div>
           <div className="mt-0.5" style={{ fontSize: 9 }}>
-            From: <b>{booking.vendor.name}</b>
+            From: <b style={{ textTransform: "none" }}>{labelVendorName(booking.vendor.name)}</b>
           </div>
         </div>
         <div className="shrink-0 text-center" style={{ width: sq ? "48%" : "52%" }}>
