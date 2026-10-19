@@ -42,6 +42,9 @@ const EMIRATE_WORDS: [RegExp, string][] = [
 const PHONE_RE = /(?:\+?971|00971|0)?[\s-]*\(?0?(?:5[024568]|[2-79])\)?[\s-]*\d{3}[\s-]*\d{4}\b/;
 
 // Lines that carry no customer data (confirmation text, separators, headings).
+// A label with nothing after it ("Fragrance:", "Items:") — the items follow on the next lines.
+const ITEMS_HEADING = /^(?:fragrances?|perfumes?|scents?|products?|items?|order|order\s+details|your\s+order|selected\s+items?)\s*[:：\-]?$/i;
+
 const BOILERPLATE = [
   /^order\s+received/i,
   /^here\s+(are|is)\s+(your|the)\s+order/i,
@@ -55,6 +58,11 @@ const BOILERPLATE = [
   /^next\s+type/i,
   /^[-=_*~.\s]+$/,
   /^discount\b/i,
+  // Vendor's own order-template text
+  /free\s+delivery|delivery\s+(?:all\s+over|across)|cash\s+on\s+delivery\s+available/i,
+  /^\(?\s*(?:except|excluding|not\s+including)\b.*\)?$/i,
+  /kindly\s+share|please\s+share\s+(?:the|your)|share\s+the\s+following|following\s+details|(?:like|want|wish)\s+to\s+(?:place\s+an\s+)?order|place\s+(?:an|your)\s+order|fill\s+(?:in\s+)?(?:the|your)\s+details/i,
+  /^read\s+this\.?$/i,
   /^(?:shipping|billing)\s*(?:address|details|info)?\s*:?$/i,
   /^(?:payment\s*(?:method|mode)?\s*[:\-]?\s*)?(?:cod|cash\s*on\s*delivery|cash)\.?$/i,
   /^(?:ok|okay|done|confirmed|order\s+confirmed|your\s+order)\.?$/i,
@@ -212,6 +220,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   // Which (non-boilerplate) lines produced an item or a total — plain names next to them are items too.
   const itemLineIdx = new Set<number>();
   let li = -1;
+  let itemsSection = false;
   let seenItems = 0;
   let seenTotal: number | undefined;
   let seenPending: unknown = null;
@@ -247,6 +256,10 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     const isProductBullet = /^\s*(?:🔹|🔸|▪️|▫️|•|◾|➤|👉)/u.test(rawLine);
     let line = tidy(rawLine);
     if (!line) continue;
+    if (ITEMS_HEADING.test(line)) {
+      itemsSection = true;
+      continue;
+    }
     if (BOILERPLATE.some((re) => re.test(line))) continue;
     markLine();
     li++;
@@ -326,7 +339,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     }
 
     // --- Labelled fields: "Label: value", "Label - value", or "Emirate sharjha"
-    const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|loc|area|building|landmark|delivery\s*address|delivery\s*time|preferred\s*time|timing|time|emirate|city|state|items?|products?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
+    const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|loc|area|building|landmark|delivery\s*address|delivery\s*time|preferred\s*time|timing|time|emirate|city|state|items?|products?|fragrances?|perfumes?|scents?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
     if (lab) {
       const key = lab[1].toLowerCase();
       const value = lab[2].trim().replace(/,$/, "");
@@ -343,7 +356,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
         notes.push(`Time: ${value}`);
       } else if (/^(emirate|city|state)/.test(key)) {
         out.emirate = detectEmirate(value) ?? value.toUpperCase();
-      } else if (/^(item|product|order)/.test(key)) {
+      } else if (/^(item|product|order|fragrance|perfume|scent)/.test(key)) {
         const partsL = value.split(/\s*[,;]\s*/).filter(Boolean);
         const one = partsL.length === 1 ? parseItemLine(partsL[0], false) : null;
         if (one && one.price === undefined && !/\d/.test(partsL[0].replace(SIZE_RE, ""))) {
@@ -450,6 +463,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     }
 
     leftovers.push({ t: line, i: li });
+    if (itemsSection) itemLineIdx.add(li);
   }
   flushItem();
   markLine();
@@ -469,9 +483,18 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     }
   }
   const plainItems = leftovers.filter((l) => itemLineIdx.has(l.i));
+  // "ALF" above "Alf classic x2" is a heading, not a separate piece.
+  const itemNames = items.map((x) => x.replace(/^\d+\s*×\s*/, "").toLowerCase());
   // Never take every leftover as an item — the name and address must remain.
-  if (plainItems.length && plainItems.length < leftovers.length) {
-    for (const l of plainItems) items.push(fmtItem(1, l.t));
+  if (plainItems.length && (plainItems.length < leftovers.length || (out.customerName && addressParts.length))) {
+    for (const l of plainItems) {
+      const low = l.t.toLowerCase().trim();
+      const isHeading = itemNames.some((n) => n !== low && n.startsWith(low + " "));
+      if (isHeading) {
+        const at = items.findIndex((x) => x.replace(/^\d+\s*×\s*/, "").toLowerCase().startsWith(low + " "));
+        items.splice(at < 0 ? items.length : at, 0, `▸ ${l.t.trim()}`);
+      } else items.push(fmtItem(1, l.t));
+    }
     leftovers.splice(0, leftovers.length, ...leftovers.filter((l) => !itemLineIdx.has(l.i)));
   }
 
