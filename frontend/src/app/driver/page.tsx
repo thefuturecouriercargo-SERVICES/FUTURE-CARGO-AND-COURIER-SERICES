@@ -198,7 +198,6 @@ export default function DriverPortalPage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
-  const [sortOpen, setSortOpen] = useState(false);
   const [view, setViewState] = useState<"list" | "area">("list");
   useEffect(() => {
     try {
@@ -933,12 +932,6 @@ export default function DriverPortalPage() {
         📦 Assign order — scan barcode
       </button>
 
-      <button
-        onClick={() => setSortOpen(true)}
-        className="mb-4 flex w-full items-center justify-center gap-2 rounded border-2 border-navy bg-white px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-navy shadow-sm hover:bg-paper-2"
-      >
-        🗂 Sort my parcels by area — scan each
-      </button>
 
       <div className="mb-2 flex gap-1">
         {([
@@ -1093,14 +1086,6 @@ export default function DriverPortalPage() {
         />
       )}
 
-      {sortOpen && (
-        <SortScanModal
-          orders={orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER")}
-          areaOrder={areaOrder}
-          onClose={() => setSortOpen(false)}
-        />
-      )}
-
       {areaEdit && (
         <AreaPickerModal
           order={areaEdit}
@@ -1194,83 +1179,6 @@ export default function DriverPortalPage() {
   );
 }
 
-/**
- * Morning sorting: scan each parcel and the screen says which pile (area) it
- * goes in, so the driver can arrange 50 parcels by route without reading labels.
- */
-function SortScanModal({ orders, areaOrder, onClose }: { orders: Order[]; areaOrder: string[]; onClose: () => void }) {
-  const piles = useMemo(
-    () => groupByArea(orders, areaOrder).map((g) => ({ key: g.key, area: g.area, emirate: g.emirate, ids: g.orders.map((o) => o.id) })),
-    [orders, areaOrder]
-  );
-  const [sorted, setSorted] = useState<Set<string>>(new Set());
-  const [last, setLast] = useState<{ ok: boolean; pile?: number; area?: string; emirate?: string; cn?: number; text?: string } | null>(null);
-
-  function onCode(raw: string) {
-    const code = raw.trim();
-    const n = Number(code);
-    const o = orders.find((x) => x.cnNo === n) ?? orders.find((x) => x.booking?.vendorRef === code);
-    if (!o) {
-      beep(false);
-      setLast({ ok: false, text: `${code} is not in your pending parcels` });
-      return;
-    }
-    const pi = piles.findIndex((p) => p.ids.includes(o.id));
-    beep(true);
-    setSorted((prev) => new Set(prev).add(o.id));
-    setLast({ ok: true, pile: pi + 1, area: piles[pi]?.area, emirate: piles[pi]?.emirate, cn: o.cnNo });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[95vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-4 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-xl font-semibold text-navy">🗂 Sort by area</h2>
-          <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
-            ×
-          </button>
-        </div>
-        <p className="mb-2 text-sm text-ink-soft">
-          Scan each parcel — put it in the pile number shown. {sorted.size} / {orders.length} sorted.
-        </p>
-
-        {last && (
-          <div className={`mb-3 rounded p-4 text-center ${last.ok ? "bg-navy text-paper" : "bg-cancelled-bg text-cancelled"}`}>
-            {last.ok ? (
-              <>
-                <div className="font-mono text-xs uppercase tracking-widest text-brass-light">CN {last.cn} → pile</div>
-                <div className="font-display text-6xl font-bold leading-none">{last.pile}</div>
-                <div className="mt-1 text-lg font-bold">{last.area}</div>
-                <div className="font-mono text-xs uppercase">{last.emirate}</div>
-              </>
-            ) : (
-              <div className="font-bold">{last.text}</div>
-            )}
-          </div>
-        )}
-
-        <BarcodeScanner onCode={onCode} autoCamera />
-
-        <div className="mt-3 space-y-1">
-          {piles.map((p, i) => {
-            const done = p.ids.filter((id) => sorted.has(id)).length;
-            return (
-              <div key={p.key} className={`flex items-center justify-between rounded border px-3 py-1.5 text-sm ${done === p.ids.length ? "border-delivered bg-delivered-bg" : "border-line"}`}>
-                <span>
-                  <b className="mr-2 font-mono">{i + 1}</b>
-                  {p.area} <span className="text-xs text-ink-soft">· {p.emirate}</span>
-                </span>
-                <span className="font-mono text-xs">
-                  {done}/{p.ids.length}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** Driver picks (or types) the right area for a parcel; "Automatic" goes back to the guessed one. */
 function AreaPickerModal({ order, areas, onClose, onPick }: { order: Order; areas: string[]; onClose: () => void; onPick: (area: string) => void }) {
