@@ -533,7 +533,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   if (altPhones.length) notes.unshift(`Alt phone: ${altPhones.join(" / ")}`);
   if (prepaid) notes.unshift("Prepaid");
   if (notes.length) out.notes = notes.join("; ");
-  if (!out.emirate) out.emirate = emirateForOrder([out.address, raw].filter(Boolean).join(" "));
+  if (!out.emirate) out.emirate = detectEmirate([out.address, raw].filter(Boolean).join(" ")) ?? emirateOfArea(out.address ?? "");
   // No "Total" line: add up the item prices (each line's price is that line's amount).
   const itemSum = subtotal ?? (itemPrices.length ? itemPrices.reduce((a, b) => a + b, 0) : undefined);
   if (itemSum !== undefined) out.itemSum = itemSum + (deliveryFee ?? 0);
