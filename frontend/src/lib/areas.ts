@@ -374,6 +374,11 @@ export const DEFAULT_AREA_ROUTE: string[] = [
 export function detectArea(address?: string | null, emirate?: string | null): string {
   const text = (address ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "NO ADDRESS";
+  // Al Nahda exists in both Dubai and Sharjah: an emirate written in the address decides.
+  if (/\bnahda\b/i.test(text)) {
+    if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
+    if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
+  }
   const em = (emirate ?? "").toUpperCase();
   const rules = [...(BY_EMIRATE[em] ?? []), ...Object.entries(BY_EMIRATE).filter(([k]) => k !== em).flatMap(([, r]) => r)];
   for (const [re, name] of rules) if (re.test(text)) return name;
