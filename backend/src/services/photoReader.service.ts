@@ -157,11 +157,11 @@ export async function getBookingPhoto(bookingId: string, vendorId?: string) {
   return photo;
 }
 
-/** Unused uploads are dropped after 2 days, saved ones after 60 days. */
+/** Slip photos are only needed briefly: unused uploads go after 1 day, saved ones after 2 days. */
 export async function prunePhotos() {
   const day = 24 * 60 * 60 * 1000;
-  await prisma.bookingPhoto.deleteMany({ where: { bookingId: null, createdAt: { lt: new Date(Date.now() - 2 * day) } } });
-  const old = await prisma.bookingPhoto.findMany({ where: { createdAt: { lt: new Date(Date.now() - 60 * day) } }, select: { id: true, bookingId: true } });
+  await prisma.bookingPhoto.deleteMany({ where: { bookingId: null, createdAt: { lt: new Date(Date.now() - 1 * day) } } });
+  const old = await prisma.bookingPhoto.findMany({ where: { createdAt: { lt: new Date(Date.now() - 2 * day) } }, select: { id: true, bookingId: true } });
   if (old.length) {
     await prisma.booking.updateMany({ where: { id: { in: old.map((o) => o.bookingId).filter(Boolean) as string[] } }, data: { hasPhoto: false } });
     await prisma.bookingPhoto.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
@@ -171,5 +171,5 @@ export async function prunePhotos() {
 export function startPhotoPruneScheduler() {
   const run = () => prunePhotos().catch((err) => console.error("[photos] prune failed:", err));
   setTimeout(run, 60 * 1000);
-  setInterval(run, 6 * 60 * 60 * 1000);
+  setInterval(run, 60 * 60 * 1000);
 }
