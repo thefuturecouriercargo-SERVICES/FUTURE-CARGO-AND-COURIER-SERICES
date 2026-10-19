@@ -90,7 +90,7 @@ export const phoneDigits = (p: string) => p.replace(/\D/g, "").replace(/^(?:00)?
 async function assertBillNotRepeated(vendorId: string, input: BookingInput, ignoreBookingId?: string) {
   const bill = input.billNo?.trim();
   if (!bill) return;
-  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const since = new Date(Math.max(Date.now() - 60 * 24 * 60 * 60 * 1000, CN_REUSE_CUTOFF.getTime()));
   const same = await prisma.booking.findMany({
     where: {
       vendorId,
@@ -116,7 +116,7 @@ async function assertBillNotRepeated(vendorId: string, input: BookingInput, igno
 
 async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, ignoreBookingId?: string) {
   if (input.confirmDuplicate) return;
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const since = new Date(Math.max(Date.now() - 24 * 60 * 60 * 1000, CN_REUSE_CUTOFF.getTime()));
   const recent = await prisma.booking.findMany({
     where: {
       vendorId,
@@ -145,7 +145,7 @@ async function assertNotLikelyDuplicate(vendorId: string, input: BookingInput, i
  * website order No. is used as CN (owner's instruction: old hand-typed numbers
  * don't block website numbers). Railway variable CN_REUSE_CUTOFF can move it.
  */
-export const CN_REUSE_CUTOFF = new Date(process.env.CN_REUSE_CUTOFF || "2026-10-16T00:00:00+04:00");
+export const CN_REUSE_CUTOFF = new Date(process.env.CN_REUSE_CUTOFF || "2026-10-19T00:00:00+04:00");
 const recentOrders = { createdAt: { gte: CN_REUSE_CUTOFF } };
 
 export async function isCnFree(cnNo: number) {
@@ -332,7 +332,7 @@ export async function assignByScan(
     const vendor = await prisma.vendor.findUnique({ where: { id: opts.vendorId } });
     if (!vendor) throw new ApiError(404, "Vendor not found");
     const byRef = await prisma.booking.findFirst({
-      where: { vendorId: vendor.id, vendorRef: digits, status: { not: "REJECTED" } },
+      where: { vendorId: vendor.id, vendorRef: digits, status: { not: "REJECTED" }, createdAt: { gte: CN_REUSE_CUTOFF } },
       orderBy: { createdAt: "desc" },
     });
     if (!byRef && !opts.retried) {
@@ -355,8 +355,32 @@ export async function assignByScan(
     return { ...r, message: `${vendor.name} #${digits} · ${byRef.customerName} → ${r.message}` };
   }
 
-  // Our CN. Vendors' own bill/order numbers are only read in vendor bill mode above.
+  // Auto mode: the number may be our CN or an Inspired / Escalo bill No. — no need
+  // to pick the bill type first. Anything entered before the fresh start
+  // (CN_REUSE_CUTOFF) is ignored, so old paper-era numbers never match.
   const booking = await prisma.booking.findUnique({ where: { cnNo } });
+  const billVendors = await scanBillVendors();
+  const refHits = billVendors.length
+    ? await prisma.booking.findMany({
+        where: {
+          vendorRef: digits,
+          vendorId: { in: billVendors.map((v) => v.id) },
+          status: { not: "REJECTED" },
+          createdAt: { gte: CN_REUSE_CUTOFF },
+          ...(booking ? { id: { not: booking.id } } : {}),
+        },
+        select: { cnNo: true, vendor: { select: { name: true } } },
+      })
+    : [];
+  const ownLive = booking && booking.status !== "REJECTED" && (booking.status === "AWAITING_PICKUP" || booking.createdAt >= CN_REUSE_CUTOFF);
+  if ((ownLive && refHits.length) || refHits.length > 1) {
+    const names = [...(ownLive ? ["our CN"] : []), ...refHits.map((h) => `${h.vendor.name} bill`)];
+    throw new ApiError(409, `${digits} matches ${names.join(" and ")} — choose the bill type and scan again`, { code: "CHOOSE_VENDOR" });
+  }
+  if (!ownLive && refHits.length === 1) {
+    const r = await assignByScan(String(refHits[0].cnNo), employeeId, { ...opts, vendorId: undefined });
+    return { ...r, message: `${refHits[0].vendor.name} #${digits} → ${r.message}` };
+  }
 
   if (booking?.status === "AWAITING_PICKUP") {
     const created = await acceptBooking(booking.id, { employeeId });
@@ -365,8 +389,27 @@ export async function assignByScan(
   }
   if (booking?.status === "REJECTED") throw new ApiError(400, `CN ${cnNo} was rejected by the office`);
 
-  const order = await prisma.order.findFirst({ where: { cnNo }, include, orderBy: [{ date: "desc" }, { createdAt: "desc" }] });
+  const order = await prisma.order.findFirst({
+    where: { cnNo, createdAt: { gte: CN_REUSE_CUTOFF } },
+    include,
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+  });
   if (!order) {
+    // Maybe a website order placed minutes ago that hasn't synced yet.
+    if (!opts.retried && billVendors.length && digits.length <= 8) {
+      const { importWooOrderByNumber, wooConnForVendor } = await import("./inspiredWoo.service");
+      let imported = 0;
+      for (const v of billVendors) {
+        const conn = await wooConnForVendor(v.id);
+        if (!conn) continue;
+        try {
+          if (await importWooOrderByNumber(conn, digits)) imported++;
+        } catch {
+          /* not on that website */
+        }
+      }
+      if (imported) return assignByScan(code, employeeId, { ...opts, retried: true });
+    }
     throw new ApiError(404, `${code} is not one of our barcodes — no consignment or vendor order with this number. Enter this parcel in Daily Entry.`);
   }
 

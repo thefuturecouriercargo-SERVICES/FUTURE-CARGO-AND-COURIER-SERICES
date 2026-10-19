@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
-const KEY = "scanBillType";
+const KEY = "scanBillType2";
 
 /**
- * "Which barcode is on the parcel?" — our CN/label, or a specific vendor's own
- * printed bill. Vendor numbers are only matched inside the vendor chosen here.
+ * "Which barcode is on the parcel?" — Auto (default) recognises our CN and the
+ * Inspired / Escalo bills by itself; a vendor button forces that vendor's bill
+ * (only needed when one number matches two vendors).
  */
 export default function BillTypeSelect({
   source,
@@ -48,7 +49,7 @@ export default function BillTypeSelect({
     <div className="mb-3">
       <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Barcode on the parcel</label>
       <div className="flex flex-wrap gap-2">
-        {[{ id: "", name: "Our CN / label" }, ...vendors.map((v) => ({ id: v.id, name: `${v.name} bill` }))].map((o) => (
+        {[{ id: "", name: "Auto (any barcode)" }, ...vendors.map((v) => ({ id: v.id, name: `${v.name} bill` }))].map((o) => (
           <button
             key={o.id || "own"}
             type="button"
