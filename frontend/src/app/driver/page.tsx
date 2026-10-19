@@ -9,7 +9,7 @@ import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
 import BarcodeScanner, { beep } from "@/components/BarcodeScanner";
-import { detectArea } from "@/lib/areas";
+import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import BillTypeSelect from "@/components/BillTypeSelect";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 
@@ -156,7 +156,9 @@ function groupByArea(list: Order[], savedOrder: string[]): AreaGroup[] {
   }
   const rank = (k: string) => {
     const i = savedOrder.indexOf(k);
-    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+    if (i >= 0) return i;
+    const d = DEFAULT_AREA_ROUTE.indexOf(k);
+    return d >= 0 ? savedOrder.length + d : Number.MAX_SAFE_INTEGER;
   };
   return Array.from(map.values()).sort(
     (a, b) => rank(a.key) - rank(b.key) || a.emirate.localeCompare(b.emirate) || b.orders.length - a.orders.length || a.area.localeCompare(b.area)

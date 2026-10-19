@@ -62,7 +62,7 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?mizhar\b/i, "AL MIZHAR"],
   [/\b(?:al[\s\-]*)?khawaneej\b|\bkhawanij\b/i, "AL KHAWANEEJ"],
   [/\bawir\b/i, "AL AWIR"],
-  [/\bmuhaisnah?\b|\bmuhaisina\b|\bmuhaisnah[\s\-']*\d\b|\bsonapur\b/i, "MUHAISNAH"],
+  [/\bmuhaisnah?\b|\bmuhsina\b|\bmuhaisna\b|\bmhaisna\b|\bmuhaisanah\b|\bmuhaisinah\b|\bmuhaisina\b|\bmuhaisnah[\s\-']*\d\b|\bsonapur\b/i, "MUHAISNAH"],
   [/\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)/i, "AL QUSAIS"],
   [/\bal[\s\-]*twar\b|\btawar\b/i, "AL TWAR"],
   [/\b(?:al[\s\-]*)?nahda\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
@@ -70,12 +70,18 @@ const DUBAI: AreaRule[] = [
   [/\bgarhoud\b|\bgarhood\b|\bairport[\s\-']*terminal\b|\bdubai[\s\-']*airport\b|\bdxb[\s\-']*airport\b/i, "AL GARHOUD"],
   [/\b(?:al[\s\-]*)?mamzar\b/i, "AL MAMZAR"],
   [/\b(?:al[\s\-]*)?waheda\b|\bwuhaida\b/i, "AL WAHEDA"],
-  [/\bhor[\s\-']*al[\s\-']*anz\b|\bhor[\s\-']*alanz\b/i, "HOR AL ANZ"],
-  [/\babu[\s\-']*hail\b/i, "ABU HAIL"],
-  [/\bdeira\b|\b(?:al[\s\-]*)?muraqqabat\b|\bmuraqabat\b|\b(?:al[\s\-]*)?rigga\b|\briqqa\b|\bnaif\b|\bal[\s\-]*ras\b|\bport[\s\-']*saeed\b|\b(?:al[\s\-]*)?muteena\b|\b(?:al[\s\-]*)?baraha\b|\b(?:al[\s\-]*)?murar\b|\b(?:al[\s\-]*)?khabaisi\b|\b(?:al[\s\-]*)?sabkha[\s\-']*deira\b|\bgold[\s\-']*souk\b|\bdeira[\s\-']*city[\s\-']*cent(re|er)\b|\b(?:al[\s\-]*)?ghurair\b|\bunion[\s\-']*metro\b|\bsalah[\s\-']*al[\s\-']*din\b|\bal[\s\-']*maktoum[\s\-']*road\b|\bbaniyas[\s\-']*square\b/i, "DEIRA"],
+  [/\bhor[\s\-']*al[\s\-']*anz\b|\bhor[\s\-']*alanz\b|\bhorlanz\b|\bhoralanz\b|\bhor[\s\-']*al[\s\-']*ans\b|\bhor[\s\-']*el[\s\-']*anz\b/i, "HOR AL ANZ"],
+  [/\babu[\s\-']*hail\b|\babuhail\b|\babu[\s\-']*hael\b/i, "ABU HAIL"],
+  [/\b(?:al[\s\-]*)?rigga\b|\briqqa\b|\bal[\s\-']*riqqa\b|\brigga[\s\-']*road\b/i, "RIGGA"],
+  [/\b(?:al[\s\-]*)?baraha\b/i, "AL BARAHA"],
+  [/\b(?:al[\s\-]*)?murar\b|\bfrij[\s\-']*murar\b|\bfirj[\s\-']*murar\b|\bfereej[\s\-']*murar\b|\bfareej[\s\-']*murar\b|\bfreej[\s\-']*murar\b|\bmurar\b/i, "FRIJ MURAR"],
+  [/\bnaif\b|\bnayef\b|\bnayif\b|\bnaif[\s\-']*road\b/i, "NAIF"],
+  [/\bgold[\s\-']*souk\b|\bgold[\s\-']*souq\b|\bgold[\s\-']*market\b/i, "GOLD SOUK"],
+  [/\bdeira\b|\b(?:al[\s\-]*)?muraqqabat\b|\bmuraqabat\b|\bal[\s\-]*ras\b|\bport[\s\-']*saeed\b|\b(?:al[\s\-]*)?muteena\b|\b(?:al[\s\-]*)?khabaisi\b|\b(?:al[\s\-]*)?sabkha[\s\-']*deira\b|\bdeira[\s\-']*city[\s\-']*cent(re|er)\b|\b(?:al[\s\-]*)?ghurair\b|\bunion[\s\-']*metro\b|\bsalah[\s\-']*al[\s\-']*din\b|\bal[\s\-']*maktoum[\s\-']*road\b|\bbaniyas[\s\-']*square\b/i, "DEIRA"],
   [/\b(?:al[\s\-]*)?karama\b|\bkaramah\b/i, "KARAMA"],
   [/\boud[\s\-']*metha\b|\bud[\s\-']*metha\b/i, "OUD METHA"],
-  [/\bmank?hool\b|\b(?:al[\s\-]*)?raffa\b|\bmeena[\s\-']*bazaa?r\b|\bbur[\s\-']*dubai\b|\b(?:al[\s\-]*)?fahidi\b|\bal[\s\-]*souk[\s\-']*al[\s\-']*kabeer\b|\bal[\s\-']*hamriya[\s\-']*bur[\s\-']*dubai\b|\bburjuman\b|\b(?:al[\s\-]*)?hudaiba\b|\bumm[\s\-']*hurair\b/i, "BUR DUBAI"],
+  [/\bmank?hool\b|\bmankool\b|\bmankhul\b|\bmankul\b/i, "MANKHOOL"],
+  [/\b(?:al[\s\-]*)?raffa\b|\bmeena[\s\-']*bazaa?r\b|\bbur[\s\-']*dubai\b|\b(?:al[\s\-]*)?fahidi\b|\bal[\s\-]*souk[\s\-']*al[\s\-']*kabeer\b|\bal[\s\-']*hamriya[\s\-']*bur[\s\-']*dubai\b|\bburjuman\b|\b(?:al[\s\-]*)?hudaiba\b|\bumm[\s\-']*hurair\b/i, "BUR DUBAI"],
   [/\bhealthcare[\s\-']*city\b|\bdhcc\b/i, "DUBAI HEALTHCARE CITY"],
   [/\b(?:al[\s\-]*)?jaddaf\b|\bculture[\s\-']*village\b/i, "AL JADDAF"],
   [/\b(?:al[\s\-]*)?satwa\b/i, "SATWA"],
@@ -339,6 +345,30 @@ const BY_EMIRATE: Record<string, AreaRule[]> = {
   "UMM AL QUWAIN": UAQ,
   "FUJAIRAH": FUJAIRAH,
 };
+
+/**
+ * Default driving order for "By area" (office's route, Deira side → Bur Dubai side).
+ * A driver's own saved order (drag ▲▼ on the driver page) still comes first.
+ */
+export const DEFAULT_AREA_ROUTE: string[] = [
+  "DUBAI|MUHAISNAH",
+  "DUBAI|AL QUSAIS",
+  "DUBAI|AL NAHDA (DXB)",
+  "DUBAI|AL GARHOUD",
+  "DUBAI|AL MAMZAR",
+  "DUBAI|HOR AL ANZ",
+  "DUBAI|ABU HAIL",
+  "DUBAI|RIGGA",
+  "DUBAI|AL BARAHA",
+  "DUBAI|FRIJ MURAR",
+  "DUBAI|NAIF",
+  "DUBAI|DEIRA",
+  "DUBAI|GOLD SOUK",
+  "DUBAI|BUR DUBAI",
+  "DUBAI|KARAMA",
+  "DUBAI|MANKHOOL",
+  "DUBAI|OUD METHA",
+];
 
 /** Best-guess area name, or the first part of the address when no known area matches. */
 export function detectArea(address?: string | null, emirate?: string | null): string {
