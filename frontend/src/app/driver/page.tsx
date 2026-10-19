@@ -144,8 +144,9 @@ const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate)
 
 type AreaGroup = { key: string; area: string; emirate: string; orders: Order[] };
 
-/** Group parcels by emirate + area; the driver's saved route order wins, then biggest area first. */
-function groupByArea(list: Order[], savedOrder: string[]): AreaGroup[] {
+/** Group parcels by emirate + area; the driver's saved route order wins, then biggest area first.
+ *  Inside an area, parcels follow the driver's dragged order (parcelOrder), new ones at the end. */
+function groupByArea(list: Order[], savedOrder: string[], parcelOrder: string[] = []): AreaGroup[] {
   const map = new Map<string, AreaGroup>();
   for (const o of list) {
     const area = areaOf(o);
@@ -160,6 +161,11 @@ function groupByArea(list: Order[], savedOrder: string[]): AreaGroup[] {
     const d = DEFAULT_AREA_ROUTE.indexOf(k);
     return d >= 0 ? savedOrder.length + d : Number.MAX_SAFE_INTEGER;
   };
+  const pRank = (id: string) => {
+    const i = parcelOrder.indexOf(id);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  for (const g of map.values()) g.orders = g.orders.map((o, i) => ({ o, i })).sort((a, b) => pRank(a.o.id) - pRank(b.o.id) || a.i - b.i).map((x) => x.o);
   return Array.from(map.values()).sort(
     (a, b) => rank(a.key) - rank(b.key) || a.emirate.localeCompare(b.emirate) || b.orders.length - a.orders.length || a.area.localeCompare(b.area)
   );
@@ -459,7 +465,64 @@ export default function DriverPortalPage() {
       /* ignore */
     }
   }, []);
-  const areaGroups = useMemo(() => groupByArea(filtered, areaOrder), [filtered, areaOrder]);
+  // Driver's own delivery order of parcels inside each area (drag ⠿ to change, saved on this phone).
+  const [parcelOrder, setParcelOrder] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setParcelOrder(JSON.parse(localStorage.getItem("driverParcelOrder") || "[]"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const areaGroups = useMemo(() => groupByArea(filtered, areaOrder, parcelOrder), [filtered, areaOrder, parcelOrder]);
+  const dragRef = useRef<{ id: string; group: string; ids: string[]; y: number } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  function saveParcelOrder(ids: string[]) {
+    // Keep only parcels the driver still has, so the list doesn't grow forever.
+    const live = new Set(orders.map((o) => o.id));
+    const next = ids.filter((id) => live.has(id));
+    try {
+      localStorage.setItem("driverParcelOrder", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function startDrag(e: React.PointerEvent, g: AreaGroup, id: string) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { id, group: g.key, ids: g.orders.map((o) => o.id), y: e.clientY };
+    setDraggingId(id);
+  }
+  function moveDrag(e: React.PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    // Auto-scroll near the top/bottom edge of the screen.
+    if (e.clientY < 80) window.scrollBy(0, -12);
+    else if (e.clientY > window.innerHeight - 80) window.scrollBy(0, 12);
+    const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-drag-group]");
+    if (!hit || hit.dataset.dragGroup !== d.group || hit.dataset.id === d.id) return;
+    const r = hit.getBoundingClientRect();
+    const target = hit.dataset.id!;
+    const ids = d.ids.filter((x) => x !== d.id);
+    let at = ids.indexOf(target);
+    if (e.clientY > r.top + r.height / 2) at += 1;
+    ids.splice(at, 0, d.id);
+    if (ids.join() === d.ids.join()) return;
+    d.ids = ids;
+    // Put this area's new order in front; other areas keep theirs.
+    setParcelOrder((prev) => [...ids, ...prev.filter((x) => !ids.includes(x))]);
+  }
+  function endDrag() {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDraggingId(null);
+    setParcelOrder((prev) => {
+      saveParcelOrder(prev);
+      return prev;
+    });
+  }
   const [areaEdit, setAreaEdit] = useState<Order | null>(null);
 
   /** Move an area up/down in the driver's route order (saved on this phone). */
@@ -955,7 +1018,30 @@ export default function DriverPortalPage() {
                       </button>
                     </span>
                   </div>
-                  {g.orders.map((o) => renderCard(o))}
+                  {g.orders.map((o, oi) => (
+                    <div
+                      key={o.id}
+                      data-drag-group={g.key}
+                      data-id={o.id}
+                      className={`flex items-stretch gap-1.5 transition-shadow ${draggingId === o.id ? "relative z-20 scale-[1.01] opacity-90 shadow-xl ring-2 ring-brass" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        onPointerDown={(e) => startDrag(e, g, o.id)}
+                        onPointerMove={moveDrag}
+                        onPointerUp={endDrag}
+                        onPointerCancel={endDrag}
+                        style={{ touchAction: "none" }}
+                        className="flex w-8 shrink-0 cursor-grab select-none flex-col items-center justify-center gap-1 rounded border border-line bg-paper-2 text-ink-soft active:cursor-grabbing active:bg-brass/20"
+                        title="Hold and drag to change delivery order"
+                        aria-label={`Drag to reorder, position ${oi + 1}`}
+                      >
+                        <span className="font-mono text-[11px] font-bold text-navy">{oi + 1}</span>
+                        <span className="text-lg leading-none">⠿</span>
+                      </button>
+                      <div className="min-w-0 flex-1">{renderCard(o)}</div>
+                    </div>
+                  ))}
                 </div>
               ))
             : filtered.map((o) => renderCard(o))}
