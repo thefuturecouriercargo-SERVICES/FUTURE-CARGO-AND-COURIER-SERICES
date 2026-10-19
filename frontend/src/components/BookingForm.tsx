@@ -39,9 +39,21 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (p.codAmount !== undefined) { next.codAmount = String(p.codAmount); filled.push("amount"); }
     if (p.notes) { next.notes = p.notes; filled.push("notes"); }
     setForm(next);
+    const missing = [
+      !p.customerName && "name",
+      !p.customerPhone && "phone",
+      !p.address && "address",
+      !(p.emirate && EMIRATES.includes(p.emirate)) && "emirate",
+      !p.items && "items",
+      p.codAmount === undefined && "amount",
+    ].filter(Boolean);
+    const warn: string[] = [];
+    if (missing.length && filled.length) warn.push(`⚠ Not found: ${missing.join(", ")} — please type ${missing.length > 1 ? "them" : "it"}.`);
+    if (p.codAmount && p.itemSum !== undefined && p.itemSum !== p.codAmount) warn.push(`⚠ Item prices add up to AED ${p.itemSum} but the total says AED ${p.codAmount} — check the amount.`);
+    if (p.notes?.startsWith("Prepaid")) warn.push("ℹ Message says paid — amount set to 0.");
     setPasteMsg(
       filled.length
-        ? `Filled ${filled.join(", ")}. Please check every field before saving.`
+        ? [`✓ Filled ${filled.join(", ")}. Please check every field before saving.`, ...warn].join("\n")
         : "Couldn't recognise anything — please type the details in."
     );
   }
@@ -140,7 +152,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
             >
               ⤵ Fill form from message
             </button>
-            {pasteMsg && <span className="text-xs text-ink-soft">{pasteMsg}</span>}
+            {pasteMsg && <span className={`whitespace-pre-line text-xs ${pasteMsg.includes("⚠") ? "font-semibold text-cancelled" : "text-ink-soft"}`}>{pasteMsg}</span>}
           </div>
         </div>
       )}

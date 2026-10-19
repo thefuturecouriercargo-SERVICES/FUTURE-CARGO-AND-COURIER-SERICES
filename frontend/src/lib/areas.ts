@@ -173,6 +173,17 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   return named ? canonical(named) : "OTHER AREA";
 }
 
+/** Emirate of the first known area named in the text (e.g. "JVT" → DUBAI). */
+export function emirateOfArea(text: string): string | undefined {
+  for (const [em, rules] of Object.entries(BY_EMIRATE)) if (rules.some(([re]) => re.test(text))) return em;
+  return undefined;
+}
+
+/** True when the text names a known area (any emirate). */
+export function isKnownArea(text: string): boolean {
+  return Object.values(BY_EMIRATE).some((rules) => rules.some(([re]) => re.test(text)));
+}
+
 /**
  * Same unknown area written differently ("Al Musalla", "Sharjah Musallah",
  * "musalla") → one name: drop emirate words, a leading "Al", and a trailing "h".
