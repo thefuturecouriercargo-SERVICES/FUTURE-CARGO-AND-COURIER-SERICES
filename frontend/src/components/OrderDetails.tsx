@@ -1,5 +1,44 @@
+"use client";
+
 import { OrderBookingDetails } from "@/types";
+import { useState } from "react";
 import { fmtNumber } from "@/lib/format";
+
+/** Small "📋 Copy" — copies all the parcel details as plain text (to paste in WhatsApp etc.). */
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Older phones / non-https: fall back to a hidden textarea.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      ta.remove();
+    }
+    setDone(true);
+    setTimeout(() => setDone(false), 1500);
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy all details"
+      className={`shrink-0 rounded border px-2 py-0.5 font-mono text-[10px] font-bold uppercase ${done ? "border-delivered bg-delivered-bg text-delivered" : "border-line bg-white text-ink-soft hover:border-navy"}`}
+    >
+      {done ? "✓ Copied" : "📋 Copy"}
+    </button>
+  );
+}
 
 /** Digits only, with a UAE 05x number turned into 9715x for WhatsApp links. */
 function waNumber(phone: string) {
@@ -41,14 +80,27 @@ export default function OrderDetails({
   const waText = encodeURIComponent(
     `Hello ${booking.customerName}, this is Future Courier about your ${vendorName ? `${vendorName} ` : ""}order (CN ${cnNo}).`
   );
+  const cod = total ?? booking.codAmount;
+  const copyText = [
+    `CN ${cnNo}${vendorName ? ` — ${vendorName}` : ""}`,
+    `Customer: ${booking.customerName}`,
+    `Phone: ${booking.customerPhone}`,
+    `Address: ${booking.address}${booking.emirate && !booking.address.toLowerCase().includes(booking.emirate.toLowerCase()) ? `, ${booking.emirate}` : ""}`,
+    booking.items ? `Items: ${booking.items}` : "",
+    booking.notes ? `Note: ${booking.notes}` : "",
+    cod === 0 ? "PREPAID — do not collect cash" : `COD: AED ${fmtNumber(cod)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
   const row = "flex gap-2";
   const label = "w-20 shrink-0 font-mono text-[10px] uppercase leading-5 text-ink-soft";
 
   return (
     <div className={`space-y-1.5 text-sm ${compact ? "" : "max-w-xl"}`}>
-      <div className={row}>
+      <div className={`${row} items-start`}>
         <span className={label}>Customer</span>
-        <b>{booking.customerName}</b>
+        <b className="flex-1">{booking.customerName}</b>
+        <CopyButton text={copyText} />
       </div>
       <div className={row}>
         <span className={label}>Phone</span>

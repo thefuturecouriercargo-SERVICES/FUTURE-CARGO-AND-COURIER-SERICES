@@ -138,6 +138,11 @@ function customerWaLink(o: Order) {
   return `https://wa.me/${waNumber(b.customerPhone)}?text=${encodeURIComponent(text)}`;
 }
 
+/** Notes like "urgent", "deliver tomorrow must", "ASAP", "before 5pm" — the card turns red. */
+const URGENT_RE =
+  /\b(urgent\w*|asap|emergency|immediate(ly)?|priority|important|vip|today\s*itself|same\s*day|must|tomorrow|tmrw|tmw|before\s*\d{1,2}\s*(am|pm|:)?|by\s*\d{1,2}\s*(am|pm))\b|ضروري|عاجل/i;
+const isUrgent = (o: Order) => (o.status === "PENDING" || o.status === "TRANSFER") && URGENT_RE.test(o.booking?.notes ?? "");
+
 /** Area of a parcel: driver's choice first, otherwise guessed from the address. */
 const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
 
@@ -192,6 +197,10 @@ export default function DriverPortalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
+  // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
+  const [areaFilter, setAreaFilter] = useState("");
+  const [areaTyped, setAreaTyped] = useState("");
+  const [areaSuggestOpen, setAreaSuggestOpen] = useState(false);
   const [transferOrder, setTransferOrder] = useState<Order | null>(null);
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
@@ -450,9 +459,10 @@ export default function DriverPortalPage() {
     return orders.filter((o) => {
       if (statusTab !== "ALL" && o.status !== statusTab) return false;
       if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
+      if (areaFilter && areaOf(o) !== areaFilter) return false;
       return true;
     });
-  }, [orders, statusTab, search]);
+  }, [orders, statusTab, search, areaFilter]);
 
   // Area view: group the driver's parcels by emirate + area (from the address), biggest area first.
   const [areaOrder, setAreaOrder] = useState<string[]>([]);
@@ -549,11 +559,19 @@ export default function DriverPortalPage() {
   }
 
   const renderCard = (o: Order) => (
-            <div key={o.id} className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-line border-l-4 bg-white p-4 ${statusBorderClass(o.status)}`}>
+            <div
+              key={o.id}
+              className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-l-4 p-4 ${
+                isUrgent(o) ? "border-cancelled bg-cancelled-bg ring-2 ring-cancelled" : `border-line bg-white ${statusBorderClass(o.status)}`
+              }`}
+            >
               <div>
                 <div className="font-mono text-[15px] font-bold text-navy">
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
+                {isUrgent(o) && (
+                  <div className="mt-1 rounded bg-cancelled px-2 py-1 text-sm font-bold text-white">🚨 URGENT — {o.booking?.notes}</div>
+                )}
                 {isPrepaid(o) && <PrepaidBadge large />}
                 {o.booking && (
                   <div className="mt-1 text-sm">
@@ -946,6 +964,69 @@ export default function DriverPortalPage() {
           </button>
         ))}
       </div>
+      {view === "area" && (
+        <div className="relative mb-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={areaFilter || areaTyped}
+              onChange={(e) => {
+                setAreaFilter("");
+                setAreaTyped(e.target.value);
+                setAreaSuggestOpen(true);
+              }}
+              onFocus={() => setAreaSuggestOpen(true)}
+              placeholder="🔎 Search area… (tap a suggestion)"
+              className={`w-full rounded border-2 px-3 py-2 text-sm uppercase ${areaFilter ? "border-navy bg-navy/5 font-bold text-navy" : "border-line"}`}
+            />
+            {(areaFilter || areaTyped) && (
+              <button
+                onClick={() => {
+                  setAreaFilter("");
+                  setAreaTyped("");
+                  setAreaSuggestOpen(false);
+                }}
+                className="shrink-0 rounded border border-line bg-white px-3 py-2 text-sm text-ink-soft"
+              >
+                ✕ All areas
+              </button>
+            )}
+          </div>
+          {areaSuggestOpen && !areaFilter && (() => {
+            const counts = new Map<string, number>();
+            for (const o of orders) if (statusTab === "ALL" || o.status === statusTab) counts.set(areaOf(o), (counts.get(areaOf(o)) ?? 0) + 1);
+            const t = areaTyped.trim().toUpperCase().replace(/^AL\s+/, "");
+            const list = Array.from(counts.entries())
+              .filter(([a]) => !t || a.toUpperCase().includes(t))
+              .sort((x, y) => (t && x[0].startsWith(t) ? -1 : 0) - (t && y[0].startsWith(t) ? -1 : 0) || x[0].localeCompare(y[0]));
+            return (
+              <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded border border-line bg-white p-2 shadow-lg">
+                {list.length === 0 ? (
+                  <p className="px-1 py-1 text-sm text-ink-soft">No parcels in an area like “{areaTyped}”.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {list.map(([a, n]) => (
+                      <button
+                        key={a}
+                        onClick={() => {
+                          setAreaFilter(a);
+                          setAreaTyped("");
+                          setAreaSuggestOpen(false);
+                        }}
+                        className="rounded-full border border-navy/30 bg-paper px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
+                      >
+                        📍 {a} <span className="text-ink-soft">({n})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => setAreaSuggestOpen(false)} className="mt-2 w-full text-center text-xs text-ink-soft underline">
+                  Close
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
