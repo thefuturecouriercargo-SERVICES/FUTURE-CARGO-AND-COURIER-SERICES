@@ -942,6 +942,13 @@ export default function DriverPortalPage() {
         </span>
       </div>
 
+      <button
+        onClick={() => setStatusScanOpen(true)}
+        className="mb-3 flex w-full items-center justify-center gap-2 rounded bg-brass px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-white shadow hover:opacity-90"
+      >
+        📷 Scan to deliver
+      </button>
+
       <div className="mb-3 grid grid-cols-3 gap-1 rounded border border-line bg-white p-1">
         {([
           ["OPEN", "To deliver"],
