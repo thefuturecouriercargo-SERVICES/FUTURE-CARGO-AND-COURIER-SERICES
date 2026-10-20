@@ -12,6 +12,7 @@
  */
 
 import { emirateOfArea, isKnownArea } from "./areas";
+import { isKnownProduct } from "./products";
 
 export interface ParsedOrder {
   customerName?: string;
@@ -225,7 +226,9 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   let seenItems = 0;
   let seenTotal: number | undefined;
   let seenPending: unknown = null;
+  const itemLi: number[] = []; // line each item came from, to keep the message's order
   const markLine = () => {
+    while (itemLi.length < items.length) itemLi.push(Math.max(li, 0));
     if (li >= 0 && (items.length !== seenItems || totalFromLabel !== seenTotal || (pendingItem && pendingItem !== seenPending))) itemLineIdx.add(li);
     seenItems = items.length;
     seenTotal = totalFromLabel;
@@ -494,6 +497,10 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   // total lines; address lines don't. Walk outwards from the known item lines.
   const isPlainName = (t: string) =>
     t.length <= 40 && !/\d/.test(t) && t.split(/\s+/).length <= 5 && !ADDRESS_WORDS.test(t) && !detectEmirate(t) && !isKnownArea(t) && !/[,;:]/.test(t);
+  // A line that is exactly one of the vendors' product names ("Alf", "Royal Skin") is an item.
+  // (The very first line with no "Name:" label is still the customer's name — someone can be called "Rooh".)
+  const nameFirst = !out.customerName && leftovers[0]?.i === 0 ? leftovers[0] : null;
+  for (const l of leftovers) if (l !== nameFirst && isKnownProduct(l.t)) itemLineIdx.add(l.i);
   for (let changed = true; changed; ) {
     changed = false;
     for (const l of leftovers) {
@@ -511,11 +518,16 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   if (plainItems.length && (plainItems.length < leftovers.length || (out.customerName && addressParts.length))) {
     for (const l of plainItems) {
       const low = l.t.toLowerCase().trim();
-      const isHeading = itemNames.some((n) => n !== low && n.startsWith(low + " "));
+      // …unless it is itself a product ("ALF" and "ALF CLASSIC" are both sold).
+      const isHeading = !isKnownProduct(l.t) && itemNames.some((n) => n !== low && n.startsWith(low + " "));
       if (isHeading) {
         const at = items.findIndex((x) => x.replace(/^\d+\s*×\s*/, "").toLowerCase().startsWith(low + " "));
         items.splice(at < 0 ? items.length : at, 0, `▸ ${l.t.trim()}`);
-      } else items.push(fmtItem(1, l.t));
+        itemLi.splice(at < 0 ? itemLi.length : at, 0, l.i);
+      } else {
+        items.push(fmtItem(1, l.t));
+        itemLi.push(l.i);
+      }
     }
     leftovers.splice(0, leftovers.length, ...leftovers.filter((l) => !itemLineIdx.has(l.i)));
   }
@@ -529,7 +541,10 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   addressParts.push(...leftovers.map((l) => l.t));
 
   if (addressParts.length) out.address = tidyAddress(addressParts);
-  if (items.length) out.items = items.join(", ");
+  if (items.length) {
+    const order = items.map((t, k) => ({ t, k, li: itemLi[k] ?? Number.MAX_SAFE_INTEGER })).sort((a, b) => a.li - b.li || a.k - b.k);
+    out.items = order.map((x) => x.t).join(", ");
+  }
   if (altPhones.length) notes.unshift(`Alt phone: ${altPhones.join(" / ")}`);
   if (prepaid) notes.unshift("Prepaid");
   if (notes.length) out.notes = notes.join("; ");
