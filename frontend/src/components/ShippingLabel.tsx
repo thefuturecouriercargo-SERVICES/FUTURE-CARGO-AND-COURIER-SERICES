@@ -160,6 +160,11 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           <div className="mt-0.5" style={{ fontSize: 9 }}>
             From: <b style={{ textTransform: "none" }}>{labelVendorName(booking.vendor.name)}</b>
           </div>
+          {(booking.vendorRef || (booking as { billNo?: string | null }).billNo) && (
+            <div style={{ fontSize: 10, fontWeight: 700 }}>
+              {booking.vendorRef ? `Order #${booking.vendorRef}` : `Bill ${(booking as { billNo?: string | null }).billNo}`}
+            </div>
+          )}
         </div>
         <div className="shrink-0 text-center" style={{ width: sq ? "48%" : "52%" }}>
           <Barcode value={String(booking.cnNo)} height={sq ? 26 : 34} />
