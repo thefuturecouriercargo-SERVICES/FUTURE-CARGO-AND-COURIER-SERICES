@@ -93,8 +93,8 @@ export interface WooOrder {
   }[];
 }
 
-/** Website orders now always get a CN from our own series (true = old: website order No. as CN). */
-const WEBSITE_NO_AS_CN = false;
+/** true: website orders use the website order No. as our CN (when free). false: our own CN series. */
+const WEBSITE_NO_AS_CN = true;
 
 /** When the customer placed the order (GMT), so "Stop today's orders" goes by order time. */
 function placedAtOf(o: WooOrder): Date | undefined {
@@ -295,7 +295,7 @@ export async function importWooOrderByNumber(conn: string, num: string): Promise
   const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
   if (exists) return true;
   if (await linkToManualTwin(vendor.id, data)) return true;
-  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { placedAt: placedAtOf(o), webStatus: o.status });
+  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { ...(WEBSITE_NO_AS_CN ? { preferredCn: Number(data.vendorRef) } : {}), placedAt: placedAtOf(o), webStatus: o.status });
   emitGlobal("booking:changed", { type: "imported", count: 1 });
   await writeAuditLog({ action: "WEBSITE_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
   return true;
@@ -496,7 +496,7 @@ export async function syncWooOrders(conn: string, triggeredBy: string | null = n
       continue;
     }
     try {
-      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { placedAt: placedAtOf(o), webStatus: o.status });
+      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { ...(WEBSITE_NO_AS_CN ? { preferredCn: Number(data.vendorRef) } : {}), placedAt: placedAtOf(o), webStatus: o.status });
       imported++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
