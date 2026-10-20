@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { vendorTabToken, apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorNav from "@/components/VendorNav";
@@ -387,7 +387,7 @@ function ConsignmentsContent() {
                       </td>
                       <td className="whitespace-nowrap">
                         {b.hasPhoto && (
-                          <a href={`/api/vendor-portal/bookings/${b.id}/photo`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
+                          <a href={`/api/vendor-portal/bookings/${b.id}/photo${vendorTabToken() ? `?vt=${encodeURIComponent(vendorTabToken()!)}` : ""}`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
                             📷
                           </a>
                         )}

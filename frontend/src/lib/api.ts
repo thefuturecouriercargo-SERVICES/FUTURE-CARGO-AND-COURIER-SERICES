@@ -33,11 +33,25 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
   return `/api${path}${qs ? `?${qs}` : ""}`;
 }
 
+/** This browser tab's vendor login (sessionStorage = per tab). */
+export const VENDOR_TAB_KEY = "vendorTabToken";
+export function vendorTabToken(): string | null {
+  try {
+    return typeof window !== "undefined" ? sessionStorage.getItem(VENDOR_TAB_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.body) headers["Content-Type"] = "application/json";
+  const vt = path.startsWith("/vendor-portal") || path.startsWith("/vendor-auth") ? vendorTabToken() : null;
+  if (vt) headers["X-Vendor-Token"] = vt;
   const res = await fetch(buildUrl(path, options.query), {
     method: options.method ?? "GET",
     credentials: "include",
-    headers: options.body ? { "Content-Type": "application/json" } : undefined,
+    headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
   });

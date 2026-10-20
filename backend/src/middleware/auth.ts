@@ -50,7 +50,10 @@ export function authenticateVendor(req: Request, _res: Response, next: NextFunct
   const cookieToken = req.cookies?.[env.vendorCookieName];
   const header = req.headers.authorization;
   const bearerToken = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
-  const token = cookieToken || bearerToken;
+  // Each browser tab sends its own vendor's token, so Inspired, Escalo and NAH can work
+  // in separate tabs of one computer without the last login taking over every tab.
+  const tabToken = (req.headers["x-vendor-token"] as string | undefined) || (typeof req.query.vt === "string" ? req.query.vt : undefined);
+  const token = tabToken || bearerToken || cookieToken;
 
   if (!token) {
     return next(new ApiError(401, "Not authenticated"));

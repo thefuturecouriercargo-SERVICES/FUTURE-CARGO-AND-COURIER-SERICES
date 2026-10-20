@@ -65,7 +65,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const vendor = await prisma.vendor.findUnique({ where: { id: req.vendor!.sub } });
     if (!vendor || !vendor.active) throw new ApiError(401, "Not authenticated");
-    res.json({ id: vendor.id, name: vendor.name, username: vendor.username });
+    // A fresh token for this tab to keep, so the tab stays on this vendor even if
+    // another vendor logs in later in a different tab.
+    const token = signVendorToken({ sub: vendor.id, type: "VENDOR", username: vendor.username ?? "", name: vendor.name });
+    res.json({ id: vendor.id, name: vendor.name, username: vendor.username, token });
   })
 );
 
