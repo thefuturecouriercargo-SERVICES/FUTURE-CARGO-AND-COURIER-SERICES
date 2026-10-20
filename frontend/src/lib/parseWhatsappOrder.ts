@@ -44,7 +44,7 @@ const PHONE_RE = /(?:\+?971|00971|0)?[\s-]*\(?0?(?:5[024568]|[2-79])\)?[\s-]*\d{
 
 // Lines that carry no customer data (confirmation text, separators, headings).
 // A label with nothing after it ("Fragrance:", "Items:") — the items follow on the next lines.
-const ITEMS_HEADING = /^(?:fragrances?|perfumes?|scents?|products?|items?|order|order\s+details|your\s+order|selected\s+items?)\s*[:：\-]?$/i;
+const ITEMS_HEADING = /^\(?\s*order\s*here\s*\)?\s*:?$|^(?:fragrances?|perfumes?|scents?|products?|items?|order|order\s+details|your\s+order|selected\s+items?)\s*[:：\-]?$/i;
 
 const BOILERPLATE = [
   /^order\s+received/i,
@@ -64,6 +64,7 @@ const BOILERPLATE = [
   /^\(?\s*(?:except|excluding|not\s+including)\b.*\)?$/i,
   /kindly\s+share|please\s+share\s+(?:the|your)|share\s+the\s+following|following\s+details|(?:like|want|wish)\s+to\s+(?:place\s+an\s+)?order|place\s+(?:an|your)\s+order|fill\s+(?:in\s+)?(?:the|your)\s+details/i,
   /^read\s+this\.?$/i,
+  /order\s+confirmed\s+after|confirmed\s+after\s+\d+\s+days|delivery\s+(?:with)?in\s+\d+\s*(?:-|to|–)?\s*\d*\s*(?:working\s+)?days/i,
   /^(?:shipping|billing)\s*(?:address|details|info)?\s*:?$/i,
   /^(?:payment\s*(?:method|mode)?\s*[:\-]?\s*)?(?:cod|cash\s*on\s*delivery|cash)\.?$/i,
   /^(?:ok|okay|done|confirmed|order\s+confirmed|your\s+order)\.?$/i,
@@ -239,6 +240,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   let subtotal: number | undefined;
   let deliveryFee: number | undefined;
   let prepaid = false;
+  let loneAmount: number | undefined;
   const itemPrices: number[] = [];
   const altPhones: string[] = [];
   const addPhone = (p: string) => {
@@ -261,6 +263,19 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     const isProductBullet = /^\s*(?:🔹|🔸|▪️|▫️|•|◾|➤|👉)/u.test(rawLine);
     let line = tidy(rawLine);
     if (!line) continue;
+    // "( ORDER HERE ) 3pc shoes" — the form's heading with the item on the same line
+    const oh = line.match(/^\(?\s*order\s*here\s*\)?\s*[:\-]?\s*([a-z0-9].*)$/i);
+    if (oh) line = oh[1].trim();
+    // "YOU URGENTLY DELIVERY: yes" / "Urgent delivery: no" (vendor's form field)
+    const urg = line.match(/^(?:you\s+)?urgent(?:ly)?\s*deliver(?:y|ed)?\s*[:\-?]?\s*(.*)$/i);
+    if (urg) {
+      const v = urg[1].trim();
+      if (/^(y|yes|yes\b.*|urgent.*|today.*|asap.*)$/i.test(v)) notes.push(`URGENT delivery${/^(y|yes)$/i.test(v) ? "" : `: ${v}`}`);
+      else if (v && !/^(no|n|normal.*|not\s+urgent.*|-|nil|none)$/i.test(v)) notes.push(`Delivery: ${v}`);
+      continue;
+    }
+    // A form label with nothing typed after it ("SIZE:", "Landmark:") — skip it.
+    if (/^(size|colou?r|landmark|remarks?|notes?|place|area\s*name|time)\s*:?\s*$/i.test(line)) continue;
     if (ITEMS_HEADING.test(line)) {
       itemsSection = true;
       inAddress = false;
@@ -338,7 +353,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     }
 
     // --- "Size 44", "Colour black" right under an item → part of that item, not a new one
-    const variant = line.match(/^(size|sz|colou?r|clr|model|variant|type)\s*[:\-=]?\s*(.{1,30})$/i);
+    const variant = line.match(/^(size|sz|colou?r|clr|model|variant|type)\s*[:\-=]?\s*([a-z0-9][^]{0,29})$/i);
     const prevPlain = leftovers.length && leftovers[leftovers.length - 1].i === li - 1 && !/\d/.test(leftovers[leftovers.length - 1].t) && leftovers[leftovers.length - 1].t.length <= 40;
     if (variant && (items.length || pendingItem || prevPlain)) {
       const tag = `${variant[1][0].toUpperCase()}${variant[1].slice(1).toLowerCase()} ${variant[2].trim()}`;
@@ -451,6 +466,23 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       continue;
     }
     inAddress = false;
+
+    // --- A number alone on its line ("170") — the amount, when no Total line says otherwise
+    const lone = line.match(/^(\d{2,6}(?:\.\d+)?)\s*(?:\/-)?$/);
+    if (lone && !PHONE_RE.test(line) && Number(lone[1]) >= 20) {
+      loneAmount = num(lone[1]);
+      continue;
+    }
+
+    // --- Delivery instructions ("Pls delivery on Saturday", "No urgent delivery") → notes, not items
+    if (
+      /^(?:pls|plz|please|kindly|no\s+urgent)\b|\b(?:deliver\w*|saturday|sunday|monday|tuesday|wednesday|thursday|friday)\b/i.test(line) &&
+      !new RegExp(String.raw`\b${CUR}\b|\d\s*${UNIT}\b|[x×*]\s*\d`, "i").test(line) &&
+      !/\d{3}/.test(line)
+    ) {
+      notes.push(line);
+      continue;
+    }
 
     // --- Manual item lines in any common style ("Akoya 2pc-AED 80", "2 Akoya 80aed", "Akoya x2", …)
     // A list number ("1.", "2)") in front is not a quantity.
@@ -578,7 +610,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   // No "Total" line: add up the item prices (each line's price is that line's amount).
   const itemSum = subtotal ?? (itemPrices.length ? itemPrices.reduce((a, b) => a + b, 0) : undefined);
   if (itemSum !== undefined) out.itemSum = itemSum + (deliveryFee ?? 0);
-  out.codAmount = prepaid ? 0 : totalFromLabel ?? (itemSum !== undefined ? itemSum + (deliveryFee ?? 0) : undefined);
+  out.codAmount = prepaid ? 0 : totalFromLabel ?? loneAmount ?? (itemSum !== undefined ? itemSum + (deliveryFee ?? 0) : undefined);
   if (!out.customerPhone) {
     const pm = raw.match(PHONE_RE);
     if (pm) out.customerPhone = cleanPhone(pm[0]);
