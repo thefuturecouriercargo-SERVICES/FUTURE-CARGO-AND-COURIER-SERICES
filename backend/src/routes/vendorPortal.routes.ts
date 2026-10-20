@@ -10,6 +10,7 @@ import { markWebsiteCompleted } from "../services/inspiredWoo.service";
 import { writeAuditLog } from "../services/audit.service";
 import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { emitGlobal } from "../lib/socket";
+import { isCustomerLinkVendor } from "./public.routes";
 
 const router = Router();
 router.use(authenticateVendor);
@@ -41,7 +42,7 @@ router.get(
 
     const orders = await prisma.order.findMany({
       where,
-      include: { booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true } } },
+      include: { booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true, lat: true, lng: true } } },
       orderBy: [{ date: "desc" }, { slNo: "asc" }],
       take: 1000,
     });
@@ -435,6 +436,71 @@ router.post(
     const website = await markWebsiteCompleted(ids).catch((err) => ({ marked: 0, failed: ids.length, error: String(err) }));
     if (website.marked) emitGlobal("booking:changed", { type: "web-completed" });
     res.json({ ok: true, website });
+  })
+);
+
+// ── Customer order link (/order/<VENDOR>): requests the customers sent ─────────
+router.get(
+  "/customer-requests",
+  asyncHandler(async (req, res) => {
+    const vendor = await prisma.vendor.findUnique({ where: { id: req.vendor!.sub }, select: { name: true, username: true } });
+    const enabled = !!vendor && isCustomerLinkVendor(vendor);
+    if (!enabled) return res.json({ enabled: false, slug: null, requests: [] });
+    const status = typeof req.query.status === "string" ? req.query.status : "PENDING";
+    const requests = await prisma.customerRequest.findMany({
+      where: { vendorId: req.vendor!.sub, ...(status === "ALL" ? {} : { status }) },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json({ enabled, slug: (vendor.username || vendor.name).toUpperCase().replace(/[^A-Z0-9]/g, ""), requests });
+  })
+);
+
+router.post(
+  "/customer-requests/:id/accept",
+  asyncHandler(async (req, res) => {
+    const r = await prisma.customerRequest.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.sub } });
+    if (!r) throw new ApiError(404, "Request not found");
+    if (r.status !== "PENDING") throw new ApiError(409, `Already ${r.status.toLowerCase()}`);
+    const body = z
+      .object({
+        items: z.string().trim().max(1500).optional(),
+        codAmount: z.number().int().min(0),
+        notes: z.string().trim().max(500).optional(),
+        customerName: z.string().trim().min(1).max(120).optional(),
+        customerPhone: z.string().trim().min(5).max(30).optional(),
+        address: z.string().trim().min(1).max(500).optional(),
+        emirate: z.string().trim().min(1).max(30).optional(),
+        confirmDuplicate: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const pin = r.lat != null && r.lng != null ? `📍 https://maps.google.com/?q=${r.lat},${r.lng}` : "";
+    const input = bookingInputSchema.parse({
+      customerName: body.customerName ?? r.customerName,
+      customerPhone: body.customerPhone ?? r.customerPhone,
+      address: [body.address ?? r.address, r.landmark ? `Near ${r.landmark}` : ""].filter(Boolean).join(", ").slice(0, 500),
+      emirate: body.emirate ?? r.emirate,
+      items: body.items || undefined,
+      codAmount: body.codAmount,
+      notes: [body.notes, r.notes, pin].filter(Boolean).join(" · ").slice(0, 500) || undefined,
+      confirmDuplicate: body.confirmDuplicate,
+    });
+    const booking = await createBooking(req.vendor!.sub, input, "VENDOR", { lat: r.lat ?? undefined, lng: r.lng ?? undefined });
+    await prisma.customerRequest.update({ where: { id: r.id }, data: { status: "ACCEPTED", bookingId: booking.id } });
+    await writeAuditLog({ action: "CUSTOMER_REQUEST_ACCEPT", entity: "Booking", entityId: booking.id, meta: { cnNo: booking.cnNo } });
+    emitGlobal("booking:changed", { type: "created", id: booking.id });
+    res.json({ booking });
+  })
+);
+
+router.post(
+  "/customer-requests/:id/reject",
+  asyncHandler(async (req, res) => {
+    const r = await prisma.customerRequest.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.sub }, select: { id: true, status: true } });
+    if (!r) throw new ApiError(404, "Request not found");
+    if (r.status !== "PENDING") throw new ApiError(409, `Already ${r.status.toLowerCase()}`);
+    await prisma.customerRequest.update({ where: { id: r.id }, data: { status: "REJECTED" } });
+    res.json({ ok: true });
   })
 );
 

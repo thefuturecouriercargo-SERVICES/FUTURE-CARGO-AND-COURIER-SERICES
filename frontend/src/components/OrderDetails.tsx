@@ -151,12 +151,16 @@ export default function OrderDetails({
           💬 WhatsApp customer
         </a>
         <a
-          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${booking.address}, ${booking.emirate}, UAE`)}`}
+          href={
+            booking.lat != null && booking.lng != null
+              ? `https://www.google.com/maps/search/?api=1&query=${booking.lat},${booking.lng}`
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${booking.address}, ${booking.emirate}, UAE`)}`
+          }
           target="_blank"
           rel="noreferrer"
           className="rounded border border-navy bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-navy"
         >
-          📍 Map
+          📍 {booking.lat != null && booking.lng != null ? "Map (exact pin)" : "Map"}
         </a>
       </div>
     </div>

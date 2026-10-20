@@ -70,6 +70,9 @@ export interface OrderBookingDetails {
   notes?: string | null;
   vendorRef?: string | null;
   codAmount: number;
+  /** Exact pin the customer shared on the order link. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface Summary {
@@ -125,6 +128,8 @@ export interface Booking {
   rejectReason?: string | null;
   createdBy: "VENDOR" | "ADMIN" | "WEBSITE";
   webStatus?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   hasPhoto?: boolean;
   orderId?: string | null;
   order?: {

@@ -123,6 +123,7 @@ model Vendor {
 
   orders           Order[]
   bookings         Booking[]
+  customerRequests CustomerRequest[]
   payments         VendorPayment[]
   driverPayments   Purchase[]
   adjustments      VendorAdjustment[]
@@ -375,6 +376,9 @@ model Booking {
   orderId       String?       @unique
   // Website order status as last seen (processing / completed …) — website orders only.
   webStatus     String?
+  // Exact delivery pin the customer shared (customer order link), for the driver's map.
+  lat           Float?
+  lng           Float?
   order         Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
   labelPrintedAt DateTime?
   // True when the order was read from a photo (handwritten slip); the photo is in BookingPhoto.
@@ -429,4 +433,29 @@ model ScanLog {
 
   @@index([createdAt])
   @@map("scan_logs")
+}
+
+// Delivery details a customer filled in on the vendor's order link (/order/<VENDOR>).
+// The vendor adds items + COD and accepts it → a normal Booking.
+model CustomerRequest {
+  id            String   @id @default(cuid())
+  vendorId      String
+  vendor        Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  customerName  String
+  customerPhone String
+  phoneDigits   String
+  address       String
+  emirate       String
+  landmark      String?
+  notes         String?
+  lat           Float?
+  lng           Float?
+  status        String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  bookingId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([vendorId, status])
+  @@index([vendorId, phoneDigits])
+  @@map("customer_requests")
 }

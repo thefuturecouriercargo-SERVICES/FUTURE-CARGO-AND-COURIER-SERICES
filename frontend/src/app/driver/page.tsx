@@ -916,7 +916,13 @@ export default function DriverPortalPage() {
   const routeLinks = (list: Order[]) => {
     const stops = list
       .filter((o) => o.status === "PENDING" || o.status === "TRANSFER")
-      .map((o) => (o.booking?.address ? `${o.booking.address}, ${o.emirate}, UAE` : null))
+      .map((o) =>
+        o.booking?.lat != null && o.booking?.lng != null
+          ? `${o.booking.lat},${o.booking.lng}`
+          : o.booking?.address
+            ? `${o.booking.address}, ${o.emirate}, UAE`
+            : null
+      )
       .filter((x): x is string => !!x);
     const links: { href: string; from: number; to: number }[] = [];
     for (let i = 0; i < stops.length; i += 10) {

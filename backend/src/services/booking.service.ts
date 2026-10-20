@@ -188,7 +188,7 @@ export async function createBooking(
   vendorId: string,
   input: BookingInput,
   createdBy: "VENDOR" | "ADMIN" | "WEBSITE",
-  opts: { preferredCn?: number; placedAt?: Date; webStatus?: string } = {}
+  opts: { preferredCn?: number; placedAt?: Date; webStatus?: string; lat?: number; lng?: number } = {}
 ) {
   await assertRefFree(vendorId, input.vendorRef || undefined);
   await assertBillNotRepeated(vendorId, input);
@@ -206,6 +206,8 @@ export async function createBooking(
     notes: input.notes || null,
     createdBy,
     webStatus: opts.webStatus ?? null,
+    lat: opts.lat ?? null,
+    lng: opts.lng ?? null,
     // After the vendor pressed "Stop today's orders", new orders belong to tomorrow's list.
     ...(await nextDayIfStopped(vendorId, opts.placedAt ?? new Date())),
   };
