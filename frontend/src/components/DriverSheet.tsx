@@ -61,15 +61,12 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
         doc.text(`${nice}   ·   ${rows.length} parcels   ·   COD AED ${fmtNumber(cod)}`, 10, big ? 20 : 19);
         doc.text("The Future Courier Service L.L.C", W - 10, 13, { align: "right" });
 
-        let lastArea = "";
         autoTable(doc, {
           startY: big ? 24 : 22,
           margin: { left: 8, right: 8, bottom: 16 },
           head: [["Tick", "#", "CN", "Vendor", "Customer", "Phone", "Area", "Address", "COD", "Note"]],
           body: rows.map((o, i) => {
             const area = areaOf(o);
-            const showArea = area !== lastArea;
-            lastArea = area;
             const b = o.booking;
             return [
               "",
@@ -78,7 +75,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
               o.brandName ?? "",
               b?.customerName ?? "",
               b?.customerPhone ?? "",
-              showArea ? area : "\"",
+              area,
               b ? `${b.address}${b.emirate && !b.address.toLowerCase().includes(b.emirate.toLowerCase()) ? `, ${b.emirate}` : ""}` : o.emirate,
               o.total === 0 && b ? "PREPAID" : fmtNumber(o.total),
               [b?.notes, o.driverNote ? `Driver: ${o.driverNote}` : ""].filter(Boolean).join(" · "),
@@ -109,7 +106,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
               d.cell.styles.fontStyle = "bold";
               d.cell.styles.textColor = [180, 20, 20];
             }
-            if (d.column.index === 6 && d.cell.raw !== "\"") d.cell.styles.fontStyle = "bold";
+            if (d.column.index === 6) d.cell.styles.fontStyle = "bold";
           },
           didDrawCell: (d) => {
             // Empty tick box in the first column.
