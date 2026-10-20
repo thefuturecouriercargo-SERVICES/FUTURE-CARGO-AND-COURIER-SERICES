@@ -331,9 +331,28 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
       totalFromLabel = num(total[1]);
       continue;
     }
-    const cod = line.match(/^(?:cod|cod\s*amount|cash\s*on\s*delivery|cash|to\s*collect|collect|payable|amount(?:\s*to\s*(?:collect|pay|be\s*paid|be\s*collected))?|bill\s*amount|net\s*amount|price|total\s*price|payment(?:\s*(?:cod|cash))?)\s*(?:amount)?\s*[:\-=]?\s*(?:cod\s*)?(?:aed|dhs?)?\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)/i);
+    const cod = line.match(/^(?:cod|cod\s*amount|cash\s*on\s*delivery|cash|to\s*collect|collect|payable|amount(?:\s*to\s*(?:collect|pay|be\s*paid|be\s*collected))?|bill\s*amount|net\s*amount|price|pirce|prise|prize|priсe|cost|total\s*price|payment(?:\s*(?:cod|cash))?)\s*(?:amount)?\s*[:\-=]?\s*(?:cod\s*)?(?:aed|dhs?)?\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)/i);
     if (cod) {
       totalFromLabel = num(cod[1]);
+      continue;
+    }
+
+    // --- "Size 44", "Colour black" right under an item → part of that item, not a new one
+    const variant = line.match(/^(size|sz|colou?r|clr|model|variant|type)\s*[:\-=]?\s*(.{1,30})$/i);
+    const prevPlain = leftovers.length && leftovers[leftovers.length - 1].i === li - 1 && !/\d/.test(leftovers[leftovers.length - 1].t) && leftovers[leftovers.length - 1].t.length <= 40;
+    if (variant && (items.length || pendingItem || prevPlain)) {
+      const tag = `${variant[1][0].toUpperCase()}${variant[1].slice(1).toLowerCase()} ${variant[2].trim()}`;
+      if (pendingItem) pendingItem.name = `${pendingItem.name} · ${tag}`;
+      else if (prevPlain && (!items.length || itemLi[itemLi.length - 1] !== li - 1)) {
+        // "Shoes" then "Size 44": the line above is the item.
+        const prev = leftovers.pop()!;
+        items.push(fmtItem(1, `${prev.t} · ${tag}`));
+        itemLi.push(prev.i);
+        seenItems = items.length;
+      } else {
+        const k = items.length - 1;
+        items[k] = items[k].replace(/^(.*?)( \(AED [\d,]+\))?$/, (_m, a, b) => `${a} · ${tag}${b ?? ""}`);
+      }
       continue;
     }
 
@@ -345,7 +364,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     }
 
     // --- Labelled fields: "Label: value", "Label - value", or "Emirate sharjha"
-    const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|loc|area|building|landmark|delivery\s*address|delivery\s*time|preferred\s*time|timing|time|emirate|city|state|items?|products?|fragrances?|perfumes?|scents?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
+    const lab = line.match(/^(name|customer(?:\s*name)?|full\s*name|ph|phone|mobile(?:\s*no\.?)?|mob(?:\s*no\.?)?|contact(?:\s*no\.?)?|tel|whats\s*app|whatsapp|number|address|addr|location|loc|place|area\s*name|area|building|landmark|delivery\s*address|delivery\s*time|preferred\s*time|timing|time|emirate|city|state|items?|products?|fragrances?|perfumes?|scents?|order\s*details|notes?|remarks?|instructions?)\s*(?:[:：=\-–]\s*|\s+(?=\S))(.+)$/i);
     // "No: +971…" — phone
     const noLab = line.match(/^(?:no|num|nmbr|nbr)\.?\s*[:：]\s*(.+)$/i);
     if (noLab && PHONE_RE.test(noLab[1])) {
@@ -363,7 +382,7 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
         if (!all.length) leftovers.push({ t: line, i: li });
       } else if (/^(name|customer|full)/.test(key)) {
         if (!out.customerName) out.customerName = value;
-      } else if (/^(address|addr|location|loc|area|building|landmark|delivery)/.test(key)) {
+      } else if (/^(address|addr|location|loc|place|area|building|landmark|delivery)/.test(key)) {
         // "Building 4" / "Area 2" without a colon: the word is part of the address
         addressParts.push(/^(building|area)$/.test(key) && !/^\S+\s*[:：=\-–]/.test(line) ? line.replace(/,$/, "") : value);
       } else if (/^(time|timing|delivery\s*time|preferred\s*time)/.test(key)) {
@@ -541,6 +560,13 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   addressParts.push(...leftovers.map((l) => l.t));
 
   if (addressParts.length) out.address = tidyAddress(addressParts);
+  // An "item" that is only a price/size word ("Pirce", "Price", "Size") is not a product.
+  for (let k = items.length - 1; k >= 0; k--) {
+    if (/^\d+\s*×\s*(price|pirce|prise|prize|cost|amount|size|total)\b\s*(\(AED [\d,]+\))?$/i.test(items[k])) {
+      items.splice(k, 1);
+      itemLi.splice(k, 1);
+    }
+  }
   if (items.length) {
     const order = items.map((t, k) => ({ t, k, li: itemLi[k] ?? Number.MAX_SAFE_INTEGER })).sort((a, b) => a.li - b.li || a.k - b.k);
     out.items = order.map((x) => x.t).join(", ");
