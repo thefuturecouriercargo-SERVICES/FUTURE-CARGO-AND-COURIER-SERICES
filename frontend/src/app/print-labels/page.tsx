@@ -31,7 +31,11 @@ function Labels() {
       bookings={bookings}
       backHref="/awaiting-pickup"
       onPrinted={(printed) => {
-        apiFetch("/bookings/mark-printed", { method: "POST", body: { ids: printed } }).catch(() => {});
+        apiFetch<{ website?: { marked: number; failed: number; error?: string } }>("/bookings/mark-printed", { method: "POST", body: { ids: printed } })
+          .then((r: { website?: { marked: number; failed: number; error?: string } }) => {
+          if (r?.website?.failed) alert(`Labels printed. ${r.website.failed} website order(s) could not be marked "Completed" on the website — please mark them there.\n\n${r.website.error ?? ""}`);
+        })
+          .catch(() => {});
       }}
     />
   );

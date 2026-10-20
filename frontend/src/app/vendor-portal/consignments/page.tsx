@@ -41,6 +41,17 @@ function ConsignmentsContent() {
   const [showPhotos, setShowPhotos] = useState(false);
   const [date, setDate] = useState(today());
   const [source, setSource] = useState<Source>("MANUAL");
+  const [stopState, setStopState] = useState<{ active: boolean; stoppedAt: string | null }>({ active: false, stoppedAt: null });
+  useEffect(() => {
+    apiFetch<{ active: boolean; stoppedAt: string | null }>("/vendor-portal/orders-stop").then(setStopState).catch(() => {});
+  }, []);
+  async function toggleStop(stop: boolean) {
+    try {
+      setStopState(await apiFetch("/vendor-portal/orders-stop", { method: "POST", body: { stop } }));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not change it");
+    }
+  }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Booking | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -141,6 +152,28 @@ function ConsignmentsContent() {
           Enter each order here instead of writing a paper bill. Print the label and stick it on the parcel — Future
           Courier scans it at pickup. You can edit or delete a consignment until it&apos;s picked up.
         </p>
+
+        {/* Stop today's orders (e.g. 10 PM): later orders go to tomorrow's list. Resets at midnight. */}
+        {stopState.active ? (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-2 border-pending bg-pending-bg px-4 py-3">
+            <div className="text-sm text-pending">
+              <b>⏸ Today&apos;s orders stopped at {new Date(stopState.stoppedAt!).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" })}.</b>{" "}
+              New orders (website and manual) now go to <b>tomorrow&apos;s</b> list. Starts again by itself after midnight.
+            </div>
+            <button onClick={() => toggleStop(false)} className="rounded border border-pending bg-white px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-pending">
+              ▶ Resume today
+            </button>
+          </div>
+        ) : (
+          <div className="mb-5 flex justify-end">
+            <button
+              onClick={() => window.confirm("Stop taking orders for today?\n\nOrders from now on will show in tomorrow's list.") && toggleStop(true)}
+              className="rounded border-2 border-cancelled bg-white px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-cancelled hover:bg-cancelled-bg"
+            >
+              ⏹ Stop today&apos;s orders
+            </button>
+          </div>
+        )}
 
         {justSaved && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
@@ -338,7 +371,17 @@ function ConsignmentsContent() {
                         <BookingStatusBadge booking={b} />
                         {b.status === "REJECTED" && b.rejectReason && <div className="mt-0.5 max-w-[180px] text-xs text-cancelled">{b.rejectReason}</div>}
                       </td>
-                      <td className="text-xs text-ink-soft">{b.labelPrintedAt ? "Printed" : "—"}</td>
+                      <td className="text-xs text-ink-soft">
+                        {b.labelPrintedAt ? "Printed" : "—"}
+                        {isWebsite(b) && b.webStatus && (
+                          <span
+                            className={`ml-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${b.webStatus === "completed" ? "bg-delivered-bg text-delivered" : "bg-pending-bg text-pending"}`}
+                            title="Status on your website"
+                          >
+                            🌐 {b.webStatus}
+                          </span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
                         {new Date(b.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
                       </td>

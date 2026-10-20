@@ -5,7 +5,8 @@ import { authenticateVendor } from "../middleware/auth";
 import { parseDateParam, monthRange, formatDate, dayRange } from "../utils/dates";
 import { z } from "zod";
 import { ApiError } from "../utils/asyncHandler";
-import { bookingInputSchema, createBooking, assertRefFree } from "../services/booking.service";
+import { bookingInputSchema, createBooking, assertRefFree, ordersStopState } from "../services/booking.service";
+import { markWebsiteCompleted } from "../services/inspiredWoo.service";
 import { writeAuditLog } from "../services/audit.service";
 import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { emitGlobal } from "../lib/socket";
@@ -430,7 +431,27 @@ router.post(
   asyncHandler(async (req, res) => {
     const { ids } = z.object({ ids: z.array(z.string()).min(1) }).parse(req.body);
     await prisma.booking.updateMany({ where: { id: { in: ids }, vendorId: req.vendor!.sub }, data: { labelPrintedAt: new Date() } });
-    res.json({ ok: true });
+    // Printed website orders → "completed" on the vendor's website.
+    const website = await markWebsiteCompleted(ids).catch((err) => ({ marked: 0, failed: ids.length, error: String(err) }));
+    if (website.marked) emitGlobal("booking:changed", { type: "web-completed" });
+    res.json({ ok: true, website });
+  })
+);
+
+// "Stop today's orders" — later orders today go to tomorrow's list (resets at midnight).
+router.get(
+  "/orders-stop",
+  asyncHandler(async (req, res) => {
+    res.json(await ordersStopState(req.vendor!.sub));
+  })
+);
+router.post(
+  "/orders-stop",
+  asyncHandler(async (req, res) => {
+    const { stop } = z.object({ stop: z.boolean() }).parse(req.body);
+    await prisma.vendor.update({ where: { id: req.vendor!.sub }, data: { ordersStopAt: stop ? new Date() : null } });
+    await writeAuditLog({ action: stop ? "VENDOR_STOP_TODAY" : "VENDOR_RESUME_TODAY", entity: "Vendor", entityId: req.vendor!.sub });
+    res.json(await ordersStopState(req.vendor!.sub));
   })
 );
 

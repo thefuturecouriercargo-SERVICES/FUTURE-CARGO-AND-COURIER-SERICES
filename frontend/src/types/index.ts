@@ -124,6 +124,7 @@ export interface Booking {
   status: BookingStatus;
   rejectReason?: string | null;
   createdBy: "VENDOR" | "ADMIN" | "WEBSITE";
+  webStatus?: string | null;
   hasPhoto?: boolean;
   orderId?: string | null;
   order?: {

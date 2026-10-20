@@ -116,6 +116,8 @@ model Vendor {
   active         Boolean  @default(true)
   username       String?  @unique
   passwordHash   String?
+  // "Stop today's orders" pressed at this time: later orders that day go to tomorrow's list.
+  ordersStopAt   DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -371,6 +373,8 @@ model Booking {
   // "VENDOR" or "ADMIN" — who entered it.
   createdBy     String        @default("VENDOR")
   orderId       String?       @unique
+  // Website order status as last seen (processing / completed …) — website orders only.
+  webStatus     String?
   order         Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
   labelPrintedAt DateTime?
   // True when the order was read from a photo (handwritten slip); the photo is in BookingPhoto.

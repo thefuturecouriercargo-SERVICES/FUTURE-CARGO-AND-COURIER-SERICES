@@ -37,7 +37,11 @@ function Labels() {
       bookings={bookings}
       backHref="/vendor-portal/consignments"
       onPrinted={(printed) => {
-        apiFetch("/vendor-portal/bookings/mark-printed", { method: "POST", body: { ids: printed } }).catch(() => {});
+        apiFetch<{ website?: { marked: number; failed: number; error?: string } }>("/vendor-portal/bookings/mark-printed", { method: "POST", body: { ids: printed } })
+          .then((r: { website?: { marked: number; failed: number; error?: string } }) => {
+          if (r?.website?.failed) alert(`Labels printed. ${r.website.failed} website order(s) could not be marked "Completed" on the website — please mark them there.\n\n${r.website.error ?? ""}`);
+        })
+          .catch(() => {});
       }}
     />
   );

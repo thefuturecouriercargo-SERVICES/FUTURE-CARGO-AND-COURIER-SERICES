@@ -156,6 +156,29 @@ export async function isCnFree(cnNo: number) {
   return !order && !booking;
 }
 
+const dubaiDayOf = (d: Date) => new Date(d.getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+
+/**
+ * The vendor stopped taking orders for today (e.g. 10 PM, they leave): an order placed
+ * after that moment, the same day, is dated tomorrow 00:00 Dubai so it shows in
+ * tomorrow's lists. The stop expires by itself at midnight.
+ */
+export async function nextDayIfStopped(vendorId: string, placedAt: Date): Promise<{ createdAt?: Date }> {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { ordersStopAt: true } });
+  const stop = v?.ordersStopAt;
+  const now = new Date();
+  if (!stop || dubaiDayOf(stop) !== dubaiDayOf(now) || placedAt < stop) return {};
+  const [y, m, d] = dubaiDayOf(now).split("-").map(Number);
+  return { createdAt: new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 30) - 4 * 3600 * 1000) };
+}
+
+/** Is "Stop today's orders" active right now for this vendor? */
+export async function ordersStopState(vendorId: string) {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { ordersStopAt: true } });
+  const active = !!v?.ordersStopAt && dubaiDayOf(v.ordersStopAt) === dubaiDayOf(new Date());
+  return { active, stoppedAt: active ? v!.ordersStopAt : null };
+}
+
 /**
  * preferredCn: website orders use the vendor's own order No. as our CN (their
  * printed barcode then IS the CN), when that number is free. If another
@@ -165,7 +188,7 @@ export async function createBooking(
   vendorId: string,
   input: BookingInput,
   createdBy: "VENDOR" | "ADMIN" | "WEBSITE",
-  opts: { preferredCn?: number } = {}
+  opts: { preferredCn?: number; placedAt?: Date; webStatus?: string } = {}
 ) {
   await assertRefFree(vendorId, input.vendorRef || undefined);
   await assertBillNotRepeated(vendorId, input);
@@ -182,6 +205,9 @@ export async function createBooking(
     codAmount: input.codAmount,
     notes: input.notes || null,
     createdBy,
+    webStatus: opts.webStatus ?? null,
+    // After the vendor pressed "Stop today's orders", new orders belong to tomorrow's list.
+    ...(await nextDayIfStopped(vendorId, opts.placedAt ?? new Date())),
   };
 
   const pref = opts.preferredCn;

@@ -71,6 +71,7 @@ export interface WooOrder {
   number?: string;
   status: string;
   date_created: string;
+  date_created_gmt?: string;
   date_modified_gmt?: string;
   total: string;
   payment_method?: string;
@@ -92,16 +93,28 @@ export interface WooOrder {
   }[];
 }
 
-async function wooGet<T>(conn: string, path: string, params: Record<string, string>): Promise<T> {
+/** Website orders now always get a CN from our own series (true = old: website order No. as CN). */
+const WEBSITE_NO_AS_CN = false;
+
+/** When the customer placed the order (GMT), so "Stop today's orders" goes by order time. */
+function placedAtOf(o: WooOrder): Date | undefined {
+  const t = o.date_created_gmt ? new Date(`${o.date_created_gmt}Z`) : null;
+  return t && !Number.isNaN(t.getTime()) ? t : undefined;
+}
+
+async function wooGet<T>(conn: string, path: string, params: Record<string, string>, method = "GET", body?: unknown): Promise<T> {
   const cfg = wooConfig(conn);
   if (!cfg.configured) throw new Error(`${cfg.vendorName} website not connected — add ${conn}_WC_URL, ${conn}_WC_KEY and ${conn}_WC_SECRET in Railway`);
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${cfg.url}/wp-json/wc/v3/${path}?${qs}`, {
+  const res = await fetch(`${cfg.url}/wp-json/wc/v3/${path}${qs ? `?${qs}` : ""}`, {
+    method,
     headers: {
       Authorization: "Basic " + Buffer.from(`${cfg.key}:${cfg.secret}`).toString("base64"),
       Accept: "application/json",
       "User-Agent": "FutureCourier/1.0",
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
+    body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) {
@@ -282,7 +295,7 @@ export async function importWooOrderByNumber(conn: string, num: string): Promise
   const exists = await prisma.booking.findFirst({ where: { vendorId: vendor.id, vendorRef: data.vendorRef }, select: { id: true } });
   if (exists) return true;
   if (await linkToManualTwin(vendor.id, data)) return true;
-  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { preferredCn: Number(data.vendorRef) });
+  await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { placedAt: placedAtOf(o), webStatus: o.status });
   emitGlobal("booking:changed", { type: "imported", count: 1 });
   await writeAuditLog({ action: "WEBSITE_IMPORT_ON_SCAN", entity: "Booking", meta: { vendorRef: data.vendorRef } });
   return true;
@@ -315,9 +328,9 @@ async function refreshImportedWooOrders(conn: string, vendorId: string) {
   let rejected = 0;
   let flagged = 0;
 
-  // Earlier imports got a CN from our own range. While still waiting and no
-  // label printed, switch them to the website order No. (if that CN is free).
-  for (const b of open) {
+  // (Old behaviour, now off: website orders used to switch to the website order No. as CN.
+  // They now keep our own CN series; the order No. is printed on the label instead.)
+  for (const b of WEBSITE_NO_AS_CN ? open : []) {
     if (b.status !== "AWAITING_PICKUP" || b.cnSource !== "SYSTEM" || b.labelPrintedAt || !b.createdBy || b.createdBy !== "WEBSITE") continue;
     const own = Number(b.vendorRef);
     if (!Number.isSafeInteger(own) || own <= 0 || own >= CN_START || own === b.cnNo) continue;
@@ -337,7 +350,7 @@ async function refreshImportedWooOrders(conn: string, vendorId: string) {
     select: { id: true, orderId: true, vendorRef: true, cnNo: true },
   });
   let renumbered = 0;
-  for (const b of acceptedGenerated) {
+  for (const b of WEBSITE_NO_AS_CN ? acceptedGenerated : []) {
     const own = Number(b.vendorRef);
     if (!Number.isSafeInteger(own) || own <= 0 || own >= CN_START || own === b.cnNo) continue;
     if (!(await isCnFree(own))) continue;
@@ -359,6 +372,10 @@ async function refreshImportedWooOrders(conn: string, vendorId: string) {
   for (const b of open) {
     const o = web.get(b.vendorRef!);
     if (!o) continue;
+    if (b.createdBy === "WEBSITE" && b.webStatus !== o.status) {
+      await prisma.booking.update({ where: { id: b.id }, data: { webStatus: o.status } });
+      b.webStatus = o.status;
+    }
     const cancelled = CANCELLED_STATUSES.includes(o.status);
     const m = mapWooOrder(o);
 
@@ -479,7 +496,7 @@ export async function syncWooOrders(conn: string, triggeredBy: string | null = n
       continue;
     }
     try {
-      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { preferredCn: Number(data.vendorRef) });
+      await createBooking(vendor.id, { ...data, confirmDuplicate: true }, "WEBSITE", { placedAt: placedAtOf(o), webStatus: o.status });
       imported++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -548,4 +565,55 @@ export async function fixOtherEmirates(): Promise<number> {
     fixed++;
   }
   return fixed;
+}
+
+/**
+ * Labels printed for website orders → mark those orders "completed" on the vendor's
+ * website (what they used to do by hand after printing). Never blocks printing:
+ * returns how many were marked and the first error, if any.
+ */
+export async function markWebsiteCompleted(bookingIds: string[]): Promise<{ marked: number; failed: number; error?: string }> {
+  const list = await prisma.booking.findMany({
+    where: { id: { in: bookingIds }, createdBy: "WEBSITE", vendorRef: { not: null }, status: { not: "REJECTED" } },
+    select: { id: true, vendorId: true, vendorRef: true, webStatus: true },
+  });
+  let marked = 0;
+  let failed = 0;
+  let error: string | undefined;
+  const connOf = new Map<string, string | null>();
+  for (const b of list) {
+    if (b.webStatus === "completed") continue;
+    if (!connOf.has(b.vendorId)) connOf.set(b.vendorId, await wooConnForVendor(b.vendorId));
+    const conn = connOf.get(b.vendorId);
+    if (!conn) continue;
+    try {
+      // vendorRef is the order number; find the order's id if the shop numbers orders differently.
+      let id = b.vendorRef!;
+      let current: WooOrder | null = null;
+      try {
+        current = await wooGet<WooOrder>(conn, `orders/${id}`, {});
+        if (String(current.number ?? current.id) !== b.vendorRef) current = null;
+      } catch {
+        current = null;
+      }
+      if (!current) {
+        const found = await wooGet<WooOrder[]>(conn, "orders", { search: b.vendorRef!, per_page: "10", status: "any" });
+        current = found.find((x) => String(x.number ?? x.id) === b.vendorRef) ?? null;
+      }
+      if (!current) throw new Error(`order #${b.vendorRef} not found on the website`);
+      id = String(current.id);
+      if (CANCELLED_STATUSES.includes(current.status)) {
+        await prisma.booking.update({ where: { id: b.id }, data: { webStatus: current.status } });
+        continue;
+      }
+      if (current.status !== "completed") await wooGet(conn, `orders/${id}`, {}, "PUT", { status: "completed" });
+      await prisma.booking.update({ where: { id: b.id }, data: { webStatus: "completed" } });
+      marked++;
+    } catch (err) {
+      failed++;
+      error ??= err instanceof Error ? err.message : String(err);
+    }
+  }
+  if (failed) console.error(`[woo] mark completed: ${failed} failed — ${error}`);
+  return { marked, failed, error };
 }

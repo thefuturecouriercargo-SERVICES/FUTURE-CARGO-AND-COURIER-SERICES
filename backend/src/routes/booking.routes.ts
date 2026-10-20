@@ -5,6 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
+import { markWebsiteCompleted } from "../services/inspiredWoo.service";
 import { withScanLog, scanLogForDay } from "../services/scanLog.service";
 import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan, scanBillVendors } from "../services/booking.service";
@@ -307,7 +308,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { ids } = z.object({ ids: z.array(z.string()).min(1) }).parse(req.body);
     await prisma.booking.updateMany({ where: { id: { in: ids } }, data: { labelPrintedAt: new Date() } });
-    res.json({ ok: true });
+    const website = await markWebsiteCompleted(ids).catch((err) => ({ marked: 0, failed: ids.length, error: String(err) }));
+    if (website.marked) emitGlobal("booking:changed", { type: "web-completed" });
+    res.json({ ok: true, website });
   })
 );
 
