@@ -24,6 +24,23 @@ router.patch(
   })
 );
 
+// Driver's quick "not delivered" note on one of his parcels (status stays the same).
+router.patch(
+  "/orders/:id/note",
+  asyncHandler(async (req, res) => {
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 200) : "";
+    const order = await prisma.order.findFirst({ where: { id: req.params.id, employeeId: req.user!.sub }, select: { id: true } });
+    if (!order) throw new ApiError(404, "Order not found in your list");
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { driverNote: note || null, driverNoteAt: note ? new Date() : null },
+      select: { id: true, driverNote: true, driverNoteAt: true },
+    });
+    emitGlobal("order:changed", { type: "updated", order: updated });
+    res.json(updated);
+  })
+);
+
 router.get(
   "/orders",
   asyncHandler(async (req, res) => {

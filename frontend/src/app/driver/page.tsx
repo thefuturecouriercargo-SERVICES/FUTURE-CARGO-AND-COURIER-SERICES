@@ -207,20 +207,18 @@ export default function DriverPortalPage() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
   const [view, setViewState] = useState<"list" | "area">("list");
+  // "By area" is its own page (#areas), so the phone's Back button returns to the list.
   useEffect(() => {
-    try {
-      if (localStorage.getItem("driverView") === "area") setViewState("area");
-    } catch {
-      /* storage unavailable */
-    }
+    const sync = () => setViewState(window.location.hash === "#areas" ? "area" : "list");
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
   }, []);
   function setView(v: "list" | "area") {
+    if (v === "area" && window.location.hash !== "#areas") window.history.pushState(null, "", "#areas");
+    else if (v === "list" && window.location.hash === "#areas") window.history.pushState(null, "", window.location.pathname + window.location.search);
     setViewState(v);
-    try {
-      localStorage.setItem("driverView", v);
-    } catch {
-      /* ignore */
-    }
+    window.scrollTo(0, 0);
   }
   const [fromScan, setFromScan] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "info" | "milestone" | "reminder" } | null>(null);
@@ -459,10 +457,21 @@ export default function DriverPortalPage() {
     return orders.filter((o) => {
       if (statusTab !== "ALL" && o.status !== statusTab) return false;
       if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
-      if (areaFilter && areaOf(o) !== areaFilter) return false;
       return true;
     });
-  }, [orders, statusTab, search, areaFilter]);
+  }, [orders, statusTab, search]);
+
+  // Area page: its own To deliver / Done / All switch and area search.
+  const [areaTab, setAreaTab] = useState<"OPEN" | "DONE" | "ALL">("OPEN");
+  const [noteOpenId, setNoteOpenId] = useState<string | null>(null);
+  const areaBase = useMemo(
+    () =>
+      orders.filter((o) =>
+        areaTab === "ALL" ? true : areaTab === "OPEN" ? o.status === "PENDING" || o.status === "TRANSFER" : o.status === "DELIVERED" || o.status === "CANCELLED"
+      ),
+    [orders, areaTab]
+  );
+  const areaFiltered = useMemo(() => (areaFilter ? areaBase.filter((o) => areaOf(o) === areaFilter) : areaBase), [areaBase, areaFilter]);
 
   // Area view: group the driver's parcels by emirate + area (from the address), biggest area first.
   const [areaOrder, setAreaOrder] = useState<string[]>([]);
@@ -482,7 +491,19 @@ export default function DriverPortalPage() {
       /* ignore */
     }
   }, []);
-  const areaGroups = useMemo(() => groupByArea(filtered, areaOrder, parcelOrder), [filtered, areaOrder, parcelOrder]);
+  const areaGroups = useMemo(() => groupByArea(areaFiltered, areaOrder, parcelOrder), [areaFiltered, areaOrder, parcelOrder]);
+
+  /** Quick "not delivered" note on a parcel (tap the same one again to clear). */
+  async function setDriverNote(o: Order, note: string) {
+    const next = o.driverNote === note ? "" : note;
+    setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, driverNote: next || null, driverNoteAt: next ? new Date().toISOString() : null } : x)));
+    try {
+      await apiFetch(`/driver/orders/${o.id}/note`, { method: "PATCH", body: { note: next } });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not save the note", "info");
+      load();
+    }
+  }
   const dragRef = useRef<{ id: string; group: string; ids: string[]; y: number } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -535,11 +556,13 @@ export default function DriverPortalPage() {
 
   /** Move an area up/down in the driver's route order (saved on this phone). */
   function moveArea(key: string, dir: -1 | 1) {
-    const keys = areaGroups.map((g) => g.key);
-    const i = keys.indexOf(key);
+    const shown = areaGroups.map((g) => g.key);
+    const i = shown.indexOf(key);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= keys.length) return;
-    [keys[i], keys[j]] = [keys[j], keys[i]];
+    if (i < 0 || j < 0 || j >= shown.length) return;
+    [shown[i], shown[j]] = [shown[j], shown[i]];
+    // Keep the order of areas not on screen (other tab / search) too.
+    const keys = [...shown, ...areaOrder.filter((k) => !shown.includes(k))];
     setAreaOrder(keys);
     try {
       localStorage.setItem("driverAreaOrder", JSON.stringify(keys));
@@ -591,6 +614,12 @@ export default function DriverPortalPage() {
                 {o.remarks && (
                   <div className="mt-1 text-xs text-cancelled">
                     Reason: {o.remarks}
+                  </div>
+                )}
+                {o.driverNote && (o.status === "PENDING" || o.status === "TRANSFER") && (
+                  <div className="mt-1 text-xs font-semibold text-pending">
+                    🚚 {o.driverNote}
+                    {o.driverNoteAt ? ` · ${new Date(o.driverNoteAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
                   </div>
                 )}
                 {o.status === "TRANSFER" && o.transferredBy && (
@@ -880,6 +909,238 @@ export default function DriverPortalPage() {
     setTimeout(() => setAssistantHeard(null), 2000);
   });
 
+  const OPEN_NOTES = ["No answer", "Phone off", "Wrong address", "Customer asked tomorrow", "Shop closed", "Will call back"];
+  /** Google Maps directions through the parcels in order (Maps takes up to 10 stops per link). */
+  const routeLinks = (list: Order[]) => {
+    const stops = list
+      .filter((o) => o.status === "PENDING" || o.status === "TRANSFER")
+      .map((o) => (o.booking?.address ? `${o.booking.address}, ${o.emirate}, UAE` : null))
+      .filter((x): x is string => !!x);
+    const links: { href: string; from: number; to: number }[] = [];
+    for (let i = 0; i < stops.length; i += 10) {
+      const part = stops.slice(i, i + 10);
+      const dest = part[part.length - 1];
+      const way = part.slice(0, -1);
+      links.push({
+        href: `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(dest)}${way.length ? `&waypoints=${encodeURIComponent(way.join("|"))}` : ""}`,
+        from: i + 1,
+        to: i + part.length,
+      });
+    }
+    return links;
+  };
+
+  const areaPage = (
+    <div>
+      <div className="sticky top-0 z-30 mb-3 flex items-center gap-3 rounded bg-navy px-3 py-2.5 text-paper shadow">
+        <button onClick={() => setView("list")} className="rounded border border-white/40 px-2.5 py-1 font-mono text-xs uppercase">
+          ← Back
+        </button>
+        <span className="font-display text-lg font-semibold">📍 By area</span>
+        <span className="ml-auto text-right font-mono text-[11px] uppercase text-brass-light">
+          {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
+        </span>
+      </div>
+
+      <div className="mb-3 grid grid-cols-3 gap-1 rounded border border-line bg-white p-1">
+        {([
+          ["OPEN", "To deliver"],
+          ["DONE", "Done"],
+          ["ALL", "All"],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setAreaTab(k)}
+            className={`rounded py-1.5 font-mono text-[11px] font-bold uppercase ${areaTab === k ? "bg-navy text-paper" : "text-ink-soft"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {(
+        <div className="relative mb-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={areaFilter || areaTyped}
+              onChange={(e) => {
+                setAreaFilter("");
+                setAreaTyped(e.target.value);
+                setAreaSuggestOpen(true);
+              }}
+              onFocus={() => setAreaSuggestOpen(true)}
+              placeholder="🔎 Search area… (tap a suggestion)"
+              className={`w-full rounded border-2 px-3 py-2 text-sm uppercase ${areaFilter ? "border-navy bg-navy/5 font-bold text-navy" : "border-line"}`}
+            />
+            {(areaFilter || areaTyped) && (
+              <button
+                onClick={() => {
+                  setAreaFilter("");
+                  setAreaTyped("");
+                  setAreaSuggestOpen(false);
+                }}
+                className="shrink-0 rounded border border-line bg-white px-3 py-2 text-sm text-ink-soft"
+              >
+                ✕ All areas
+              </button>
+            )}
+          </div>
+          {areaSuggestOpen && !areaFilter && (() => {
+            const counts = new Map<string, number>();
+            for (const o of areaBase) counts.set(areaOf(o), (counts.get(areaOf(o)) ?? 0) + 1);
+            const t = areaTyped.trim().toUpperCase().replace(/^AL\s+/, "");
+            const list = Array.from(counts.entries())
+              .filter(([a]) => !t || a.toUpperCase().includes(t))
+              .sort((x, y) => (t && x[0].startsWith(t) ? -1 : 0) - (t && y[0].startsWith(t) ? -1 : 0) || x[0].localeCompare(y[0]));
+            return (
+              <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded border border-line bg-white p-2 shadow-lg">
+                {list.length === 0 ? (
+                  <p className="px-1 py-1 text-sm text-ink-soft">No parcels in an area like “{areaTyped}”.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {list.map(([a, n]) => (
+                      <button
+                        key={a}
+                        onClick={() => {
+                          setAreaFilter(a);
+                          setAreaTyped("");
+                          setAreaSuggestOpen(false);
+                        }}
+                        className="rounded-full border border-navy/30 bg-paper px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
+                      >
+                        📍 {a} <span className="text-ink-soft">({n})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => setAreaSuggestOpen(false)} className="mt-2 w-full text-center text-xs text-ink-soft underline">
+                  Close
+                </button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {areaGroups.length === 0 ? (
+        <div className="rounded border border-line bg-white py-14 text-center text-ink-soft">
+          <div className="mb-1 font-display text-lg text-navy">{areaTab === "OPEN" ? "All delivered 🎉" : "Nothing here"}</div>
+          {areaTab === "OPEN" ? "No parcels left to deliver." : "No parcels match."}
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {areaGroups.map((g, gi) => {
+            const routes = routeLinks(g.orders);
+            return (
+              <section key={g.key} className="space-y-2.5">
+                <div className="rounded bg-white px-3 py-2 shadow-sm ring-1 ring-line">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-base font-bold text-navy">
+                      {gi + 1}. {g.area}
+                    </span>
+                    <span className="font-mono text-[10px] uppercase text-ink-soft">{g.emirate}</span>
+                    <span className="ml-auto flex gap-1">
+                      <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="rounded border border-line px-1.5 text-xs disabled:opacity-30" title="Move area up">
+                        ▲
+                      </button>
+                      <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="rounded border border-line px-1.5 text-xs disabled:opacity-30" title="Move area down">
+                        ▼
+                      </button>
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[11px] uppercase text-ink-soft">
+                      {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((t, o) => t + o.total, 0))}
+                    </span>
+                    <span className="ml-auto flex flex-wrap gap-1.5">
+                      {routes.map((r) => (
+                        <a
+                          key={r.href}
+                          href={r.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded bg-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-white"
+                        >
+                          🗺 Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
+                        </a>
+                      ))}
+                    </span>
+                  </div>
+                </div>
+                {g.orders.map((o, oi) => (
+                  <div
+                    key={o.id}
+                    data-drag-group={g.key}
+                    data-id={o.id}
+                    className={`flex items-stretch gap-1.5 transition-shadow ${draggingId === o.id ? "relative z-20 scale-[1.01] opacity-90 shadow-xl ring-2 ring-brass" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      onPointerDown={(e) => startDrag(e, g, o.id)}
+                      onPointerMove={moveDrag}
+                      onPointerUp={endDrag}
+                      onPointerCancel={endDrag}
+                      style={{ touchAction: "none" }}
+                      className="flex w-8 shrink-0 cursor-grab select-none flex-col items-center justify-center gap-1 rounded border border-line bg-paper-2 text-ink-soft active:cursor-grabbing active:bg-brass/20"
+                      title="Hold and drag to change delivery order"
+                      aria-label={`Drag to reorder, position ${oi + 1}`}
+                    >
+                      <span className="font-mono text-[11px] font-bold text-navy">{oi + 1}</span>
+                      <span className="text-lg leading-none">⠿</span>
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      {renderCard(o)}
+                      {(o.status === "PENDING" || o.status === "TRANSFER") && (
+                        noteOpenId !== o.id ? (
+                          <button
+                            onClick={() => setNoteOpenId(o.id)}
+                            className="w-full rounded-b border border-t-0 border-line bg-paper px-3 py-1.5 text-left font-mono text-[10.5px] uppercase text-ink-soft"
+                          >
+                            {o.driverNote ? "✎ Change note" : "📝 Not delivered? add a note"}
+                          </button>
+                        ) : (
+                        <div className="flex flex-wrap items-center gap-1 rounded-b border border-t-0 border-line bg-paper px-2 py-1.5">
+                          {OPEN_NOTES.map((n) => (
+                            <button
+                              key={n}
+                              onClick={() => {
+                                setDriverNote(o, n);
+                                setNoteOpenId(null);
+                              }}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] ${o.driverNote === n ? "border-pending bg-pending text-white" : "border-line bg-white text-ink-soft"}`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => {
+                              const t = window.prompt("Note for this parcel:", o.driverNote && !OPEN_NOTES.includes(o.driverNote) ? o.driverNote : "");
+                              if (t !== null) setDriverNote({ ...o, driverNote: null }, t.trim());
+                              setNoteOpenId(null);
+                            }}
+                            className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                              o.driverNote && !OPEN_NOTES.includes(o.driverNote) ? "border-pending bg-pending text-white" : "border-line bg-white text-ink-soft"
+                            }`}
+                          >
+                            {o.driverNote && !OPEN_NOTES.includes(o.driverNote) ? `✎ ${o.driverNote}` : "✎ Other"}
+                          </button>
+                          <button onClick={() => setNoteOpenId(null)} className="ml-auto px-1 text-sm text-ink-soft" aria-label="Close">
+                            ✕
+                          </button>
+                        </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       {awaitingBankConfirm ? (
@@ -910,6 +1171,10 @@ export default function DriverPortalPage() {
         </button>
       )}
 
+      {view === "area" ? (
+        areaPage
+      ) : (
+        <>
       <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
       <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
 
@@ -950,83 +1215,13 @@ export default function DriverPortalPage() {
       </button>
 
 
-      <div className="mb-2 flex gap-1">
-        {([
-          ["list", "📋 List"],
-          ["area", "📍 By area"],
-        ] as const).map(([v, label]) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`rounded px-3 py-1.5 font-mono text-[11px] font-bold uppercase ${view === v ? "bg-navy text-paper" : "border border-line bg-white text-ink-soft"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {view === "area" && (
-        <div className="relative mb-3">
-          <div className="flex items-center gap-2">
-            <input
-              value={areaFilter || areaTyped}
-              onChange={(e) => {
-                setAreaFilter("");
-                setAreaTyped(e.target.value);
-                setAreaSuggestOpen(true);
-              }}
-              onFocus={() => setAreaSuggestOpen(true)}
-              placeholder="🔎 Search area… (tap a suggestion)"
-              className={`w-full rounded border-2 px-3 py-2 text-sm uppercase ${areaFilter ? "border-navy bg-navy/5 font-bold text-navy" : "border-line"}`}
-            />
-            {(areaFilter || areaTyped) && (
-              <button
-                onClick={() => {
-                  setAreaFilter("");
-                  setAreaTyped("");
-                  setAreaSuggestOpen(false);
-                }}
-                className="shrink-0 rounded border border-line bg-white px-3 py-2 text-sm text-ink-soft"
-              >
-                ✕ All areas
-              </button>
-            )}
-          </div>
-          {areaSuggestOpen && !areaFilter && (() => {
-            const counts = new Map<string, number>();
-            for (const o of orders) if (statusTab === "ALL" || o.status === statusTab) counts.set(areaOf(o), (counts.get(areaOf(o)) ?? 0) + 1);
-            const t = areaTyped.trim().toUpperCase().replace(/^AL\s+/, "");
-            const list = Array.from(counts.entries())
-              .filter(([a]) => !t || a.toUpperCase().includes(t))
-              .sort((x, y) => (t && x[0].startsWith(t) ? -1 : 0) - (t && y[0].startsWith(t) ? -1 : 0) || x[0].localeCompare(y[0]));
-            return (
-              <div className="absolute left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded border border-line bg-white p-2 shadow-lg">
-                {list.length === 0 ? (
-                  <p className="px-1 py-1 text-sm text-ink-soft">No parcels in an area like “{areaTyped}”.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {list.map(([a, n]) => (
-                      <button
-                        key={a}
-                        onClick={() => {
-                          setAreaFilter(a);
-                          setAreaTyped("");
-                          setAreaSuggestOpen(false);
-                        }}
-                        className="rounded-full border border-navy/30 bg-paper px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
-                      >
-                        📍 {a} <span className="text-ink-soft">({n})</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <button onClick={() => setAreaSuggestOpen(false)} className="mt-2 w-full text-center text-xs text-ink-soft underline">
-                  Close
-                </button>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      <button
+        onClick={() => setView("area")}
+        className="mb-3 flex w-full items-center justify-between rounded border-2 border-navy bg-white px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-navy shadow-sm hover:bg-paper-2"
+      >
+        <span>📍 By area — route, notes, reorder</span>
+        <span className="text-lg">›</span>
+      </button>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(["ALL", ...STATUSES] as const).map((s) => (
           <button
@@ -1074,50 +1269,7 @@ export default function DriverPortalPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {view === "area"
-            ? areaGroups.map((g, gi) => (
-                <div key={g.key} id={`area-${gi}`} className="space-y-3">
-                  <div className="sticky top-0 z-10 flex flex-wrap items-baseline justify-between gap-2 rounded bg-navy px-3 py-2 text-paper shadow">
-                    <span className="font-display text-base font-bold">
-                      {gi + 1}. {g.area} <span className="font-mono text-[11px] font-normal text-brass-light">· {g.emirate}</span>
-                    </span>
-                    <span className="flex items-center gap-2 font-mono text-[11px] uppercase">
-                      {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((s2, o) => s2 + o.total, 0))}
-                      <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="rounded border border-white/40 px-1.5 disabled:opacity-30" title="Move area up">
-                        ▲
-                      </button>
-                      <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="rounded border border-white/40 px-1.5 disabled:opacity-30" title="Move area down">
-                        ▼
-                      </button>
-                    </span>
-                  </div>
-                  {g.orders.map((o, oi) => (
-                    <div
-                      key={o.id}
-                      data-drag-group={g.key}
-                      data-id={o.id}
-                      className={`flex items-stretch gap-1.5 transition-shadow ${draggingId === o.id ? "relative z-20 scale-[1.01] opacity-90 shadow-xl ring-2 ring-brass" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        onPointerDown={(e) => startDrag(e, g, o.id)}
-                        onPointerMove={moveDrag}
-                        onPointerUp={endDrag}
-                        onPointerCancel={endDrag}
-                        style={{ touchAction: "none" }}
-                        className="flex w-8 shrink-0 cursor-grab select-none flex-col items-center justify-center gap-1 rounded border border-line bg-paper-2 text-ink-soft active:cursor-grabbing active:bg-brass/20"
-                        title="Hold and drag to change delivery order"
-                        aria-label={`Drag to reorder, position ${oi + 1}`}
-                      >
-                        <span className="font-mono text-[11px] font-bold text-navy">{oi + 1}</span>
-                        <span className="text-lg leading-none">⠿</span>
-                      </button>
-                      <div className="min-w-0 flex-1">{renderCard(o)}</div>
-                    </div>
-                  ))}
-                </div>
-              ))
-            : filtered.map((o) => renderCard(o))}
+          {filtered.map((o) => renderCard(o))}
         </div>
       )}
 
@@ -1156,6 +1308,8 @@ export default function DriverPortalPage() {
         </p>
       )}
       <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onSubmitted={() => showToast("Cash closing submitted", "success")} />
+        </>
+      )}
 
       {claimOpen && (
         <ClaimModal

@@ -669,8 +669,9 @@ required
                     >
                       {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
                     </td>
-                    <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
-                      {o.remarks || "—"}
+                    <td className="max-w-[160px] truncate text-ink-soft" title={[o.remarks, o.driverNote && `Driver: ${o.driverNote}`].filter(Boolean).join(" · ")}>
+                      {o.remarks || (o.driverNote ? "" : "—")}
+                      {o.driverNote && <span className="ml-1 rounded bg-pending-bg px-1 text-[11px] font-semibold text-pending">🚚 {o.driverNote}</span>}
                     </td>
                     <td className="whitespace-nowrap">
                       <button onClick={() => startEdit(o)} className="mr-2 text-xs text-brass hover:underline">
