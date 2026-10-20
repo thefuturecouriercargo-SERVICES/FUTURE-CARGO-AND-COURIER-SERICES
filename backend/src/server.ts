@@ -8,6 +8,7 @@ import { startWeeklyBackupScheduler } from "./services/backup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
+import { fixOtherEmirates } from "./services/inspiredWoo.service";
 
 async function main() {
   const app = createApp();
@@ -30,6 +31,9 @@ async function main() {
   startWooSyncScheduler();
   startPhotoPruneScheduler();
   void runVendorLoginResetOnce();
+  void fixOtherEmirates()
+    .then((n) => n && console.log(`[emirates] fixed ${n} parcel(s) saved as OTHER`))
+    .catch((err) => console.error("[emirates] fix failed", err));
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console

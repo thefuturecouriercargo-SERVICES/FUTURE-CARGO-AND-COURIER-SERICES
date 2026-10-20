@@ -162,7 +162,9 @@ function groupByArea(list: Order[], savedOrder: string[], parcelOrder: string[] 
   const rank = (k: string) => {
     const i = savedOrder.indexOf(k);
     if (i >= 0) return i;
-    const d = DEFAULT_AREA_ROUTE.indexOf(k);
+    // By area name too, so a parcel saved with emirate "OTHER" still follows the route.
+    let d = DEFAULT_AREA_ROUTE.indexOf(k);
+    if (d < 0) d = DEFAULT_AREA_ROUTE.findIndex((r) => r.endsWith(`|${k.split("|")[1]}`));
     return d >= 0 ? savedOrder.length + d : Number.MAX_SAFE_INTEGER;
   };
   const pRank = (id: string) => {

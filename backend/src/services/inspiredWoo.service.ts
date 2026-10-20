@@ -131,7 +131,13 @@ const STATE_TO_EMIRATE: Record<string, string> = {
 };
 
 function detectEmirate(addr: WooAddress): string {
-  const text = `${addr.state ?? ""} ${addr.city ?? ""} ${addr.address_1 ?? ""} ${addr.address_2 ?? ""}`.toLowerCase();
+  return emirateFromText(`${addr.state ?? ""} ${addr.city ?? ""} ${addr.address_1 ?? ""} ${addr.address_2 ?? ""}`, addr.state);
+}
+
+/** Emirate from a free-text address (state code first when given). "OTHER" when unknown. */
+export function emirateFromText(raw: string, stateCode?: string): string {
+  const text = raw.toLowerCase();
+  const addr = { state: stateCode };
   if (/\bal\s*ain\b|\balain\b/.test(text)) return "AL AIN";
   const code = (addr.state ?? "").toUpperCase().trim();
   if (STATE_TO_EMIRATE[code]) return STATE_TO_EMIRATE[code];
@@ -142,6 +148,9 @@ function detectEmirate(addr: WooAddress): string {
   if (/ajman/.test(text)) return "AJMAN";
   if (/sharjah|\bshj\b/.test(text)) return "SHARJAH";
   if (/dubai|\bdxb\b/.test(text)) return "DUBAI";
+  // No emirate written: well-known area names decide (Deira, Qusais… → Dubai; Muwaileh, Taawun… → Sharjah).
+  if (/(?:\b|al)(muwail|muweil|taawun|tawoon|qasimi|majaz|abu\s*shag|rolla|butina|yarmook|sajaa|al\s*khan\b|zahia|aljada|university\s*city|maysaloon)/.test(text)) return "SHARJAH";
+  if (/(?:\b|al)(deira|qusais|karama|mankh?ool|bur\s*dub|rigga|riqqa|naif|nayef|murar|muteena|baraha|hor\s*al\s*anz|horl[ae]nz|abu\s*hail|buhail|mamzar|garhoud|muhaisn|mirdif|warqa|rashidiya|qouz|quoz|barsha|jlt|jvc|jbr|marina|business\s*bay|downtown|silicon|international\s*city|jebel\s*ali|jabal\s*ali|furjan|discovery\s*garden|dip\b|satwa|jumeira|oud\s*metha|jaddaf|waheda|wuheida|wuhaida|twar|mizhar|khawaneej|nad\s*al|ras\s*al\s*khor|dubailand|arjan|motor\s*city|sports\s*city|meydan|damascus\s*st)/.test(text)) return "DUBAI";
   return "OTHER";
 }
 
@@ -517,4 +526,26 @@ export function startWooSyncScheduler() {
   };
   setTimeout(tick, 90 * 1000);
   setInterval(tick, 5 * 60 * 1000);
+}
+
+/**
+ * Parcels saved with emirate "OTHER" whose address clearly names a place
+ * ("Al Muteena, Deira", "Firj Murar") get the right emirate — bookings and
+ * their orders. Safe to run on every start: it only touches "OTHER" ones.
+ */
+export async function fixOtherEmirates(): Promise<number> {
+  const since = new Date(Date.now() - 60 * 24 * 3600 * 1000);
+  const list = await prisma.booking.findMany({
+    where: { emirate: "OTHER", createdAt: { gte: since } },
+    select: { id: true, address: true, orderId: true },
+  });
+  let fixed = 0;
+  for (const b of list) {
+    const em = emirateFromText(b.address);
+    if (em === "OTHER") continue;
+    await prisma.booking.update({ where: { id: b.id }, data: { emirate: em } });
+    if (b.orderId) await prisma.order.updateMany({ where: { id: b.orderId, emirate: "OTHER" }, data: { emirate: em } });
+    fixed++;
+  }
+  return fixed;
 }

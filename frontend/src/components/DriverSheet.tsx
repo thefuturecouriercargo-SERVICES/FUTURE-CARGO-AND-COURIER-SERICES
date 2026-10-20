@@ -10,13 +10,17 @@ const URGENT_RE =
 
 const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
 
-/** Route order: office route list first, then the rest A–Z; inside an area by CN. */
+/** Route order by area name (so an order saved with emirate "OTHER" still sits with its area):
+ *  office route list first, then the rest A–Z, unknown/no-address last; inside an area by CN. */
 function sortForRoute(list: Order[]) {
   const rank = (o: Order) => {
-    const i = DEFAULT_AREA_ROUTE.indexOf(`${o.emirate}|${areaOf(o)}`);
+    const a = areaOf(o);
+    if (a === "NO ADDRESS") return 30_000;
+    if (a === "OTHER AREA") return 20_000;
+    const i = DEFAULT_AREA_ROUTE.findIndex((k) => k.endsWith(`|${a}`));
     return i < 0 ? 10_000 : i;
   };
-  return [...list].sort((a, b) => rank(a) - rank(b) || a.emirate.localeCompare(b.emirate) || areaOf(a).localeCompare(areaOf(b)) || a.cnNo - b.cnNo);
+  return [...list].sort((a, b) => rank(a) - rank(b) || areaOf(a).localeCompare(areaOf(b)) || a.cnNo - b.cnNo);
 }
 
 /**
@@ -76,7 +80,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
               b?.customerName ?? "",
               b?.customerPhone ?? "",
               area,
-              b ? `${b.address}${b.emirate && !b.address.toLowerCase().includes(b.emirate.toLowerCase()) ? `, ${b.emirate}` : ""}` : o.emirate,
+              b ? `${b.address}${b.emirate && b.emirate !== "OTHER" && b.emirate !== "EXCHANGED" && !b.address.toLowerCase().includes(b.emirate.toLowerCase()) ? `, ${b.emirate}` : ""}` : o.emirate,
               o.total === 0 && b ? "PREPAID" : fmtNumber(o.total),
               [b?.notes, o.driverNote ? `Driver: ${o.driverNote}` : ""].filter(Boolean).join(" · "),
             ];

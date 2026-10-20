@@ -63,15 +63,15 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?khawaneej\b|\bkhawanij\b/i, "AL KHAWANEEJ"],
   [/\bawir\b/i, "AL AWIR"],
   [/\bmuhaisnah?\b|\bmuhsina\b|\bmuhaisna\b|\bmhaisna\b|\bmuhaisanah\b|\bmuhaisinah\b|\bmuhaisina\b|\bmuhaisnah[\s\-']*\d\b|\bsonapur\b/i, "MUHAISNAH"],
-  [/\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)/i, "AL QUSAIS"],
+  [/\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)|\bdamascus[\s\-']*street\b|\bdamascus[\s\-']*st\b/i, "AL QUSAIS"],
   [/\bal[\s\-]*twar\b|\btawar\b/i, "AL TWAR"],
-  [/\b(?:al[\s\-]*)?nahda\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
+  [/\b(?:al[\s\-]*)?nahda\b|\b(?:al[\s\-]*)?nahadha\b|\b(?:al[\s\-]*)?nahdha\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
   [/\b(?:al[\s\-]*)?rashidiy?a\b|\brashidiyah\b|\brashidia\b/i, "AL RASHIDIYA"],
   [/\bgarhoud\b|\bgarhood\b|\bairport[\s\-']*terminal\b|\bdubai[\s\-']*airport\b|\bdxb[\s\-']*airport\b/i, "AL GARHOUD"],
   [/\b(?:al[\s\-]*)?mamzar\b/i, "AL MAMZAR"],
-  [/\b(?:al[\s\-]*)?waheda\b|\bwuhaida\b/i, "AL WAHEDA"],
-  [/\bhor[\s\-']*al[\s\-']*anz\b|\bhor[\s\-']*alanz\b|\bhorlanz\b|\bhoralanz\b|\bhor[\s\-']*al[\s\-']*ans\b|\bhor[\s\-']*el[\s\-']*anz\b/i, "HOR AL ANZ"],
-  [/\babu[\s\-']*hail\b|\babuhail\b|\babu[\s\-']*hael\b/i, "ABU HAIL"],
+  [/\b(?:al[\s\-]*)?waheda\b|\bwuhaida\b|\b(?:al[\s\-]*)?wuheida\b|\bwuhaida\b|\bwaheida\b|\bwahaida\b|\bwuhida\b/i, "AL WAHEDA"],
+  [/\bhor[\s\-']*al[\s\-']*anz\b|\bhor[\s\-']*alanz\b|\bhorlanz\b|\bhoralanz\b|\bhor[\s\-']*al[\s\-']*ans\b|\bhor[\s\-']*el[\s\-']*anz\b|\bhorl[ae]nz\b|\bhor[\s\-']*l[ae]nz\b|\bhor[\s\-']*al[\s\-']*ens\b/i, "HOR AL ANZ"],
+  [/\babu[\s\-']*hail\b|\babuhail\b|\babu[\s\-']*hael\b|\bbuhail\b|\bbu[\s\-']*hail\b/i, "ABU HAIL"],
   [/\b(?:al[\s\-]*)?rigga\b|\briqqa\b|\bal[\s\-']*riqqa\b|\brigga[\s\-']*road\b/i, "RIGGA"],
   [/\b(?:al[\s\-]*)?baraha\b/i, "AL BARAHA"],
   [/\b(?:al[\s\-]*)?murar\b|\bfrij[\s\-']*murar\b|\bfirj[\s\-']*murar\b|\bfereej[\s\-']*murar\b|\bfareej[\s\-']*murar\b|\bfreej[\s\-']*murar\b|\bmurar\b/i, "FRIJ MURAR"],
@@ -150,7 +150,7 @@ const SHARJAH: AreaRule[] = [
   [/\b(?:al[\s\-]*)?suyoh\b|\bsuyouh\b/i, "AL SUYOH / TILAL"],
   [/\bmaysaloon\b|\bmaisaloon\b|\bmysaloon\b|\bmaysalon\b|\bmysalon\b|\bmaisalun\b/i, "MAYSALOON"],
   [/\b(?:al[\s\-]*)?jubail\b/i, "AL JUBAIL"],
-  [/\b(?:al[\s\-]*)?nahda\b|(?:\bal\s*nahda\b(?=.*\b(sharjah|shj|sharja|sharjha)\b))|\b(?:al[\s\-]*)?nahda[\s\-']*sharjah\b|\bnahda[\s\-']*park\b/i, "AL NAHDA (SHJ)"],
+  [/\b(?:al[\s\-]*)?nahda\b|\b(?:al[\s\-]*)?nahadha\b|\b(?:al[\s\-]*)?nahdha\b|(?:\bal\s*nahda\b(?=.*\b(sharjah|shj|sharja|sharjha)\b))|\b(?:al[\s\-]*)?nahda[\s\-']*sharjah\b|\bnahda[\s\-']*park\b/i, "AL NAHDA (SHJ)"],
   [/\b(?:al[\s\-]*)?wahda\b|\bwahda[\s\-']*street\b/i, "AL WAHDA (SHJ)"],
   [/\b(?:al[\s\-]*)?rifa'?a?\b/i, "AL RIFA"],
   [/\bal[\s\-]*riqa\b/i, "AL RIQA"],
@@ -413,7 +413,7 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   const text = (address ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "NO ADDRESS";
   // Al Nahda exists in both Dubai and Sharjah: an emirate written in the address decides.
-  if (/\bnahda\b/i.test(text)) {
+  if (/\bnah[a]?d[h]?a\b/i.test(text)) {
     if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
     if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
   }
