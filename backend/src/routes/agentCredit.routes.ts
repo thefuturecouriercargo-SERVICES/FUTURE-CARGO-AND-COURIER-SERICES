@@ -11,9 +11,9 @@ import { emitGlobal } from "../lib/socket";
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 
-// New-entries report: for a given day, how many genuinely new consignments each
-// agent got. "New" means created that day — not orders merely carried over or
-// resolved that day. Same rule used on the Vendor Credit page's equivalent report.
+// New-entries report: for a given day, every consignment each agent GOT that day —
+// newly entered for them (by scan or typed in Daily Entry) or transferred to them —
+// with the full list for the PDF / Excel export. Orders merely carried over aren't counted.
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
@@ -21,29 +21,107 @@ router.get(
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const agents = await prisma.user.findMany({ where: { isAgent: true }, select: { id: true, name: true } });
     const agentIds = agents.map((a) => a.id);
+    const nameOf = new Map(agents.map((a) => [a.id, a.name]));
 
-    const orders = await prisma.order.findMany({
-      where: { employeeId: { in: agentIds }, createdAt: { gte: start, lt: end } },
-      select: { employeeId: true, total: true, cnNo: true },
+    const select = {
+      id: true,
+      cnNo: true,
+      total: true,
+      status: true,
+      emirate: true,
+      createdAt: true,
+      employeeId: true,
+      brandName: true,
+      vendor: { select: { name: true } },
+      booking: { select: { customerName: true, customerPhone: true, address: true, items: true } },
+    } as const;
+
+    // 1) Entered that day for an agent.
+    const created = await prisma.order.findMany({ where: { employeeId: { in: agentIds }, createdAt: { gte: start, lt: end } }, select });
+    // How each was entered: a scan that day created it → Scanned, otherwise typed in → Manual.
+    const scans = await prisma.scanLog.findMany({
+      where: { createdAt: { gte: start, lt: end }, driverId: { in: agentIds }, result: { in: ["ACCEPTED", "REASSIGNED"] } },
+      select: { orderId: true, cnNo: true, driverId: true, result: true, createdAt: true, fromDriver: true },
+    });
+    const scannedIds = new Set(scans.filter((s) => s.result === "ACCEPTED").map((s) => s.orderId).filter(Boolean) as string[]);
+
+    // 2) Transferred to an agent that day (Transfer button, or moved by scanning).
+    const transfers = await prisma.orderTransfer.findMany({
+      where: { toEmployeeId: { in: agentIds }, transferredAt: { gte: start, lt: end } },
+      select: { orderId: true, toEmployeeId: true, transferredAt: true, fromEmployee: { select: { name: true } } },
+    });
+    const moved = [
+      ...transfers.map((t) => ({ orderId: t.orderId, agentId: t.toEmployeeId, at: t.transferredAt, from: t.fromEmployee.name })),
+      ...scans.filter((s) => s.result === "REASSIGNED" && s.orderId).map((s) => ({ orderId: s.orderId!, agentId: s.driverId!, at: s.createdAt, from: s.fromDriver ?? "" })),
+    ];
+    const movedOrders = moved.length
+      ? await prisma.order.findMany({ where: { id: { in: Array.from(new Set(moved.map((m) => m.orderId))) } }, select })
+      : [];
+    const byId = new Map(movedOrders.map((o) => [o.id, o]));
+
+    type Entry = {
+      agentId: string;
+      agentName: string;
+      type: "SCANNED" | "MANUAL" | "TRANSFERRED";
+      at: Date;
+      from?: string;
+      cnNo: number;
+      vendor: string;
+      customerName: string;
+      customerPhone: string;
+      address: string;
+      emirate: string;
+      items: string;
+      total: number;
+      status: string;
+    };
+    const toEntry = (o: (typeof created)[number], agentId: string, type: Entry["type"], at: Date, from?: string): Entry => ({
+      agentId,
+      agentName: nameOf.get(agentId) ?? "",
+      type,
+      at,
+      from,
+      cnNo: o.cnNo,
+      vendor: o.vendor?.name ?? o.brandName ?? "",
+      customerName: o.booking?.customerName ?? "",
+      customerPhone: o.booking?.customerPhone ?? "",
+      address: o.booking?.address ?? "",
+      emirate: o.emirate,
+      items: o.booking?.items ?? "",
+      total: o.total,
+      status: o.status,
     });
 
-    const seenCn = new Set<number>();
-    const grouped = new Map<string, { agentId: string; agentName: string; count: number; totalAmount: number }>();
-
-    for (const o of orders) {
-      if (seenCn.has(o.cnNo)) continue;
-      seenCn.add(o.cnNo);
-      const agent = agents.find((a) => a.id === o.employeeId);
-      if (!agent) continue;
-      const existing = grouped.get(o.employeeId) ?? { agentId: o.employeeId, agentName: agent.name, count: 0, totalAmount: 0 };
-      existing.count += 1;
-      existing.totalAmount += o.total;
-      grouped.set(o.employeeId, existing);
+    const seen = new Set<string>(); // one row per agent + CN
+    const entries: Entry[] = [];
+    for (const o of created) {
+      const k = `${o.employeeId}|${o.cnNo}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      entries.push(toEntry(o, o.employeeId, scannedIds.has(o.id) ? "SCANNED" : "MANUAL", o.createdAt));
     }
+    for (const m of moved) {
+      const o = byId.get(m.orderId);
+      if (!o) continue;
+      const k = `${m.agentId}|${o.cnNo}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      entries.push(toEntry(o, m.agentId, "TRANSFERRED", m.at, m.from));
+    }
+    entries.sort((a, b) => a.agentName.localeCompare(b.agentName) || a.type.localeCompare(b.type) || a.cnNo - b.cnNo);
 
+    const grouped = new Map<string, { agentId: string; agentName: string; count: number; totalAmount: number; scanned: number; manual: number; transferred: number }>();
+    for (const e of entries) {
+      const g = grouped.get(e.agentId) ?? { agentId: e.agentId, agentName: e.agentName, count: 0, totalAmount: 0, scanned: 0, manual: 0, transferred: 0 };
+      g.count += 1;
+      g.totalAmount += e.total;
+      if (e.type === "SCANNED") g.scanned += 1;
+      else if (e.type === "MANUAL") g.manual += 1;
+      else g.transferred += 1;
+      grouped.set(e.agentId, g);
+    }
     const rows = Array.from(grouped.values()).sort((a, b) => a.agentName.localeCompare(b.agentName));
-
-    res.json({ rows });
+    res.json({ rows, entries });
   })
 );
 

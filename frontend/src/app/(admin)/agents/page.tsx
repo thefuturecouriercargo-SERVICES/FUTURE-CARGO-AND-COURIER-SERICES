@@ -1,5 +1,7 @@
 "use client";
 
+import AgentEntriesExport, { AgentEntry } from "@/components/AgentEntriesExport";
+
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
@@ -65,7 +67,10 @@ export default function AgentsPage() {
   const [loadingMonthly, setLoadingMonthly] = useState(false);
 
   const [newEntriesDate, setNewEntriesDate] = useState(todayStr());
-  const [newEntriesRows, setNewEntriesRows] = useState<{ agentId: string; agentName: string; count: number; totalAmount: number }[]>([]);
+  const [newEntriesRows, setNewEntriesRows] = useState<
+    { agentId: string; agentName: string; count: number; totalAmount: number; scanned: number; manual: number; transferred: number }[]
+  >([]);
+  const [newEntriesList, setNewEntriesList] = useState<AgentEntry[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
 
   const load = useCallback(async () => {
@@ -89,8 +94,9 @@ export default function AgentsPage() {
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);
     try {
-      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/agent-credit/new-entries", { query: { date: newEntriesDate } });
+      const res = await apiFetch<{ rows: typeof newEntriesRows; entries?: AgentEntry[] }>("/agent-credit/new-entries", { query: { date: newEntriesDate } });
       setNewEntriesRows(res.rows);
+      setNewEntriesList(res.entries ?? []);
     } finally {
       setLoadingNewEntries(false);
     }
@@ -759,11 +765,12 @@ export default function AgentsPage() {
               <button onClick={() => setNewEntriesDate(todayStr())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
                 Today
               </button>
+              <AgentEntriesExport entries={newEntriesList} date={newEntriesDate} />
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            How many genuinely new consignments each agent got on <b>{newEntriesDate}</b>. Counts an order only
-            on the day it was actually entered — not carried-over or resolved days.
+            Every consignment each agent got on <b>{newEntriesDate}</b>: newly entered (by scan or typed in Daily
+            Entry) plus transferred to them that day. Orders only carried over from earlier days aren&apos;t counted.
           </p>
 
           {loadingNewEntries ? (
@@ -775,6 +782,9 @@ export default function AgentsPage() {
               <thead>
                 <tr>
                   <th>Agent</th>
+                  <th className="text-right">Scanned</th>
+                  <th className="text-right">Manual entry</th>
+                  <th className="text-right">Transferred</th>
                   <th className="text-right">New Entries</th>
                   <th className="text-right">Total Amount</th>
                 </tr>
@@ -783,7 +793,10 @@ export default function AgentsPage() {
                 {newEntriesRows.map((r) => (
                   <tr key={r.agentId}>
                     <td>{r.agentName}</td>
-                    <td className="text-right font-mono">{r.count}</td>
+                    <td className="text-right font-mono">{r.scanned}</td>
+                    <td className="text-right font-mono">{r.manual}</td>
+                    <td className="text-right font-mono">{r.transferred}</td>
+                    <td className="text-right font-mono font-bold">{r.count}</td>
                     <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
                   </tr>
                 ))}
@@ -791,6 +804,9 @@ export default function AgentsPage() {
               <tfoot>
                 <tr className="font-semibold">
                   <td>TOTAL</td>
+                  <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.scanned, 0)}</td>
+                  <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.manual, 0)}</td>
+                  <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.transferred, 0)}</td>
                   <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
                   <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                 </tr>
