@@ -271,6 +271,24 @@ export default function PhotoBulkEntry({
   const readyOk = ready.filter((c) => !problems(c.fields).length);
   const saved = cards.filter((c) => c.status === "saved" && c.booking);
   const reading = cards.filter((c) => c.status === "queued" || c.status === "reading").length;
+  // Everything not saved yet, with the reason — so a skipped photo is never missed.
+  const notSaved = cards
+    .map((c, i) => ({ c, n: i + 1 }))
+    .filter(({ c }) => c.status !== "saved" && c.status !== "queued" && c.status !== "reading" && c.status !== "saving")
+    .map(({ c, n }) => ({
+      key: c.key,
+      n,
+      why:
+        c.status === "blocked"
+          ? "same bill already entered"
+          : c.status === "duplicate"
+            ? "possible duplicate — confirm or remove"
+            : c.status === "error"
+              ? "photo could not be read"
+              : problems(c.fields).length
+                ? `missing ${problems(c.fields).join(", ")}`
+                : c.message ?? "not saved yet",
+    }));
 
   const input = "w-full rounded border px-2 py-1.5 text-sm";
   const cls = (c: Card, name: keyof Fields) =>
@@ -360,10 +378,31 @@ export default function PhotoBulkEntry({
         </p>
       )}
 
+      {saved.length > 0 && notSaved.length > 0 && !savingAll && reading === 0 && (
+        <div className="mb-3 border-2 border-cancelled bg-cancelled-bg p-3 text-sm text-cancelled">
+          <b>
+            ⚠ {saved.length} saved · {notSaved.length} NOT saved
+          </b>{" "}
+          — fix or remove {notSaved.length === 1 ? "it" : "them"}:
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {notSaved.map((x) => (
+              <button
+                key={x.key}
+                onClick={() => document.getElementById(`photo-card-${x.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                className="rounded border border-cancelled bg-white px-2 py-1 text-xs"
+              >
+                Photo #{x.n}: {x.why} →
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {cards.map((c, idx) => (
           <div
             key={c.key}
+            id={`photo-card-${c.key}`}
             className={`flex flex-col gap-3 border p-3 md:flex-row ${
               c.status === "saved" ? "border-delivered bg-delivered-bg" : c.status === "error" || c.status === "duplicate" || c.status === "blocked" ? "border-cancelled bg-cancelled-bg" : "border-line"
             }`}
