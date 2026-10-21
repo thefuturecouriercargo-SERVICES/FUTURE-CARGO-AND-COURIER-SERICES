@@ -11,6 +11,7 @@ const EMIRATES = ["DUBAI", "SHARJAH", "ABUDHABI", "AL AIN", "AJMAN", "RAS AL KHA
 export interface ReadOrder {
   vendorRef: string | null;
   customerName: string | null;
+  agent: string | null;
   customerPhone: string | null;
   address: string | null;
   emirate: string | null;
@@ -35,9 +36,12 @@ How these slips usually look:
 - Area / building / street → address (keep the words as written, fix obvious spelling like "Busness bay" → "Business Bay").
 - A UAE phone number, usually 05X XXX XXXX. Write it as "05X XXX XXXX". If a digit is unreadable, give your best reading and add "phone" to unclear.
 - Quantity like "1pce", "2 pcs", "1 pc" and any product name → items, written like "1 × Perfume" or "1 piece" when no product is named.
+- Shoes are common: "1 shoe", "2 shoes", "1 pair", "1 sh" → items "1 × Shoe" / "2 × Shoe". Read the number before it carefully.
 - An amount like "55/-", "AED 55", "55 dhs" → codAmount (whole number). "Paid" / "prepaid" → 0.
 - Words like "Top Urgent", "Urgent", "Call before", "Evening" → notes (e.g. "TOP URGENT").
 - Customer names are often NOT written — then customerName is null. Do not invent one.
+- A short name or initials written on its own (e.g. "Haira", "K", "KD", "Sam") is usually the vendor's AGENT / salesman, not the customer → put it in "agent", and leave customerName null unless the slip clearly labels a customer name.
+- The bill number (vendorRef) is important — always look for it and read every digit.
 - Ignore single stray letters or ticks in the corners (e.g. a lone "N") — they are internal marks, not data.
 Never guess data that is not on the slip; use null. List any field you were unsure about in "unclear".`;
 
@@ -54,6 +58,7 @@ const TOOL = {
           properties: {
             vendorRef: { type: ["string", "null"], description: "Vendor's bill / order number" },
             customerName: { type: ["string", "null"] },
+            agent: { type: ["string", "null"], description: "Agent / salesman name or initials written on the slip (e.g. K, KD, Haira)" },
             customerPhone: { type: ["string", "null"] },
             address: { type: ["string", "null"] },
             emirate: { type: ["string", "null"], enum: [...EMIRATES, null] },
@@ -121,6 +126,7 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg"): 
   return orders.map((o) => ({
     vendorRef: o.vendorRef ? String(o.vendorRef).trim() : null,
     customerName: o.customerName?.trim() || null,
+    agent: o.agent ? String(o.agent).trim() || null : null,
     customerPhone: o.customerPhone?.trim() || null,
     address: o.address?.trim() || null,
     emirate: o.emirate && (EMIRATES as readonly string[]).includes(o.emirate) ? o.emirate : null,

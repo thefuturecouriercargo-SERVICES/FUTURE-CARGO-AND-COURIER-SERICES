@@ -38,6 +38,7 @@ interface Card {
 interface ReadOrder {
   vendorRef: string | null;
   customerName: string | null;
+  agent?: string | null;
   customerPhone: string | null;
   address: string | null;
   emirate: string | null;
@@ -76,8 +77,9 @@ async function shrink(file: Blob, maxSide: number, quality: number): Promise<str
   return canvas.toDataURL("image/jpeg", quality);
 }
 
-function problems(f: Fields): string[] {
+function problems(f: Fields, needBill = false): string[] {
   const p: string[] = [];
+  if (needBill && !f.vendorRef.trim()) p.push("vendorRef");
   if (f.customerPhone.replace(/\D/g, "").length < 7) p.push("customerPhone");
   if (!f.address.trim()) p.push("address");
   if (!f.emirate) p.push("emirate");
@@ -110,6 +112,9 @@ export default function PhotoBulkEntry({
   cardsRef.current = cards;
 
   const chosenVendorName = mode === "admin" ? vendors?.find((v) => v.id === vendorId)?.name ?? "" : vendorName ?? "";
+  // EW: the bill No. is the only way to tell their orders apart — always required.
+  const needBill = /^EW$/i.test(chosenVendorName.trim());
+  const problemsOf = (f: Fields) => problems(f, needBill);
 
   useEffect(() => {
     apiFetch<{ configured: boolean }>(`${mode === "admin" ? "/bookings" : "/vendor-portal"}/photo-reader/status`)
@@ -122,7 +127,14 @@ export default function PhotoBulkEntry({
   }, []);
 
   const setField = (key: string, name: keyof Fields, value: string) =>
-    patch(key, (c) => ({ fields: { ...c.fields, [name]: value }, unclear: c.unclear.filter((u) => u !== name) }));
+    patch(key, (c) => {
+      const fields = { ...c.fields, [name]: value };
+      // Placeholder name follows the bill No. ("EW customer · 7509").
+      if (name === "vendorRef" && /^\S+ customer( · .*)?$/.test(c.fields.customerName)) {
+        fields.customerName = `${c.fields.customerName.split(" customer")[0]} customer${value.trim() ? ` · ${value.trim()}` : ""}`;
+      }
+      return { fields, unclear: c.unclear.filter((u) => u !== name) };
+    });
 
   /** Read one photo; a slip with several orders becomes several cards. */
   async function readOne(card: Card, file: Blob, vName: string, vId: string) {
@@ -133,16 +145,22 @@ export default function PhotoBulkEntry({
         method: "POST",
         body: mode === "admin" ? { vendorId: vId, image, thumb } : { image, thumb },
       });
-      const toFields = (o: ReadOrder): Fields => ({
-        vendorRef: o.vendorRef ?? "",
-        customerName: o.customerName || `${vName || "Vendor"} customer${o.vendorRef ? ` · ${o.vendorRef}` : ""}`,
-        customerPhone: o.customerPhone ?? "",
-        address: o.address ?? "",
-        emirate: o.emirate ?? "",
-        items: o.items ?? "",
-        codAmount: o.codAmount === null || o.codAmount === undefined ? "" : String(o.codAmount),
-        notes: o.notes ?? "",
-      });
+      // EW never writes the customer's name: a name on their slip is the agent (K, KD, Haira…).
+      const noCustomerNames = /^EW$/i.test((vName || "").trim());
+      const toFields = (o: ReadOrder): Fields => {
+        const agent = o.agent || (noCustomerNames ? o.customerName : null);
+        const name = noCustomerNames ? null : o.customerName;
+        return {
+          vendorRef: o.vendorRef ?? "",
+          customerName: name || `${vName || "Vendor"} customer${o.vendorRef ? ` · ${o.vendorRef}` : ""}`,
+          customerPhone: o.customerPhone ?? "",
+          address: o.address ?? "",
+          emirate: o.emirate ?? "",
+          items: o.items ?? "",
+          codAmount: o.codAmount === null || o.codAmount === undefined ? "" : String(o.codAmount),
+          notes: [agent ? `Agent ${agent}` : "", o.notes ?? ""].filter(Boolean).join(" · "),
+        };
+      };
       if (!res.orders.length) {
         patch(card.key, { status: "ready", photoId: res.photoId, message: "No order found on this photo — type it in or remove it." });
         return;
@@ -216,7 +234,7 @@ export default function PhotoBulkEntry({
 
   async function saveCard(card: Card, confirmDuplicate = false) {
     const f = card.fields;
-    const missing = problems(f);
+    const missing = problemsOf(f);
     if (missing.length) {
       patch(card.key, { message: "Fill the red boxes first." });
       return false;
@@ -259,7 +277,7 @@ export default function PhotoBulkEntry({
     setSavingAll(true);
     try {
       for (const c of cardsRef.current) {
-        if (c.status === "ready" && !problems(c.fields).length) await saveCard(c);
+        if (c.status === "ready" && !problemsOf(c.fields).length) await saveCard(c);
       }
       onSaved?.();
     } finally {
@@ -268,7 +286,7 @@ export default function PhotoBulkEntry({
   }
 
   const ready = cards.filter((c) => c.status === "ready");
-  const readyOk = ready.filter((c) => !problems(c.fields).length);
+  const readyOk = ready.filter((c) => !problemsOf(c.fields).length);
   const saved = cards.filter((c) => c.status === "saved" && c.booking);
   const reading = cards.filter((c) => c.status === "queued" || c.status === "reading").length;
   // Everything not saved yet, with the reason — so a skipped photo is never missed.
@@ -285,14 +303,16 @@ export default function PhotoBulkEntry({
             ? "possible duplicate — confirm or remove"
             : c.status === "error"
               ? "photo could not be read"
-              : problems(c.fields).length
-                ? `missing ${problems(c.fields).join(", ")}`
+              : problemsOf(c.fields).length
+                ? `missing ${problemsOf(c.fields)
+                    .map((k) => ({ vendorRef: "bill no.", customerName: "name", customerPhone: "phone", address: "address", emirate: "emirate", codAmount: "COD" })[k as string] ?? k)
+                    .join(", ")}`
                 : c.message ?? "not saved yet",
     }));
 
   const input = "w-full rounded border px-2 py-1.5 text-sm";
   const cls = (c: Card, name: keyof Fields) =>
-    `${input} ${problems(c.fields).includes(name) ? "border-cancelled bg-cancelled-bg" : c.unclear.includes(name) ? "border-pending bg-pending-bg" : "border-line"}`;
+    `${input} ${problemsOf(c.fields).includes(name) ? "border-cancelled bg-cancelled-bg" : c.unclear.includes(name) ? "border-pending bg-pending-bg" : "border-line"}`;
   const lbl = "mb-0.5 block font-mono text-[10px] uppercase tracking-wide text-ink-soft";
 
   return (
