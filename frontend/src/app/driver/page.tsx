@@ -762,11 +762,8 @@ export default function DriverPortalPage() {
             ↩ Refund — give customer AED {fmtNumber(-o.total)}
           </div>
         )}
-        {(o.status !== "PENDING" || o.remarks || o.driverNote || age !== null) && (
+        {(o.status === "TRANSFER" || o.remarks || o.driverNote || age !== null) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px]">
-            {o.status !== "PENDING" && o.status !== "TRANSFER" && (
-              <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${statusSelectedClass(o.status)}`}>{o.status}</span>
-            )}
             {o.status === "TRANSFER" && (
               <span className="rounded bg-transferred-bg px-1.5 py-0.5 font-semibold text-transferred">↪ PENDING · transferred{o.transferredBy ? ` by ${o.transferredBy}` : ""}</span>
             )}
@@ -789,9 +786,13 @@ export default function DriverPortalPage() {
           <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location">📍</button>
           <button
             onClick={() => setStatusOrder(o)}
-            className="flex h-10 flex-1 items-center justify-center rounded-full bg-delivered font-mono text-[12px] font-bold uppercase tracking-wide text-white active:scale-[0.98]"
+            className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full font-mono text-[12.5px] font-bold uppercase tracking-wide text-white active:scale-[0.98] ${
+              o.status === "DELIVERED" ? "bg-delivered" : o.status === "CANCELLED" ? "bg-cancelled" : "bg-pending"
+            }`}
+            title="Tap to change status"
           >
-            Update status
+            {o.status === "DELIVERED" ? "✓ Delivered" : o.status === "CANCELLED" ? "✕ Cancelled" : "⏳ Pending"}
+            <span className="text-[10px] opacity-80">▾</span>
           </button>
           <button
             onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
