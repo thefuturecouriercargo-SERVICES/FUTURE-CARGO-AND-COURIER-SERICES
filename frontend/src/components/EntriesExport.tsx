@@ -95,7 +95,7 @@ export default function EntriesExport({
         doc.setFontSize(9.5);
         const c = (t: EntryRow["type"]) => mine.filter((e) => e.type === t).length;
         doc.text(
-          `${date}   ·   ${mine.length} entries   ·   AED ${fmtNumber(mine.reduce((s, e) => s + e.total, 0))}   ·   Scanned ${c("SCANNED")} · Manual ${c("MANUAL")} · Transferred ${c("TRANSFERRED")}`,
+          `${date}   ·   ${mine.length} entries   ·   AED ${fmtNumber(mine.reduce((s, e) => s + e.total, 0))}   ·   Scanned ${c("SCANNED")} · Manual ${c("MANUAL")}${isVendor && !c("TRANSFERRED") ? "" : ` · Transferred ${c("TRANSFERRED")}`}`,
           10,
           19
         );
