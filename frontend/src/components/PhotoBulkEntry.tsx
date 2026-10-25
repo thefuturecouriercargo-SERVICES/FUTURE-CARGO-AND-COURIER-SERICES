@@ -83,7 +83,7 @@ function problems(f: Fields, needBill = false): string[] {
   if (f.customerPhone.replace(/\D/g, "").length < 7) p.push("customerPhone");
   if (!f.address.trim()) p.push("address");
   if (!f.emirate) p.push("emirate");
-  if (f.codAmount.trim() === "" || !Number.isFinite(Number(f.codAmount)) || Number(f.codAmount) < 0) p.push("codAmount");
+  if (f.codAmount.trim() === "" || !Number.isFinite(Number(f.codAmount)) ) p.push("codAmount");
   if (!f.customerName.trim()) p.push("customerName");
   return p;
 }

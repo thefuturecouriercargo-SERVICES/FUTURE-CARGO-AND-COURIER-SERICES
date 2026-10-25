@@ -176,8 +176,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
 
       {/* COD */}
       <div className="mt-1.5 flex items-center justify-between border-2 border-black px-2 py-1">
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{booking.codAmount > 0 ? "Cash on delivery" : "Payment"}</span>
-        <span style={{ fontSize: sq ? 18 : 22, fontWeight: 800 }}>{booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : "PREPAID"}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{booking.codAmount > 0 ? "Cash on delivery" : booking.codAmount < 0 ? "Refund — give customer" : "Payment"}</span>
+        <span style={{ fontSize: sq ? 18 : 22, fontWeight: 800 }}>{booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : "PREPAID"}</span>
       </div>
 
       {/* Customer */}

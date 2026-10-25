@@ -85,7 +85,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     setError("");
     if (vendors && !vendorId) return setError("Choose a vendor.");
     const cod = Number(form.codAmount);
-    if (form.codAmount.trim() === "" || Number.isNaN(cod) || cod < 0) return setError("Enter the COD amount (0 if prepaid).");
+    if (form.codAmount.trim() === "" || Number.isNaN(cod)) return setError("Enter the COD amount (0 if prepaid, minus for a refund).");
 
     const payload: BookingInput = {
       vendorRef: form.vendorRef.trim() || undefined,
@@ -198,7 +198,18 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         </div>
         <div>
           <label className={labelCls}>COD amount (AED) *</label>
-          <input value={form.codAmount} onChange={set("codAmount")} className={input} required inputMode="numeric" placeholder="0 if prepaid" />
+          <div className="flex gap-1">
+            <input value={form.codAmount} onChange={set("codAmount")} className={input} required inputMode="numeric" placeholder="0 if prepaid" />
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, codAmount: form.codAmount.trim().startsWith("-") ? form.codAmount.trim().slice(1) : `-${form.codAmount.trim()}` })}
+              title="Refund: the driver gives this amount to the customer"
+              className={`shrink-0 rounded border px-2 font-mono text-[10px] font-bold uppercase ${form.codAmount.trim().startsWith("-") ? "border-transferred bg-transferred-bg text-transferred" : "border-line bg-white text-ink-soft"}`}
+            >
+              ↩ Refund
+            </button>
+          </div>
+          {form.codAmount.trim().startsWith("-") && <p className="mt-1 text-xs text-transferred">Refund — the driver gives AED {form.codAmount.trim().slice(1) || "…"} to the customer.</p>}
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Items</label>

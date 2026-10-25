@@ -49,7 +49,7 @@ function Requests() {
   async function accept(r: CustomerRequest, confirmDuplicate = false) {
     const f = form[r.id] ?? { items: "", cod: "" };
     const cod = Number(f.cod);
-    if (f.cod.trim() === "" || !Number.isFinite(cod) || cod < 0) return setMsg({ ok: false, text: "Enter the COD amount (0 if prepaid)." });
+    if (f.cod.trim() === "" || !Number.isFinite(cod)) return setMsg({ ok: false, text: "Enter the COD amount (0 if prepaid)." });
     setBusyId(r.id);
     setMsg(null);
     try {

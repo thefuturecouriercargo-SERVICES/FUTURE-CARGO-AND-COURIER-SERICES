@@ -88,7 +88,7 @@ export default function OrderDetails({
     `Address: ${booking.address}${booking.emirate && !booking.address.toLowerCase().includes(booking.emirate.toLowerCase()) ? `, ${booking.emirate}` : ""}`,
     booking.items ? `Items: ${booking.items}` : "",
     booking.notes ? `Note: ${booking.notes}` : "",
-    cod === 0 ? "PREPAID — do not collect cash" : `COD: AED ${fmtNumber(cod)}`,
+    cod === 0 ? "PREPAID — do not collect cash" : cod < 0 ? `REFUND: give the customer AED ${fmtNumber(-cod)}` : `COD: AED ${fmtNumber(cod)}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -130,6 +130,8 @@ export default function OrderDetails({
         <span className="font-mono">
           {(total ?? booking.codAmount) === 0 ? (
             <b className="text-cancelled">PREPAID — do not collect cash</b>
+          ) : (total ?? booking.codAmount) < 0 ? (
+            <b className="text-transferred">↩ REFUND — give the customer AED {fmtNumber(-(total ?? booking.codAmount))}</b>
           ) : (
             <>AED {fmtNumber(total ?? booking.codAmount)}</>
           )}

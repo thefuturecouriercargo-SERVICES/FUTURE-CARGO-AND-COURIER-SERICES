@@ -121,6 +121,8 @@ function customerWaLink(o: Order) {
   const name = /customer\s*·|^ew customer/i.test(b.customerName) ? "" : ` ${b.customerName}`;
   const payLine = isPrepaid(o)
     ? "💵 Payment: *Already paid* — nothing to pay on delivery"
+    : o.total < 0
+    ? `💵 Refund: our driver will give you *AED ${-o.total}*`
     : `💵 Amount: *AED ${o.total}*\n_Cash only — card payment is not accepted_`;
   const text = [
     `Hello${name},`,
@@ -621,6 +623,11 @@ export default function DriverPortalPage() {
                   <div className="mt-1 rounded bg-cancelled px-2 py-1 text-sm font-bold text-white">🚨 URGENT — {o.booking?.notes}</div>
                 )}
                 {isPrepaid(o) && <PrepaidBadge large />}
+                {o.total < 0 && (
+                  <div className="my-2 rounded border-2 border-transferred bg-transferred-bg px-3 py-2 text-center font-mono text-sm font-bold uppercase tracking-wide text-transferred">
+                    ↩ Refund — give the customer AED {fmtNumber(-o.total)}
+                  </div>
+                )}
                 {o.booking && (
                   <div className="mt-1 text-sm">
                     👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>

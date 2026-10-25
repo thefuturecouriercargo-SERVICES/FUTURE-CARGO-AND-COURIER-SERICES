@@ -35,7 +35,8 @@ export const bookingInputSchema = z.object({
   address: z.string().trim().min(1, "Address is required").max(500),
   emirate: z.string().trim().min(1).max(30),
   items: z.string().trim().max(1500).optional(),
-  codAmount: z.number().int().min(0, "COD amount can't be negative"),
+  // Negative = refund: the driver gives this amount back to the customer.
+  codAmount: z.number().int().min(-100000).max(1000000),
   notes: z.string().trim().max(500).optional(),
   // Set after the user saw the "possible duplicate" warning and chose to save anyway.
   confirmDuplicate: z.boolean().optional(),

@@ -465,7 +465,7 @@ router.post(
     const body = z
       .object({
         items: z.string().trim().max(1500).optional(),
-        codAmount: z.number().int().min(0),
+        codAmount: z.number().int().min(-100000),
         notes: z.string().trim().max(500).optional(),
         customerName: z.string().trim().min(1).max(120).optional(),
         customerPhone: z.string().trim().min(5).max(30).optional(),
