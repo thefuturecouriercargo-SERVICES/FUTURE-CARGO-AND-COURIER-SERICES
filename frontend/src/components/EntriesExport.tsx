@@ -65,8 +65,10 @@ export default function EntriesExport({
   const [chosen, setAgentId] = useState("");
   const agentId = onlyGroup ?? chosen;
   const [busy, setBusy] = useState(false);
-  const list = agentId ? entries.filter((e) => e.groupId === agentId) : entries;
-  const label = agentId ? agents.find((a) => a[0] === agentId)?.[1] ?? "" : `all-${groupLabel.toLowerCase()}s`;
+  const [onlyType, setOnlyType] = useState<"" | EntryRow["type"]>("");
+  const list = entries.filter((e) => (!agentId || e.groupId === agentId) && (!onlyType || e.type === onlyType));
+  const typeTitle = onlyType ? SECTIONS.find((x) => x.type === onlyType)!.title : "";
+  const label = `${agentId ? agents.find((a) => a[0] === agentId)?.[1] ?? "" : `all-${groupLabel.toLowerCase()}s`}${onlyType ? `-${onlyType.toLowerCase()}-only` : ""}`;
   const isVendor = groupLabel === "Vendor";
 
   const head = ["#", "CN", isVendor ? "Driver" : "Vendor", "Customer", "Phone", "Address", "Items", "Amount", ...(isVendor ? ["DL", "Status"] : []), "Scan details"];
@@ -91,13 +93,13 @@ export default function EntriesExport({
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const W = doc.internal.pageSize.getWidth();
       let first = true;
-      for (const [id, name] of agents.filter((a) => !agentId || a[0] === agentId)) {
+      for (const [id, name] of agents.filter((a) => (!agentId || a[0] === agentId) && list.some((e) => e.groupId === a[0]))) {
         if (!first) doc.addPage();
         first = false;
         const mine = list.filter((e) => e.groupId === id);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(15);
-        doc.text(`${fileLabel} — ${name.toUpperCase()}`, 10, 13);
+        doc.text(`${fileLabel}${typeTitle ? ` (${typeTitle} only)` : ""} — ${name.toUpperCase()}`, 10, 13);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9.5);
         const c = (t: EntryRow["type"]) => mine.filter((e) => e.type === t).length;
@@ -188,9 +190,9 @@ export default function EntriesExport({
       };
       for (const sec of SECTIONS) {
         const rows = list.filter((e) => e.type === sec.type);
-        if (rows.length || sec.type === "SCANNED" || sec.type === "MANUAL") add(sec.title, rows);
+        if (onlyType ? sec.type === onlyType : rows.length || sec.type === "SCANNED" || sec.type === "MANUAL") add(sec.title, rows);
       }
-      add("All", list);
+      if (!onlyType) add("All", list);
       const buf = await wb.xlsx.writeBuffer();
       const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const a = document.createElement("a");
@@ -226,6 +228,14 @@ export default function EntriesExport({
         {agents.map(([id, name]) => (
           <option key={id} value={id}>
             {name}
+          </option>
+        ))}
+      </select>
+      <select value={onlyType} onChange={(e) => setOnlyType(e.target.value as "" | EntryRow["type"])} className="rounded border border-line px-2 py-1.5 text-xs">
+        <option value="">All entries</option>
+        {SECTIONS.filter((x) => entries.some((e) => e.type === x.type)).map((x) => (
+          <option key={x.type} value={x.type}>
+            {x.title} only ({entries.filter((e) => e.type === x.type && (!agentId || e.groupId === agentId)).length})
           </option>
         ))}
       </select>
