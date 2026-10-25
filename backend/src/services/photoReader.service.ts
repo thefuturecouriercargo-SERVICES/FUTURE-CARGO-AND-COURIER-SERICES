@@ -137,6 +137,70 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg"): 
   }));
 }
 
+const MESSAGE_PROMPT = `You are reading a WhatsApp order message that a vendor (a small UAE shop) pasted into a courier company's booking form. Fill the booking fields.
+
+Rules:
+- customerName: the customer's name. Often the FIRST line on its own with no label (e.g. "Suneer"). Never put a building, company, landmark or product in the name.
+- address: everything that tells the driver where to go — building / business center / office or flat number, street, area, landmarks ("Behind Nissan Showroom", "near Lulu"). Keep the vendor's words and order, joined with ", ". Lines like "Golden Business center 208" are ADDRESS (208 is the office number), not items.
+- customerPhone: UAE mobile written "05X XXX XXXX". If there are two numbers put the second in notes as "Alt phone: …".
+- emirate: from the area (Deira, Port Saeed, Al Quoz, Business Bay… → DUBAI; Al Nahda/Muwaileh/Al Majaz/Rolla → SHARJAH unless it says Dubai; Mussafah/Khalifa City → ABUDHABI; Al Ain → AL AIN). Use OTHER only if outside the list.
+- items: only the products ordered, written like "2 × Akoya (AED 80), 1 × Prestige ruby (AED 40)". "2pc", "x2", "2 nos", "qty 2" are quantities; the AED after an item is that line's amount. Sizes (100ml) stay in the name. Never list names, addresses, totals or delivery words as items.
+- codAmount: the "Total" line if there is one, otherwise the sum of the item amounts (+ delivery charge if written). "Paid"/"prepaid" → 0. Whole number.
+- notes: delivery instructions only (time, "urgent", "call before", alt phone, location link).
+- vendorRef: the vendor's order / bill number if labelled.
+Never invent data; use null when a field isn't in the message. List fields you were unsure about in "unclear".`;
+
+/** Read a pasted WhatsApp order text with Claude → one suggested order. */
+export async function readOrderMessage(text: string, products: string[] = []): Promise<ReadOrder | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new ApiError(503, "AI is not set up — add ANTHROPIC_API_KEY in Railway");
+  const hint = products.length ? `\n\nThis vendor's product names that appear in the message (spell them like this): ${products.join(", ")}` : "";
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: MODEL(),
+      max_tokens: 1000,
+      tools: [TOOL],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: `${MESSAGE_PROMPT}${hint}\n\nMessage:\n"""\n${text}\n"""\n\nReply only by calling the ${TOOL.name} tool with exactly one order.` }],
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    content?: { type: string; name?: string; text?: string; input?: { orders?: ReadOrder[] } }[];
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    const msg = body.error?.message ?? `HTTP ${res.status}`;
+    if (res.status === 401) throw new ApiError(502, "AI key is wrong or revoked");
+    if (/credit|balance|billing/i.test(msg)) throw new ApiError(502, "AI has no credit left");
+    if (res.status === 429 || res.status === 529) throw new ApiError(503, "AI is busy — try again in a moment");
+    throw new ApiError(502, `AI error: ${msg}`);
+  }
+  let o: ReadOrder | undefined = body.content?.find((c) => c.type === "tool_use" && c.name === TOOL.name)?.input?.orders?.[0];
+  if (!o) {
+    const t = body.content?.filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n") ?? "";
+    try {
+      o = JSON.parse(t.match(/\{[\s\S]*\}/)?.[0] ?? "null")?.orders?.[0];
+    } catch {
+      o = undefined;
+    }
+  }
+  if (!o) return null;
+  return {
+    vendorRef: o.vendorRef ? String(o.vendorRef).trim() : null,
+    customerName: o.customerName?.trim() || null,
+    agent: null,
+    customerPhone: o.customerPhone?.trim() || null,
+    address: o.address?.trim() || null,
+    emirate: o.emirate && (EMIRATES as readonly string[]).includes(o.emirate) ? o.emirate : null,
+    items: o.items?.trim() || null,
+    codAmount: typeof o.codAmount === "number" && Number.isFinite(o.codAmount) ? Math.round(o.codAmount) : null,
+    notes: o.notes?.trim() || null,
+    unclear: Array.isArray(o.unclear) ? o.unclear : [],
+  };
+}
+
 const MAX_PHOTO_BYTES = 600 * 1024;
 
 /** Store the small copy of the slip so it can be attached to the booking on save. */

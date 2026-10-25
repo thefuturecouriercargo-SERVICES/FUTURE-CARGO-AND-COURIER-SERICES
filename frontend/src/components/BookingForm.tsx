@@ -3,7 +3,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
-import { ApiClientError } from "@/lib/api";
+import { apiFetch, ApiClientError } from "@/lib/api";
+import { ESCALO_PRODUCTS, INSPIRED_PRODUCTS } from "@/lib/products";
 
 interface Props {
   /** When set, the form edits this booking instead of creating a new one. */
@@ -26,6 +27,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
   const [saving, setSaving] = useState(false);
   const [paste, setPaste] = useState("");
   const [pasteMsg, setPasteMsg] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
 
   function fillFromMessage() {
     const p = parseWhatsappOrder(paste);
@@ -53,9 +55,56 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (p.notes?.startsWith("Prepaid")) warn.push("ℹ Message says paid — amount set to 0.");
     setPasteMsg(
       filled.length
-        ? [`✓ Filled ${filled.join(", ")}. Please check every field before saving.`, ...warn].join("\n")
-        : "Couldn't recognise anything — please type the details in."
+        ? [`✓ Filled ${filled.join(", ")}. ✨ AI is double-checking…`, ...warn].join("\n")
+        : "✨ AI is reading the message…"
     );
+    aiCheck(paste, next);
+  }
+
+  // Second opinion from AI: fixes what the rules got wrong (e.g. a name read as an item).
+  // Only fields the user hasn't touched since the rules filled them are replaced.
+  async function aiCheck(text: string, ruleForm: typeof EMPTY) {
+    setAiBusy(true);
+    const low = text.toLowerCase();
+    const products = [...ESCALO_PRODUCTS, ...INSPIRED_PRODUCTS].filter((n) => n.length > 2 && low.includes(n.toLowerCase())).slice(0, 60);
+    try {
+      const res = await apiFetch<{ order: { customerName: string | null; customerPhone: string | null; address: string | null; emirate: string | null; items: string | null; codAmount: number | null; notes: string | null; vendorRef: string | null; unclear: string[] } | null }>(
+        `${vendors ? "/bookings" : "/vendor-portal"}/message-read`,
+        { method: "POST", body: { text, products } }
+      );
+      const a = res.order;
+      if (!a) throw new Error("no result");
+      const changed: string[] = [];
+      setForm((cur) => {
+        const out = { ...cur };
+        const put = (k: keyof typeof EMPTY, v: string | null | undefined, label: string) => {
+          if (v == null || v === "" || cur[k] !== ruleForm[k]) return;
+          if (k === "emirate" && !EMIRATES.includes(v)) return;
+          if (out[k] !== v) changed.push(label);
+          out[k] = v;
+        };
+        put("customerName", a.customerName, "name");
+        put("customerPhone", a.customerPhone, "phone");
+        put("address", a.address, "address");
+        put("emirate", a.emirate, "emirate");
+        put("items", a.items, "items");
+        put("codAmount", a.codAmount == null ? null : String(a.codAmount), "amount");
+        put("notes", a.notes, "notes");
+        put("vendorRef", a.vendorRef, "bill no");
+        return out;
+      });
+      const sum = (a.items ?? "").match(/AED\s*([\d,]+)/gi)?.reduce((t, m) => t + Number(m.replace(/[^\d]/g, "")), 0);
+      const warn: string[] = [];
+      if (sum && a.codAmount != null && sum !== a.codAmount) warn.push(`⚠ Item prices add up to AED ${sum} but the amount is AED ${a.codAmount} — check it.`);
+      const missing = [!a.customerName && "name", !a.customerPhone && "phone", !a.address && "address", !a.items && "items", a.codAmount == null && "amount"].filter(Boolean);
+      if (missing.length) warn.push(`⚠ Not in the message: ${missing.join(", ")} — please type ${missing.length > 1 ? "them" : "it"}.`);
+      if (a.unclear?.length) warn.push(`⚠ AI wasn't sure about: ${a.unclear.join(", ")}.`);
+      setPasteMsg([`✨ AI checked the message${changed.length ? ` and corrected ${changed.join(", ")}` : " — all fields agree"}. Please check before saving.`, ...warn].join("\n"));
+    } catch {
+      setPasteMsg((m) => m.replace("✨ AI is double-checking…", "Please check every field before saving. (AI check not available right now.)").replace("✨ AI is reading the message…", "Couldn't recognise anything — please type the details in."));
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -147,10 +196,10 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
             <button
               type="button"
               onClick={fillFromMessage}
-              disabled={!paste.trim()}
+              disabled={!paste.trim() || aiBusy}
               className="rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-40"
             >
-              ⤵ Fill form from message
+              {aiBusy ? "✨ Reading…" : "⤵ Fill form from message"}
             </button>
             {pasteMsg && <span className={`whitespace-pre-line text-xs ${pasteMsg.includes("⚠") ? "font-semibold text-cancelled" : "text-ink-soft"}`}>{pasteMsg}</span>}
           </div>

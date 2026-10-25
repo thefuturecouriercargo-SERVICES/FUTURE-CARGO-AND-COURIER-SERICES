@@ -8,7 +8,7 @@ import { ApiError } from "../utils/asyncHandler";
 import { bookingInputSchema, createBooking, assertRefFree, ordersStopState } from "../services/booking.service";
 import { markWebsiteCompleted } from "../services/inspiredWoo.service";
 import { writeAuditLog } from "../services/audit.service";
-import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
+import { readOrderPhoto, readOrderMessage, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { emitGlobal } from "../lib/socket";
 import { isCustomerLinkVendor } from "./public.routes";
 
@@ -350,6 +350,14 @@ router.post(
     await writeAuditLog({ action: "BOOKING_CREATE", entity: "Booking", entityId: booking.id, meta: { vendor: booking.vendor.name, cnNo: booking.cnNo, by: "VENDOR" } });
     emitGlobal("booking:changed", { type: "created", id: booking.id });
     res.status(201).json(booking);
+  })
+);
+
+router.post(
+  "/message-read",
+  asyncHandler(async (req, res) => {
+    const d = z.object({ text: z.string().trim().min(5).max(4000), products: z.array(z.string().max(80)).max(60).optional() }).parse(req.body);
+    res.json({ order: await readOrderMessage(d.text, d.products) });
   })
 );
 

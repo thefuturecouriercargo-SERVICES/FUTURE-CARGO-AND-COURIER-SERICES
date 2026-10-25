@@ -7,7 +7,7 @@ import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { markWebsiteCompleted } from "../services/inspiredWoo.service";
 import { withScanLog, scanLogForDay } from "../services/scanLog.service";
-import { readOrderPhoto, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
+import { readOrderPhoto, readOrderMessage, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { bookingInputSchema, createBooking, acceptBooking, assertRefFree, assignByScan, scanBillVendors } from "../services/booking.service";
 
 // Office side of vendor bookings: the "Awaiting Pickup" queue.
@@ -93,6 +93,15 @@ const photoReadSchema = z.object({
   image: z.string().min(100), // data URL sent to the reader
   thumb: z.string().optional(), // smaller copy kept with the order
 });
+
+router.post(
+  "/message-read",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const d = z.object({ text: z.string().trim().min(5).max(4000), products: z.array(z.string().max(80)).max(60).optional() }).parse(req.body);
+    res.json({ order: await readOrderMessage(d.text, d.products) });
+  })
+);
 
 router.get(
   "/photo-reader/status",
