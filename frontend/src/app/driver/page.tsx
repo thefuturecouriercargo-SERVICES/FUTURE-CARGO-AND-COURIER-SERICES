@@ -1233,7 +1233,7 @@ export default function DriverPortalPage() {
                     </button>
                     <div className="min-w-0 flex-1">
                       {renderAreaCard(o)}
-                      {(o.status === "PENDING" || o.status === "TRANSFER") && (
+                      {detailsId === o.id && (o.status === "PENDING" || o.status === "TRANSFER") && (
                         noteOpenId !== o.id ? (
                           <button
                             onClick={() => setNoteOpenId(o.id)}
