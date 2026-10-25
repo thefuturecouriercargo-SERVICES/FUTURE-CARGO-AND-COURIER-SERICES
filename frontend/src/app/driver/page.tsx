@@ -131,10 +131,7 @@ function customerWaLink(o: Order) {
     `🏠 Delivery to: ${b.address}${o.emirate && !b.address.toLowerCase().includes(o.emirate.toLowerCase()) ? `, ${o.emirate}` : ""}`,
     payLine,
     "",
-    "📍 If this address is not correct, kindly share your location here so our driver can reach you easily.",
-    "",
-    "Thank you,",
-    "The Future Courier Service L.L.C",
+    "📍 *Please share your location* so our driver can reach you easily.",
   ].join("\n");
   return `https://wa.me/${waNumber(b.customerPhone)}?text=${encodeURIComponent(text)}`;
 }
