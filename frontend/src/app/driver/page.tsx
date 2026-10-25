@@ -480,7 +480,7 @@ export default function DriverPortalPage() {
   }
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      if (statusTab !== "ALL" && o.status !== statusTab) return false;
+      if (statusTab !== "ALL" && o.status !== statusTab && !(statusTab === "PENDING" && o.status === "TRANSFER")) return false;
       if (search && !String(o.cnNo).includes(search) && !o.brandName.toUpperCase().includes(search.toUpperCase())) return false;
       return true;
     });
@@ -648,9 +648,9 @@ export default function DriverPortalPage() {
                     {o.driverNoteAt ? ` · ${new Date(o.driverNoteAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
                   </div>
                 )}
-                {o.status === "TRANSFER" && o.transferredBy && (
-                  <div className="mt-1 text-xs text-transferred">
-                    Transferred by {o.transferredBy}
+                {o.status === "TRANSFER" && (
+                  <div className="mt-1 inline-block rounded bg-transferred-bg px-2 py-0.5 text-xs font-semibold text-transferred">
+                    ↪ Transferred to you{o.transferredBy ? ` by ${o.transferredBy}` : ""}
                   </div>
                 )}
                 {o.vendor.phone && (
@@ -673,8 +673,9 @@ export default function DriverPortalPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status)}`}>
-                  {o.status}
+                {/* A transferred parcel is still to deliver: show it as Pending (who transferred it is shown above). */}
+                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status === "TRANSFER" ? "PENDING" : o.status)}`}>
+                  {o.status === "TRANSFER" ? "PENDING" : o.status}
                 </span>
                 {agingDays(o.status, o.date) !== null && (
                   <span
