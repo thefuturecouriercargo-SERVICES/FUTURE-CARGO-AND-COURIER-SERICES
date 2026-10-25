@@ -7,6 +7,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
+import { scanInfoFor, ScanInfo } from "../services/entryScan.service";
 
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
@@ -43,7 +44,7 @@ router.get(
       where: { createdAt: { gte: start, lt: end }, driverId: { in: agentIds }, result: { in: ["ACCEPTED", "REASSIGNED"] } },
       select: { orderId: true, cnNo: true, driverId: true, result: true, createdAt: true, fromDriver: true },
     });
-    const scannedIds = new Set(scans.filter((s) => s.result === "ACCEPTED").map((s) => s.orderId).filter(Boolean) as string[]);
+    const scanInfo = await scanInfoFor(created.map((o) => o.id), start, end);
 
     // 2) Transferred to an agent that day (Transfer button, or moved by scanning).
     const transfers = await prisma.orderTransfer.findMany({
@@ -65,6 +66,7 @@ router.get(
       type: "SCANNED" | "MANUAL" | "TRANSFERRED";
       at: Date;
       from?: string;
+      scan?: ScanInfo;
       cnNo: number;
       vendor: string;
       customerName: string;
@@ -75,12 +77,13 @@ router.get(
       total: number;
       status: string;
     };
-    const toEntry = (o: (typeof created)[number], agentId: string, type: Entry["type"], at: Date, from?: string): Entry => ({
+    const toEntry = (o: (typeof created)[number], agentId: string, type: Entry["type"], at: Date, from?: string, scan?: ScanInfo): Entry => ({
       agentId,
       agentName: nameOf.get(agentId) ?? "",
       type,
       at,
       from,
+      scan,
       cnNo: o.cnNo,
       vendor: o.vendor?.name ?? o.brandName ?? "",
       customerName: o.booking?.customerName ?? "",
@@ -98,7 +101,8 @@ router.get(
       const k = `${o.employeeId}|${o.cnNo}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      entries.push(toEntry(o, o.employeeId, scannedIds.has(o.id) ? "SCANNED" : "MANUAL", o.createdAt));
+      const sc = scanInfo.get(o.id);
+      entries.push(toEntry(o, o.employeeId, sc ? "SCANNED" : "MANUAL", sc?.at ?? o.createdAt, undefined, sc));
     }
     for (const m of moved) {
       const o = byId.get(m.orderId);

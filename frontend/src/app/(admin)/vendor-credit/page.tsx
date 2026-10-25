@@ -1,5 +1,7 @@
 "use client";
 
+import EntriesExport, { EntryRow } from "@/components/EntriesExport";
+
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError, vendorCreditExportUrl } from "@/lib/api";
@@ -56,8 +58,9 @@ export default function VendorCreditPage() {
   const [loadingDelivered, setLoadingDelivered] = useState(false);
   const [newEntriesDate, setNewEntriesDate] = useState(dubaiToday());
   const [newEntriesRows, setNewEntriesRows] = useState<
-    { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; balance: number }[]
+    { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; balance: number; scanned?: number; manual?: number }[]
   >([]);
+  const [newEntriesList, setNewEntriesList] = useState<EntryRow[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
   const [rows, setRows] = useState<VendorCreditRow[]>([]);
   const [expandedVendorId, setExpandedVendorId] = useState<string | null>(null);
@@ -94,8 +97,9 @@ export default function VendorCreditPage() {
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);
     try {
-      const res = await apiFetch<{ rows: typeof newEntriesRows }>("/vendor-credit/new-entries", { query: { date: newEntriesDate } });
+      const res = await apiFetch<{ rows: typeof newEntriesRows; entries?: EntryRow[] }>("/vendor-credit/new-entries", { query: { date: newEntriesDate } });
       setNewEntriesRows(res.rows);
+      setNewEntriesList(res.entries ?? []);
     } finally {
       setLoadingNewEntries(false);
     }
@@ -255,6 +259,7 @@ export default function VendorCreditPage() {
               <button onClick={() => setNewEntriesDate(dubaiToday())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
                 Today
               </button>
+              <EntriesExport entries={newEntriesList} date={newEntriesDate} groupLabel="Vendor" fileLabel="Vendor entries" />
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
@@ -273,6 +278,8 @@ export default function VendorCreditPage() {
                 <thead>
                   <tr>
                     <th>Vendor</th>
+                    <th className="text-right">Scanned</th>
+                    <th className="text-right">Manual entry</th>
                     <th className="text-right">New Entries</th>
                     <th className="text-right">Total Amount</th>
                     <th className="text-right">Delivery Charge</th>
@@ -283,7 +290,9 @@ export default function VendorCreditPage() {
                   {newEntriesRows.map((r) => (
                     <tr key={r.vendorId}>
                       <td>{r.vendorName}</td>
-                      <td className="text-right font-mono">{r.count}</td>
+                      <td className="text-right font-mono">{r.scanned ?? "—"}</td>
+                      <td className="text-right font-mono">{r.manual ?? "—"}</td>
+                      <td className="text-right font-mono font-bold">{r.count}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
                       <td className="text-right font-mono">{fmtNumber(r.deliveryCharge)}</td>
                       <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.balance)}</td>
@@ -293,6 +302,8 @@ export default function VendorCreditPage() {
                 <tfoot>
                   <tr className="font-semibold">
                     <td>TOTAL</td>
+                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + (r.scanned ?? 0), 0)}</td>
+                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + (r.manual ?? 0), 0)}</td>
                     <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
                     <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                     <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.deliveryCharge, 0))}</td>

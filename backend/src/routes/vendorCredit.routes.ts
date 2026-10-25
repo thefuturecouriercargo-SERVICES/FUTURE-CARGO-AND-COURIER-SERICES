@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
+import { scanInfoFor } from "../services/entryScan.service";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange } from "../utils/dates";
@@ -192,26 +193,63 @@ router.get(
 
     const orders = await prisma.order.findMany({
       where: { createdAt: { gte: start, lt: end } },
-      select: { vendorId: true, total: true, deliveryCharge: true, cnNo: true, vendor: { select: { name: true } } },
+      select: {
+        id: true,
+        vendorId: true,
+        total: true,
+        deliveryCharge: true,
+        cnNo: true,
+        emirate: true,
+        status: true,
+        createdAt: true,
+        vendor: { select: { name: true } },
+        employee: { select: { name: true } },
+        booking: { select: { customerName: true, customerPhone: true, address: true, items: true } },
+      },
+      orderBy: { cnNo: "asc" },
     });
+    const scanInfo = await scanInfoFor(orders.map((o) => o.id), start, end);
 
     const seenCn = new Set<number>();
-    const grouped = new Map<string, { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number }>();
+    const grouped = new Map<string, { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; scanned: number; manual: number }>();
+    const entries: unknown[] = [];
 
     for (const o of orders) {
       if (seenCn.has(o.cnNo)) continue;
       seenCn.add(o.cnNo);
-      const existing = grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0 };
+      const sc = scanInfo.get(o.id);
+      const existing =
+        grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0, scanned: 0, manual: 0 };
       existing.count += 1;
       existing.totalAmount += o.total;
       existing.deliveryCharge += o.deliveryCharge;
+      if (sc) existing.scanned += 1;
+      else existing.manual += 1;
       grouped.set(o.vendorId, existing);
+      entries.push({
+        groupId: o.vendorId,
+        groupName: o.vendor.name,
+        type: sc ? "SCANNED" : "MANUAL",
+        at: sc?.at ?? o.createdAt,
+        scan: sc,
+        cnNo: o.cnNo,
+        vendor: o.vendor.name,
+        driver: o.employee?.name ?? "",
+        customerName: o.booking?.customerName ?? "",
+        customerPhone: o.booking?.customerPhone ?? "",
+        address: o.booking?.address ?? "",
+        emirate: o.emirate,
+        items: o.booking?.items ?? "",
+        total: o.total,
+        deliveryCharge: o.deliveryCharge,
+        status: o.status,
+      });
     }
 
     const rows = Array.from(grouped.values())
       .map((r) => ({ ...r, balance: r.totalAmount - r.deliveryCharge }))
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
-    res.json({ rows });
+    res.json({ rows, entries });
   })
 );
 

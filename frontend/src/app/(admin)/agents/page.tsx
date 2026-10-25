@@ -1,6 +1,6 @@
 "use client";
 
-import AgentEntriesExport, { AgentEntry } from "@/components/AgentEntriesExport";
+import EntriesExport, { EntryRow } from "@/components/EntriesExport";
 
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
@@ -70,7 +70,7 @@ export default function AgentsPage() {
   const [newEntriesRows, setNewEntriesRows] = useState<
     { agentId: string; agentName: string; count: number; totalAmount: number; scanned: number; manual: number; transferred: number }[]
   >([]);
-  const [newEntriesList, setNewEntriesList] = useState<AgentEntry[]>([]);
+  const [newEntriesList, setNewEntriesList] = useState<EntryRow[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
 
   const load = useCallback(async () => {
@@ -94,9 +94,9 @@ export default function AgentsPage() {
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);
     try {
-      const res = await apiFetch<{ rows: typeof newEntriesRows; entries?: AgentEntry[] }>("/agent-credit/new-entries", { query: { date: newEntriesDate } });
+      const res = await apiFetch<{ rows: typeof newEntriesRows; entries?: (Omit<EntryRow, "groupId" | "groupName"> & { agentId: string; agentName: string })[] }>("/agent-credit/new-entries", { query: { date: newEntriesDate } });
       setNewEntriesRows(res.rows);
-      setNewEntriesList(res.entries ?? []);
+      setNewEntriesList((res.entries ?? []).map((e) => ({ ...e, groupId: e.agentId, groupName: e.agentName })));
     } finally {
       setLoadingNewEntries(false);
     }
@@ -765,7 +765,7 @@ export default function AgentsPage() {
               <button onClick={() => setNewEntriesDate(todayStr())} className="rounded bg-navy px-2.5 py-1.5 font-mono text-xs uppercase text-paper hover:bg-navy-2">
                 Today
               </button>
-              <AgentEntriesExport entries={newEntriesList} date={newEntriesDate} />
+              <EntriesExport entries={newEntriesList} date={newEntriesDate} groupLabel="Agent" fileLabel="Agent entries" />
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
