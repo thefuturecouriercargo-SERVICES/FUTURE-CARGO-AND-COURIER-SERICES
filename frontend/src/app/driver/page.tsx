@@ -6,7 +6,6 @@ import { fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
-import LiveFlowPanel from "@/components/LiveFlowPanel";
 import OrderDetails from "@/components/OrderDetails";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
@@ -626,113 +625,6 @@ export default function DriverPortalPage() {
     }
   }
 
-  const renderCard = (o: Order) => (
-            <div
-              key={o.id}
-              className={`flex flex-wrap items-center justify-between gap-3.5 rounded border border-l-4 p-4 ${
-                isUrgent(o) ? "border-cancelled bg-cancelled-bg ring-2 ring-cancelled" : `border-line bg-white ${statusBorderClass(o.status)}`
-              }`}
-            >
-              <div className="min-w-0 max-w-full flex-1 basis-56">
-                <div className="font-mono text-[15px] font-bold text-navy">
-                  CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
-                </div>
-                {isUrgent(o) && (
-                  <div className="mt-1 rounded bg-cancelled px-2 py-1 text-sm font-bold text-white">🚨 URGENT — {o.booking?.notes}</div>
-                )}
-                {isPrepaid(o) && <PrepaidBadge large />}
-                {o.total < 0 && (
-                  <div className="my-2 rounded border-2 border-transferred bg-transferred-bg px-3 py-2 text-center font-mono text-sm font-bold uppercase tracking-wide text-transferred">
-                    ↩ Refund — give the customer AED {fmtNumber(-o.total)}
-                  </div>
-                )}
-                {o.booking && (
-                  <div className="mt-1 text-sm">
-                    👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
-                  </div>
-                )}
-                {o.booking?.address && <AddressTicker text={`${o.booking.address}${o.emirate && !o.booking.address.toLowerCase().includes(o.emirate.toLowerCase()) ? `, ${o.emirate}` : ""}`} />}
-                <button
-                  onClick={() => setAreaEdit(o)}
-                  className="mt-1 rounded border border-navy/30 bg-paper px-2 py-0.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
-                  title="Change area"
-                >
-                  📍 {areaOf(o)} ✎
-                </button>
-                <div className="mt-1 text-xs text-ink-soft">
-                  Total <b className="text-ink">{fmtNumber(o.total)} AED</b> · DL Charge <b className="text-ink">{fmtNumber(o.deliveryCharge)} AED</b> · <span className="font-semibold text-ink">{o.payment}</span> · {o.emirate}
-                </div>
-                {o.remarks && (
-                  <div className="mt-1 text-xs text-cancelled">
-                    Reason: {o.remarks}
-                  </div>
-                )}
-                {o.driverNote && (o.status === "PENDING" || o.status === "TRANSFER") && (
-                  <div className="mt-1 text-xs font-semibold text-pending">
-                    🚚 {o.driverNote}
-                    {o.driverNoteAt ? ` · ${new Date(o.driverNoteAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
-                  </div>
-                )}
-                {o.status === "TRANSFER" && (
-                  <div className="mt-1 inline-block rounded bg-transferred-bg px-2 py-0.5 text-xs font-semibold text-transferred">
-                    ↪ Transferred to you{o.transferredBy ? ` by ${o.transferredBy}` : ""}
-                  </div>
-                )}
-                {o.vendor.phone && (
-                  <div className="mt-2 flex gap-2">
-                    <a
-                      href={`tel:${o.vendor.phone}`}
-                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
-                    >
-                      📞 Call Vendor
-                    </a>
-                    <a
-                      href={`https://wa.me/${o.vendor.phone.replace(/\D/g, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded border border-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-wide text-delivered hover:bg-delivered-bg"
-                    >
-                      💬 WhatsApp
-                    </a>
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {/* A transferred parcel is still to deliver: show it as Pending (who transferred it is shown above). */}
-                <span className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${statusSelectedClass(o.status === "TRANSFER" ? "PENDING" : o.status)}`}>
-                  {o.status === "TRANSFER" ? "PENDING" : o.status}
-                </span>
-                {agingDays(o.status, o.date) !== null && (
-                  <span
-                    className={`rounded px-2 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide ${agingBadgeClass(agingDays(o.status, o.date)!)}`}
-                    title={`Pending ${agingDays(o.status, o.date)} days`}
-                  >
-                    {agingDays(o.status, o.date)}d old
-                  </span>
-                )}
-                <button
-                  onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
-                  className={`rounded border px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide hover:-translate-y-px ${
-                    detailsId === o.id ? "border-navy bg-navy text-paper" : "border-navy text-navy"
-                  }`}
-                >
-                  {detailsId === o.id ? "Hide details" : "Details"}
-                </button>
-                <button
-                  onClick={() => setStatusOrder(o)}
-                  className="rounded border border-line px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft hover:-translate-y-px"
-                >
-                  Update Status
-                </button>
-              </div>
-              {detailsId === o.id && (
-                <div className="w-full basis-full border-t border-line pt-3">
-                  <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
-                </div>
-              )}
-            </div>
-);
-
   // By-area page card: CN big on top, customer below, amount on the right;
   // buttons = Call customer · Change location · Update status · ⋯ details.
   const renderAreaCard = (o: Order) => {
@@ -1069,37 +961,39 @@ export default function DriverPortalPage() {
 
   const areaPage = (
     <div>
-      <div className="sticky top-0 z-30 mb-3 flex items-center gap-3 rounded bg-navy px-3 py-2.5 text-paper shadow">
-        <button onClick={() => setView("list")} className="rounded border border-white/40 px-2.5 py-1 font-mono text-xs uppercase">
-          ← Back
-        </button>
-        <span className="font-display text-lg font-semibold">📍 By area</span>
-        <span className="ml-auto text-right font-mono text-[11px] uppercase text-brass-light">
-          {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
-        </span>
-      </div>
-
-      <button
-        onClick={() => setStatusScanOpen(true)}
-        className="mb-3 flex w-full items-center justify-center gap-2 rounded bg-brass px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-white shadow hover:opacity-90"
-      >
-        📷 Scan to deliver
-      </button>
-
-      <div className="mb-3 grid grid-cols-3 gap-1 rounded border border-line bg-white p-1">
-        {([
-          ["OPEN", "To deliver"],
-          ["DONE", "Done"],
-          ["ALL", "All"],
-        ] as const).map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setAreaTab(k)}
-            className={`rounded py-1.5 font-mono text-[11px] font-bold uppercase ${areaTab === k ? "bg-navy text-paper" : "text-ink-soft"}`}
-          >
-            {label}
+      <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-2 backdrop-blur">
+        <div className="flex items-center gap-3 rounded-2xl bg-navy px-3 py-3 text-paper shadow-md">
+          <button onClick={() => setView("list")} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg" aria-label="Back">
+            ←
           </button>
-        ))}
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-lg font-semibold leading-tight">By area</div>
+            <div className="font-mono text-[10.5px] uppercase tracking-wide text-brass-light">
+              {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
+            </div>
+          </div>
+          <button
+            onClick={() => setStatusScanOpen(true)}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
+          >
+            📷 Scan
+          </button>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-line">
+          {([
+            ["OPEN", "To deliver"],
+            ["DONE", "Done"],
+            ["ALL", "All"],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setAreaTab(k)}
+              className={`rounded-full py-2 font-mono text-[11px] font-bold uppercase tracking-wide transition ${areaTab === k ? "bg-navy text-paper shadow" : "text-ink-soft"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       {(
         <div className="relative mb-3">
@@ -1112,8 +1006,8 @@ export default function DriverPortalPage() {
                 setAreaSuggestOpen(true);
               }}
               onFocus={() => setAreaSuggestOpen(true)}
-              placeholder="🔎 Search area… (tap a suggestion)"
-              className={`w-full rounded border-2 px-3 py-2 text-sm uppercase ${areaFilter ? "border-navy bg-navy/5 font-bold text-navy" : "border-line"}`}
+              placeholder="🔎  Search area…"
+              className={`w-full rounded-full border px-4 py-2.5 text-sm shadow-sm outline-none focus:border-navy ${areaFilter ? "border-navy bg-navy/5 font-bold uppercase text-navy" : "border-line bg-white"}`}
             />
             {(areaFilter || areaTyped) && (
               <button
@@ -1122,9 +1016,9 @@ export default function DriverPortalPage() {
                   setAreaTyped("");
                   setAreaSuggestOpen(false);
                 }}
-                className="shrink-0 rounded border border-line bg-white px-3 py-2 text-sm text-ink-soft"
+                className="shrink-0 rounded-full border border-line bg-white px-3.5 py-2.5 text-sm text-ink-soft shadow-sm"
               >
-                ✕ All areas
+                ✕ All
               </button>
             )}
           </div>
@@ -1176,39 +1070,33 @@ export default function DriverPortalPage() {
             const routes = routeLinks(g.orders);
             return (
               <section key={g.key} className="space-y-2.5">
-                <div className="rounded bg-white px-3 py-2 shadow-sm ring-1 ring-line">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-base font-bold text-navy">
-                      {gi + 1}. {g.area}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase text-ink-soft">{g.emirate}</span>
-                    <span className="ml-auto flex gap-1">
-                      <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="rounded border border-line px-1.5 text-xs disabled:opacity-30" title="Move area up">
-                        ▲
-                      </button>
-                      <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="rounded border border-line px-1.5 text-xs disabled:opacity-30" title="Move area down">
-                        ▼
-                      </button>
-                    </span>
+                <div className="flex items-center gap-2.5 px-1 pt-1">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brass font-mono text-[12px] font-bold text-white">{gi + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-display text-[17px] font-bold leading-tight text-navy">{g.area}</div>
+                    <div className="font-mono text-[10.5px] uppercase text-ink-soft">
+                      {g.emirate} · {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((t, o) => t + o.total, 0))}
+                    </div>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[11px] uppercase text-ink-soft">
-                      {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((t, o) => t + o.total, 0))}
-                    </span>
-                    <span className="ml-auto flex flex-wrap gap-1.5">
-                      {routes.map((r) => (
-                        <a
-                          key={r.href}
-                          href={r.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded bg-delivered px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-white"
-                        >
-                          🗺 Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
-                        </a>
-                      ))}
-                    </span>
-                  </div>
+                  {routes.map((r) => (
+                    <a
+                      key={r.href}
+                      href={r.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 rounded-full bg-delivered px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase text-white shadow-sm"
+                    >
+                      🗺 Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
+                    </a>
+                  ))}
+                  <span className="flex shrink-0 flex-col">
+                    <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="px-1 text-[11px] leading-none text-ink-soft disabled:opacity-20" title="Move area up" aria-label="Move area up">
+                      ▲
+                    </button>
+                    <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="px-1 text-[11px] leading-none text-ink-soft disabled:opacity-20" title="Move area down" aria-label="Move area down">
+                      ▼
+                    </button>
+                  </span>
                 </div>
                 {g.orders.map((o, oi) => (
                   <div
@@ -1320,9 +1208,6 @@ export default function DriverPortalPage() {
         areaPage
       ) : (
         <>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">{date}</p>
-      <h1 className="mb-6 font-display text-2xl font-semibold text-navy">Today&apos;s Deliveries</h1>
-
       {unconfirmedBankCarryover.length > 0 && (
         <div className="mb-6 border border-pending bg-pending-bg p-4">
           <h2 className="mb-1 font-display text-base font-semibold text-pending">
@@ -1342,69 +1227,99 @@ export default function DriverPortalPage() {
         </div>
       )}
 
-      {orders.length > 0 && (
-        <LiveFlowPanel
-          pending={orders.filter((o) => o.status === "PENDING").length}
-          transferred={orders.filter((o) => o.status === "TRANSFER").length}
-          delivered={orders.filter((o) => o.status === "DELIVERED").length}
-          cancelled={orders.filter((o) => o.status === "CANCELLED").length}
-          totalConsignments={orders.length}
+      {(() => {
+        const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
+        const nDel = orders.filter((o) => o.status === "DELIVERED").length;
+        const nCan = orders.filter((o) => o.status === "CANCELLED").length;
+        const toCollect = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").reduce((t, o) => t + o.total, 0);
+        const pct = orders.length ? Math.round((nDel / orders.length) * 100) : 0;
+        const tiles = [
+          ["ALL", "Total", orders.length, "text-paper"],
+          ["PENDING", "Pending", nPend, "text-[#F5C46B]"],
+          ["DELIVERED", "Delivered", nDel, "text-[#7FD3A5]"],
+          ["CANCELLED", "Cancelled", nCan, "text-[#F4A29A]"],
+        ] as const;
+        return (
+          <div className="mb-3 rounded-2xl bg-navy p-4 text-paper shadow-md">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="font-mono text-[10.5px] uppercase tracking-widest text-brass-light">{date}</div>
+                <div className="font-display text-xl font-semibold leading-tight">Today&apos;s deliveries</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-extrabold leading-none">{fmtNumber(toCollect)}</div>
+                <div className="mt-1 font-mono text-[9.5px] uppercase tracking-wide text-paper/60">AED to collect</div>
+              </div>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div className="h-full rounded-full bg-[#7FD3A5] transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mt-1 font-mono text-[10px] uppercase text-paper/60">
+              {nDel} of {orders.length} delivered · {pct}%
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-1.5">
+              {tiles.map(([k, label, n, color]) => (
+                <button
+                  key={k}
+                  onClick={() => setStatusTab(k)}
+                  className={`rounded-xl px-1 py-2 text-center transition ${statusTab === k ? "bg-white/20 ring-1 ring-white/60" : "bg-white/5"}`}
+                >
+                  <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
+                  <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-paper/70">{label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setClaimOpen(true)}
+          className="flex items-center gap-2.5 rounded-2xl bg-brass px-3 py-3 text-left text-white shadow active:scale-[0.98]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg">📦</span>
+          <span className="min-w-0">
+            <span className="block font-mono text-[12px] font-bold uppercase leading-tight">Assign</span>
+            <span className="block text-[11px] leading-tight opacity-85">Scan new parcel</span>
+          </span>
+        </button>
+        <button
+          onClick={() => setView("area")}
+          className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-3 text-left text-navy shadow ring-1 ring-line active:scale-[0.98]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-lg text-white">📍</span>
+          <span className="min-w-0">
+            <span className="block font-mono text-[12px] font-bold uppercase leading-tight">By area</span>
+            <span className="block text-[11px] leading-tight text-ink-soft">Route &amp; order</span>
+          </span>
+        </button>
+      </div>
+
+      <div className="mb-4 flex items-center gap-2 rounded-full bg-white py-1 pl-4 pr-1 shadow-sm ring-1 ring-line">
+        <span className="text-ink-soft">🔎</span>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search CN or vendor…"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none"
         />
-      )}
-
-      <button
-        onClick={() => setClaimOpen(true)}
-        className="mb-4 flex w-full items-center justify-center gap-2 rounded bg-brass px-4 py-3.5 font-mono text-sm font-bold uppercase tracking-wide text-white shadow hover:opacity-90"
-      >
-        📦 Assign order — scan barcode
-      </button>
-
-
-      <button
-        onClick={() => setView("area")}
-        className="mb-3 flex w-full items-center justify-between rounded border-2 border-navy bg-white px-4 py-3 font-mono text-sm font-bold uppercase tracking-wide text-navy shadow-sm hover:bg-paper-2"
-      >
-        <span>📍 By area — route, notes, reorder</span>
-        <span className="text-lg">›</span>
-      </button>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(["ALL", ...STATUSES] as const).map((s) => (
+        <button
+          onClick={() => setStatusScanOpen(true)}
+          title="Scan a label to update its status"
+          className="flex h-9 items-center gap-1 rounded-full bg-brass px-3 font-mono text-[11px] font-bold uppercase text-white"
+        >
+          📷 Scan
+        </button>
+        {voiceAssistant.supported && (
           <button
-            key={s}
-            onClick={() => setStatusTab(s)}
-            className={`rounded-full border px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide ${
-              statusTab === s ? "border-navy bg-navy text-paper" : "border-line bg-white text-ink-soft hover:border-brass"
-            }`}
+            onClick={voiceAssistant.start}
+            title="Voice assistant — say a CN number to search, or add a command like 'delivered bank'"
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition ${voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper"}`}
           >
-            {s === "ALL" ? "All" : s}
+            🎙
           </button>
-        ))}
-        <div className="ml-auto flex items-center gap-1.5">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search CN No…"
-            className="rounded border border-line px-3 py-1.5 text-sm"
-          />
-          <button
-            onClick={() => setStatusScanOpen(true)}
-            title="Scan a label to update its status"
-            className="flex h-9 items-center justify-center gap-1 rounded-full bg-brass px-3 font-mono text-[11px] font-bold uppercase text-white shadow hover:opacity-90"
-          >
-            📷 Scan
-          </button>
-          {voiceAssistant.supported && (
-            <button
-              onClick={voiceAssistant.start}
-              title="Voice assistant — say a CN number to search, or add a command like 'delivered bank'"
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-lg shadow transition ${
-                voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper hover:bg-navy-2"
-              }`}
-            >
-              🌐
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -1414,7 +1329,17 @@ export default function DriverPortalPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((o) => renderCard(o))}
+          {filtered.map((o, i) => (
+            <div key={o.id} className={`flex items-stretch overflow-hidden rounded-2xl bg-white shadow-[0_2px_6px_rgba(20,31,51,0.08)] ${isUrgent(o) ? "ring-2 ring-cancelled" : ""}`}>
+              <div className={`flex w-11 shrink-0 flex-col items-center justify-center gap-0.5 text-white ${isUrgent(o) ? "bg-cancelled" : o.status === "DELIVERED" ? "bg-delivered" : o.status === "CANCELLED" ? "bg-cancelled" : "bg-navy"}`}>
+                <span className="font-mono text-base font-extrabold leading-none">{i + 1}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                {renderAreaCard(o)}
+                <div className="px-3 pb-2 font-mono text-[10px] uppercase text-ink-soft">📍 {areaOf(o)}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1662,19 +1587,6 @@ function Kpi({ label, value }: { label: string; value: string | number }) {
       <div className="font-display text-xl font-semibold text-navy">{value}</div>
     </div>
   );
-}
-
-function statusBorderClass(status: OrderStatus) {
-  switch (status) {
-    case "DELIVERED":
-      return "border-l-delivered";
-    case "PENDING":
-      return "border-l-pending";
-    case "CANCELLED":
-      return "border-l-cancelled";
-    default:
-      return "border-l-transferred";
-  }
 }
 
 function statusSelectedClass(status: OrderStatus) {
