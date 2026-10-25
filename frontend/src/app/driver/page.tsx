@@ -136,6 +136,31 @@ function customerWaLink(o: Order) {
   return `https://wa.me/${waNumber(b.customerPhone)}?text=${encodeURIComponent(text)}`;
 }
 
+/**
+ * Address on the card, always scrolling slowly sideways so the driver can read it
+ * all without opening Details.
+ */
+function AddressTicker({ text }: { text: string }) {
+  const long = true; // always scrolls, short or long
+  return (
+    <div className="mt-1 flex max-w-full items-center gap-1 overflow-hidden text-[13px] text-ink">
+      <span className="shrink-0">🏠</span>
+      <div className="relative min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+        {long ? (
+          <span className="addr-ticker inline-block pr-10" style={{ animationDuration: `${Math.max(7, text.length / 5)}s` }}>
+            {text}
+            <span className="px-6 text-ink-soft">•</span>
+            {text}
+          </span>
+        ) : (
+          <span>{text}</span>
+        )}
+      </div>
+      {long && <style>{`@keyframes addrscroll{0%,10%{transform:translateX(0)}100%{transform:translateX(-50%)}} .addr-ticker{animation:addrscroll linear infinite}`}</style>}
+    </div>
+  );
+}
+
 /** Notes like "urgent", "deliver tomorrow must", "ASAP", "before 5pm" — the card turns red. */
 const URGENT_RE =
   /\b(urgent\w*|asap|emergency|immediate(ly)?|priority|important|vip|today\s*itself|same\s*day|must|tomorrow|tmrw|tmw|before\s*\d{1,2}\s*(am|pm|:)?|by\s*\d{1,2}\s*(am|pm))\b|ضروري|عاجل/i;
@@ -588,7 +613,7 @@ export default function DriverPortalPage() {
                 isUrgent(o) ? "border-cancelled bg-cancelled-bg ring-2 ring-cancelled" : `border-line bg-white ${statusBorderClass(o.status)}`
               }`}
             >
-              <div>
+              <div className="min-w-0 max-w-full flex-1 basis-56">
                 <div className="font-mono text-[15px] font-bold text-navy">
                   CN {o.cnNo} <span className="font-normal text-ink-soft">— {o.brandName}</span>
                 </div>
@@ -601,6 +626,7 @@ export default function DriverPortalPage() {
                     👤 <b>{o.booking.customerName}</b> · <span className="font-mono">{o.booking.customerPhone}</span>
                   </div>
                 )}
+                {o.booking?.address && <AddressTicker text={`${o.booking.address}${o.emirate && !o.booking.address.toLowerCase().includes(o.emirate.toLowerCase()) ? `, ${o.emirate}` : ""}`} />}
                 <button
                   onClick={() => setAreaEdit(o)}
                   className="mt-1 rounded border border-navy/30 bg-paper px-2 py-0.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
