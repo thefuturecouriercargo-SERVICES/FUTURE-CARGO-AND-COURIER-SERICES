@@ -509,6 +509,9 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   const em = (emirate ?? "").toUpperCase();
   const rules = [...(BY_EMIRATE[em] ?? []), ...Object.entries(BY_EMIRATE).filter(([k]) => k !== em).flatMap(([, r]) => r)];
   for (const [re, name] of rules) if (re.test(text)) return name;
+  // Small spelling mistakes ("Sabiya", "Qusias", "Muwaileh"→"Muwailah") → closest known area.
+  const near = fuzzyArea(text, em);
+  if (near) return near;
   // Fallback: first chunk of the address that has letters (e.g. "Villa 12, Al Something" → "AL SOMETHING").
   const parts = text.split(/[,\n\-–]+/).map((p) => p.trim()).filter((p) => /[a-z]{3}/i.test(p));
   const named = parts.find((p) => p.length <= 25 && !/\d/.test(p) && !/\b(villa|flat|apt|apartment|room|building|bldg|tower|floor|street|st|road|near|opp|behind|makani|plot|house|no|office|shop)\b/i.test(p));
@@ -541,4 +544,106 @@ function canonical(name: string): string {
   // Comparable form: no leading "Al", no trailing "h" after a vowel, no doubled final vowel.
   t = t.replace(/^AL\s+/, "").replace(/(?<=[AEIOU])H\b/g, "").replace(/([AEIOU])\1\b/g, "$1").trim();
   return t || "OTHER AREA";
+}
+
+/* ---------- Spelling-tolerant matching ---------- */
+
+/** Rough sound-alike form: "Al Qusais" / "alqusays" / "Qusis" end up close together. */
+function phon(t: string): string {
+  let x = t.toLowerCase().replace(/[^a-z]/g, "");
+  x = x.replace(/^(al|el|ul)(?=[a-z]{4,})/, "");
+  x = x
+    .replace(/kh/g, "k").replace(/q/g, "k").replace(/ck/g, "k").replace(/c/g, "k")
+    .replace(/gh/g, "g").replace(/dh/g, "d").replace(/th/g, "t").replace(/ph/g, "f")
+    .replace(/ee|ie|ey/g, "i").replace(/oo|ou/g, "u").replace(/y/g, "i").replace(/w/g, "u")
+    .replace(/(?<=[aeiou])h(?![aeiou])/g, "").replace(/h$/, "")
+    .replace(/(.)\1+/g, "$1");
+  return x;
+}
+
+/** Damerau–Levenshtein distance (swaps count as one mistake). */
+function editDist(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  return d[m][n];
+}
+
+const allowed = (len: number) => (len <= 4 ? 0 : len <= 6 ? 1 : len <= 10 ? 2 : 3);
+
+/** Words that are never an area on their own. */
+const NOT_AREA = new Set(
+  "villa flat apt apartment room building bldg tower floor street road near opp opposite behind makani plot house no number office shop block sector zone area city new old the and dubai sharjah sharja ajman abu dhabi ain uae emirates united arab ras khaimah umm quwain fujairah call customer please deliver delivery before after morning evening night time phone mobile whatsapp location pin home work back front side next main metro station mall market masjid mosque school hospital clinic hotel park beach center centre".split(" ")
+);
+
+type Spelling = { key: string; words: number; area: string; emirate: string };
+let SPELLINGS: Spelling[] | null = null;
+
+/** Plain spellings pulled from the area rules plus the area names themselves. */
+function spellings(): Spelling[] {
+  if (SPELLINGS) return SPELLINGS;
+  const out: Spelling[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string, area: string, emirate: string) => {
+    const words = raw.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+    if (!words.length || words.every((w) => NOT_AREA.has(w))) return;
+    const key = phon(words.join(""));
+    if (key.length < 4) return; // very short names (JLT, JVC) only match exactly
+    const id = `${key}|${area}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ key, words: words.length, area, emirate });
+  };
+  for (const [em, rules] of Object.entries(BY_EMIRATE))
+    for (const [re, area] of rules) {
+      // Numbered areas ("AL MAJAZ 3") come from their base name + the number written after it.
+      if (!/\d\s*$/.test(area)) add(area.replace(/\(.*?\)/g, ""), area, em);
+      for (const alt of re.source.split("|")) {
+        const plain = alt
+          .replace(/\\b|\(\?:|[()^$]/g, "")
+          .replace(/\[\\s\\-'\]\*\??/g, " ")
+          .replace(/\\s[*+?]?/g, " ")
+          .replace(/'\??/g, "");
+        if (/^[a-z ]+$/i.test(plain.trim())) add(plain, area, em);
+      }
+    }
+  SPELLINGS = out;
+  return out;
+}
+
+const NUMBERED = new Set(DEFAULT_AREA_ROUTE.map((r) => r.split("|")[1]));
+
+/** Closest known area to any 1–3 word piece of the address, allowing small typing mistakes. */
+function fuzzyArea(text: string, emirate: string): string | undefined {
+  const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const list = spellings();
+  let best: { score: number; area: string; after: string | undefined } | undefined;
+  for (let i = 0; i < tokens.length; i++)
+    for (let len = 1; len <= 3 && i + len <= tokens.length; len++) {
+      const piece = tokens.slice(i, i + len);
+      if (piece.some((w) => /\d/.test(w))) break;
+      if (piece.every((w) => NOT_AREA.has(w) || w === "al")) continue;
+      const key = phon(piece.join(""));
+      if (key.length < 4) continue;
+      const after = tokens[i + len];
+      for (const sp of list) {
+        if (Math.abs(sp.key.length - key.length) > 3) continue;
+        const dist = editDist(key, sp.key);
+        if (dist > allowed(Math.min(key.length, sp.key.length))) continue;
+        // Lower is better: mistakes per letter, small push for the parcel's own emirate and longer pieces.
+        const score = dist / sp.key.length + (emirate && sp.emirate !== emirate ? 0.15 : 0) - sp.key.length * 0.002;
+        if (!best || score < best.score) best = { score, area: sp.area, after };
+      }
+    }
+  if (!best) return undefined;
+  // "Sabiya 12" → "SHABIYA 12" when that numbered area exists.
+  const base = best.area.replace(/\s+\d+$/, "");
+  if (best.after && /^\d{1,2}$/.test(best.after) && NUMBERED.has(`${base} ${Number(best.after)}`)) return `${base} ${Number(best.after)}`;
+  return best.area;
 }
