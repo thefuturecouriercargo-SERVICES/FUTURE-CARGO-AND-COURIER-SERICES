@@ -188,7 +188,13 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
         <div style={sq || items.length > 14 ? clamp(2) : clamp(3)}>{booking.address}</div>
         <div style={{ fontWeight: 800, textTransform: "uppercase", fontSize: sq ? 12 : 14 }}>
-          📍 {detectArea(booking.address, booking.emirate)} · {booking.emirate}
+          📍 {(() => {
+            // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
+            const a = detectArea(booking.address, booking.emirate);
+            const em = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+            if (a === "OTHER AREA" || a === "NO ADDRESS") return em || "—";
+            return em ? `${a} · ${em}` : a;
+          })()}
         </div>
       </div>
 

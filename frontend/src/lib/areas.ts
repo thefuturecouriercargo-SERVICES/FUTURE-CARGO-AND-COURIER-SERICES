@@ -193,11 +193,11 @@ const SHARJAH: AreaRule[] = [
 ];
 
 const ABUDHABI: AreaRule[] = [
-  [/(?:\bshabh?i?y?a\s*(?:me)?\s*-?\s*0?9\b)|(?:\bme\s*-?\s*0?9\b)|\bshabiya[\s\-']*9\b|\bshabhiya[\s\-']*9\b/i, "SHABIYA 9"],
-  [/(?:\bshabh?i?y?a\s*(?:me)?\s*-?\s*10\b)|(?:\bme\s*-?\s*10\b)|\bshabiya[\s\-']*10\b|\bshabhiya[\s\-']*10\b/i, "SHABIYA 10"],
-  [/(?:\bshabh?i?y?a\s*(?:me)?\s*-?\s*11\b)|(?:\bme\s*-?\s*11\b)|\bshabiya[\s\-']*11\b|\bshabhiya[\s\-']*11\b/i, "SHABIYA 11"],
-  [/(?:\bshabh?i?y?a\s*(?:me)?\s*-?\s*12\b)|(?:\bme\s*-?\s*12\b)|\bshabiya[\s\-']*12\b|\bshabhiya[\s\-']*12\b/i, "SHABIYA 12"],
-  [/\bshabiya\b|\bshabhiya\b|\bshabia\b|\bshabiyah\b/i, "SHABIYA"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*0?9\b)|(?:\bme\s*-?\s*0?9\b)|\bshabiya[\s\-']*9\b|\bshabhiya[\s\-']*9\b/i, "SHABIYA 9"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*10\b)|(?:\bme\s*-?\s*10\b)|\bshabiya[\s\-']*10\b|\bshabhiya[\s\-']*10\b/i, "SHABIYA 10"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*11\b)|(?:\bme\s*-?\s*11\b)|\bshabiya[\s\-']*11\b|\bshabhiya[\s\-']*11\b/i, "SHABIYA 11"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*12\b)|(?:\bme\s*-?\s*12\b)|\bshabiya[\s\-']*12\b|\bshabhiya[\s\-']*12\b/i, "SHABIYA 12"],
+  [/\bsh?abh?(?:iy|i|y)ah?\b/i, "SHABIYA"],
   [/\bicad\b|\bicad[\s\-']*\d\b|\bindustrial[\s\-']*city[\s\-']*of[\s\-']*abu[\s\-']*dhabi\b|\bmussafah[\s\-']*south\b/i, "ICAD"],
   [/\bmussafah\b|\bmusaffah\b|\bmussaffa\b|\bmusafah\b|\bmussafa\b|\bmusafa\b|\bm-?\d+[\s\-']*mussafah\b|(?:\bm\s*-?\s*\d{1,2}\b.*\b(mussaf|musaf))|\bmussafah[\s\-']*industrial\b|\bmohammed[\s\-']*bin[\s\-']*zayed[\s\-']*industrial\b/i, "MUSSAFAH"],
   [/\bshakhbout\b|\bshakbout\b|\bshakhboot\b|\bkhalifa[\s\-']*city[\s\-']*b\b|\bkcb\b|\bkhalifa[\s\-']*b\b/i, "SHAKHBOUT CITY"],
