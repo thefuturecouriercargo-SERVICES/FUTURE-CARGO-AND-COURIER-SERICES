@@ -58,7 +58,7 @@ export default function VendorCreditPage() {
   const [loadingDelivered, setLoadingDelivered] = useState(false);
   const [newEntriesDate, setNewEntriesDate] = useState(dubaiToday());
   const [newEntriesRows, setNewEntriesRows] = useState<
-    { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; balance: number; scanned?: number; manual?: number }[]
+    { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; balance: number; scanned?: number; manual?: number; awaiting?: number }[]
   >([]);
   const [newEntriesList, setNewEntriesList] = useState<EntryRow[]>([]);
   const [loadingNewEntries, setLoadingNewEntries] = useState(false);
@@ -263,9 +263,9 @@ export default function VendorCreditPage() {
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            How many genuinely new consignments each vendor got on <b>{newEntriesDate}</b>, with delivery charge and
-            balance for just these new entries. Counts an order only on the day it was actually entered — not
-            carried-over or resolved days.
+            Everything each vendor gave us on <b>{newEntriesDate}</b> — scanned, typed in, or still waiting for pickup —
+            with delivery charge and balance. Each entry counts on the day the vendor entered it. ⬇ PDF on a row = that
+            vendor&apos;s full list for the day.
           </p>
 
           {loadingNewEntries ? (
@@ -280,10 +280,12 @@ export default function VendorCreditPage() {
                     <th>Vendor</th>
                     <th className="text-right">Scanned</th>
                     <th className="text-right">Manual entry</th>
+                    <th className="text-right">Not picked up</th>
                     <th className="text-right">New Entries</th>
                     <th className="text-right">Total Amount</th>
                     <th className="text-right">Delivery Charge</th>
                     <th className="text-right">Balance</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -292,10 +294,14 @@ export default function VendorCreditPage() {
                       <td>{r.vendorName}</td>
                       <td className="text-right font-mono">{r.scanned ?? "—"}</td>
                       <td className="text-right font-mono">{r.manual ?? "—"}</td>
+                      <td className="text-right font-mono">{r.awaiting ? <span className="text-pending">{r.awaiting}</span> : "—"}</td>
                       <td className="text-right font-mono font-bold">{r.count}</td>
                       <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
                       <td className="text-right font-mono">{fmtNumber(r.deliveryCharge)}</td>
                       <td className="text-right font-mono font-semibold text-brass">{fmtNumber(r.balance)}</td>
+                      <td className="text-right">
+                        <EntriesExport entries={newEntriesList} date={newEntriesDate} groupLabel="Vendor" fileLabel="Vendor entries" onlyGroup={r.vendorId} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -304,10 +310,12 @@ export default function VendorCreditPage() {
                     <td>TOTAL</td>
                     <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + (r.scanned ?? 0), 0)}</td>
                     <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + (r.manual ?? 0), 0)}</td>
+                    <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + (r.awaiting ?? 0), 0)}</td>
                     <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
                     <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                     <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.deliveryCharge, 0))}</td>
                     <td className="text-right font-mono text-brass">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.balance, 0))}</td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>

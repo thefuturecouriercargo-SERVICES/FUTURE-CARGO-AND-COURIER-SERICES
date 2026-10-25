@@ -191,60 +191,82 @@ router.get(
     const { start } = dayRange(req.query.date as string | undefined);
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-    const orders = await prisma.order.findMany({
-      where: { createdAt: { gte: start, lt: end } },
+    // Everything each vendor gave us that day:
+    //  - vendor-portal / website / photo bookings entered that day (picked up or still waiting), and
+    //  - consignments typed straight into Daily Entry that day (no booking).
+    const bookings = await prisma.booking.findMany({
+      where: { createdAt: { gte: start, lt: end }, status: { not: "REJECTED" } },
       select: {
-        id: true,
-        vendorId: true,
-        total: true,
-        deliveryCharge: true,
         cnNo: true,
+        vendorId: true,
+        customerName: true,
+        customerPhone: true,
+        address: true,
         emirate: true,
-        status: true,
+        items: true,
+        codAmount: true,
         createdAt: true,
-        vendor: { select: { name: true } },
-        employee: { select: { name: true } },
-        booking: { select: { customerName: true, customerPhone: true, address: true, items: true } },
+        vendor: { select: { name: true, deliveryCharge: true } },
+        order: { select: { id: true, cnNo: true, total: true, deliveryCharge: true, status: true, employee: { select: { name: true } } } },
       },
-      orderBy: { cnNo: "asc" },
     });
-    const scanInfo = await scanInfoFor(orders.map((o) => o.id), start, end);
+    const typed = await prisma.order.findMany({
+      where: { createdAt: { gte: start, lt: end }, booking: { is: null } },
+      select: { id: true, vendorId: true, total: true, deliveryCharge: true, cnNo: true, emirate: true, status: true, createdAt: true, vendor: { select: { name: true } }, employee: { select: { name: true } } },
+    });
+    const scanInfo = await scanInfoFor(bookings.map((b) => b.order?.id).filter(Boolean) as string[]);
 
-    const seenCn = new Set<number>();
-    const grouped = new Map<string, { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; scanned: number; manual: number }>();
+    type Row = { vendorId: string; vendorName: string; count: number; totalAmount: number; deliveryCharge: number; scanned: number; manual: number; awaiting: number };
+    const grouped = new Map<string, Row>();
     const entries: unknown[] = [];
+    const seenCn = new Set<number>();
+    const add = (vendorId: string, vendorName: string, type: "SCANNED" | "MANUAL" | "AWAITING", total: number, dl: number, entry: Record<string, unknown>) => {
+      const g = grouped.get(vendorId) ?? { vendorId, vendorName, count: 0, totalAmount: 0, deliveryCharge: 0, scanned: 0, manual: 0, awaiting: 0 };
+      g.count += 1;
+      g.totalAmount += total;
+      g.deliveryCharge += dl;
+      if (type === "SCANNED") g.scanned += 1;
+      else if (type === "MANUAL") g.manual += 1;
+      else g.awaiting += 1;
+      grouped.set(vendorId, g);
+      entries.push({ groupId: vendorId, groupName: vendorName, type, total, deliveryCharge: dl, vendor: vendorName, ...entry });
+    };
 
-    for (const o of orders) {
+    for (const b of bookings) {
+      const cn = b.order?.cnNo ?? b.cnNo;
+      if (seenCn.has(cn)) continue;
+      seenCn.add(cn);
+      const sc = b.order ? scanInfo.get(b.order.id) : undefined;
+      const type = !b.order ? "AWAITING" : sc ? "SCANNED" : "MANUAL";
+      add(b.vendorId, b.vendor.name, type, b.order?.total ?? b.codAmount, b.order?.deliveryCharge ?? b.vendor.deliveryCharge, {
+        at: sc?.at ?? b.createdAt,
+        scan: sc,
+        cnNo: cn,
+        driver: b.order?.employee?.name ?? "",
+        customerName: b.customerName,
+        customerPhone: b.customerPhone,
+        address: b.address,
+        emirate: b.emirate,
+        items: b.items ?? "",
+        status: b.order?.status ?? "AWAITING PICKUP",
+      });
+    }
+    for (const o of typed) {
       if (seenCn.has(o.cnNo)) continue;
       seenCn.add(o.cnNo);
-      const sc = scanInfo.get(o.id);
-      const existing =
-        grouped.get(o.vendorId) ?? { vendorId: o.vendorId, vendorName: o.vendor.name, count: 0, totalAmount: 0, deliveryCharge: 0, scanned: 0, manual: 0 };
-      existing.count += 1;
-      existing.totalAmount += o.total;
-      existing.deliveryCharge += o.deliveryCharge;
-      if (sc) existing.scanned += 1;
-      else existing.manual += 1;
-      grouped.set(o.vendorId, existing);
-      entries.push({
-        groupId: o.vendorId,
-        groupName: o.vendor.name,
-        type: sc ? "SCANNED" : "MANUAL",
-        at: sc?.at ?? o.createdAt,
-        scan: sc,
+      add(o.vendorId, o.vendor.name, "MANUAL", o.total, o.deliveryCharge, {
+        at: o.createdAt,
         cnNo: o.cnNo,
-        vendor: o.vendor.name,
         driver: o.employee?.name ?? "",
-        customerName: o.booking?.customerName ?? "",
-        customerPhone: o.booking?.customerPhone ?? "",
-        address: o.booking?.address ?? "",
+        customerName: "",
+        customerPhone: "",
+        address: "",
         emirate: o.emirate,
-        items: o.booking?.items ?? "",
-        total: o.total,
-        deliveryCharge: o.deliveryCharge,
+        items: "",
         status: o.status,
       });
     }
+    (entries as { groupName: string; cnNo: number }[]).sort((a, b) => a.groupName.localeCompare(b.groupName) || a.cnNo - b.cnNo);
 
     const rows = Array.from(grouped.values())
       .map((r) => ({ ...r, balance: r.totalAmount - r.deliveryCharge }))
