@@ -143,11 +143,29 @@ function customerWaLink(o: Order) {
  * all without opening Details.
  */
 function AddressTicker({ text }: { text: string }) {
-  const long = true; // always scrolls, short or long
+  // Scrolls only when the address doesn't fit on one line.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const check = () => {
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap";
+      probe.textContent = text;
+      el.appendChild(probe);
+      setLong(probe.offsetWidth > el.clientWidth + 1);
+      probe.remove();
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text]);
   return (
     <div className="mt-1 flex max-w-full items-center gap-1 overflow-hidden text-[13px] text-ink">
       <span className="shrink-0">🏠</span>
-      <div className="relative min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+      <div ref={boxRef} className="relative min-w-0 flex-1 overflow-hidden whitespace-nowrap">
         {long ? (
           <span className="addr-ticker inline-block pr-10" style={{ animationDuration: `${Math.max(7, text.length / 5)}s` }}>
             {text}
@@ -715,6 +733,84 @@ export default function DriverPortalPage() {
             </div>
 );
 
+  // By-area page card: CN big on top, customer below, amount on the right;
+  // buttons = Call customer · Change location · Update status · ⋯ details.
+  const renderAreaCard = (o: Order) => {
+    const address = o.booking?.address
+      ? `${o.booking.address}${o.emirate && !o.booking.address.toLowerCase().includes(o.emirate.toLowerCase()) ? `, ${o.emirate}` : ""}`
+      : "";
+    const age = agingDays(o.status, o.date);
+    const round = "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-white text-base";
+    return (
+      <div className={`px-3 pb-2.5 pt-3 ${isUrgent(o) ? "bg-cancelled-bg" : ""}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="font-mono text-[17px] font-extrabold leading-tight text-navy">CN {o.cnNo}</div>
+            <div className="mt-0.5 truncate text-[13px] text-ink-soft">
+              <b className="font-semibold text-ink">{o.booking?.customerName ?? "—"}</b> · {o.brandName}
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className={`text-xl font-extrabold leading-none ${o.total < 0 ? "text-transferred" : "text-navy"}`}>{fmtNumber(o.total)}</div>
+            <div className="mt-1 font-mono text-[9.5px] font-semibold uppercase text-ink-soft">AED · {isPrepaid(o) ? "PREPAID" : o.payment}</div>
+          </div>
+        </div>
+        {address && <AddressTicker text={address} />}
+        {isUrgent(o) && <div className="mt-1.5 text-[13px] font-bold text-cancelled">🚨 {o.booking?.notes}</div>}
+        {o.total < 0 && (
+          <div className="mt-1.5 rounded bg-transferred-bg px-2 py-1 text-center font-mono text-[12px] font-bold uppercase text-transferred">
+            ↩ Refund — give customer AED {fmtNumber(-o.total)}
+          </div>
+        )}
+        {(o.status !== "PENDING" || o.remarks || o.driverNote || age !== null) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px]">
+            {o.status !== "PENDING" && o.status !== "TRANSFER" && (
+              <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${statusSelectedClass(o.status)}`}>{o.status}</span>
+            )}
+            {o.status === "TRANSFER" && (
+              <span className="rounded bg-transferred-bg px-1.5 py-0.5 font-semibold text-transferred">↪ PENDING · transferred{o.transferredBy ? ` by ${o.transferredBy}` : ""}</span>
+            )}
+            {age !== null && <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${agingBadgeClass(age)}`}>{age}d old</span>}
+            {o.driverNote && (o.status === "PENDING" || o.status === "TRANSFER") && (
+              <span className="font-semibold text-pending">
+                🚚 {o.driverNote}
+                {o.driverNoteAt ? ` · ${new Date(o.driverNoteAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
+              </span>
+            )}
+            {o.remarks && <span className="text-cancelled">Reason: {o.remarks}</span>}
+          </div>
+        )}
+        <div className="mt-2.5 flex items-center gap-2">
+          {o.booking?.customerPhone ? (
+            <a href={`tel:${o.booking.customerPhone}`} className={round} title="Call customer" aria-label="Call customer">📞</a>
+          ) : (
+            <span className={`${round} opacity-30`}>📞</span>
+          )}
+          <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location">📍</button>
+          <button
+            onClick={() => setStatusOrder(o)}
+            className="flex h-10 flex-1 items-center justify-center rounded-full bg-delivered font-mono text-[12px] font-bold uppercase tracking-wide text-white active:scale-[0.98]"
+          >
+            Update status
+          </button>
+          <button
+            onClick={() => setDetailsId(detailsId === o.id ? null : o.id)}
+            className={`${round} ${detailsId === o.id ? "border-navy bg-navy text-paper" : ""} text-lg font-bold`}
+            title="Details"
+            aria-label="Details"
+          >
+            ⋯
+          </button>
+        </div>
+        {detailsId === o.id && (
+          <div className="mt-3 border-t border-line pt-3">
+            <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ── Global voice assistant ──────────────────────────────────────────────────
   // Parses a full spoken command and either answers immediately (questions), or
   // stages a Confirm/Cancel step before touching any data (updates, transfers,
@@ -1118,7 +1214,7 @@ export default function DriverPortalPage() {
                     key={o.id}
                     data-drag-group={g.key}
                     data-id={o.id}
-                    className={`flex items-stretch gap-1.5 transition-shadow ${draggingId === o.id ? "relative z-20 scale-[1.01] opacity-90 shadow-xl ring-2 ring-brass" : ""}`}
+                    className={`flex items-stretch overflow-hidden rounded-2xl bg-white shadow-[0_2px_6px_rgba(20,31,51,0.08)] transition-shadow ${isUrgent(o) ? "ring-2 ring-cancelled" : ""} ${draggingId === o.id ? "relative z-20 scale-[1.01] opacity-90 shadow-xl ring-2 ring-brass" : ""}`}
                   >
                     <button
                       type="button"
@@ -1127,25 +1223,26 @@ export default function DriverPortalPage() {
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
                       style={{ touchAction: "none" }}
-                      className="flex w-8 shrink-0 cursor-grab select-none flex-col items-center justify-center gap-1 rounded border border-line bg-paper-2 text-ink-soft active:cursor-grabbing active:bg-brass/20"
+                      className={`flex w-11 shrink-0 cursor-grab select-none flex-col items-center justify-center gap-0.5 text-white active:cursor-grabbing ${isUrgent(o) ? "bg-cancelled" : "bg-navy"}`}
                       title="Hold and drag to change delivery order"
                       aria-label={`Drag to reorder, position ${oi + 1}`}
                     >
-                      <span className="font-mono text-[11px] font-bold text-navy">{oi + 1}</span>
-                      <span className="text-lg leading-none">⠿</span>
+                      <span className="font-mono text-base font-extrabold leading-none">{oi + 1}</span>
+                      <span className="font-mono text-[8px] font-semibold tracking-wider text-brass-light">STOP</span>
+                      <span className="mt-1 text-sm leading-none opacity-60">⠿</span>
                     </button>
                     <div className="min-w-0 flex-1">
-                      {renderCard(o)}
+                      {renderAreaCard(o)}
                       {(o.status === "PENDING" || o.status === "TRANSFER") && (
                         noteOpenId !== o.id ? (
                           <button
                             onClick={() => setNoteOpenId(o.id)}
-                            className="w-full rounded-b border border-t-0 border-line bg-paper px-3 py-1.5 text-left font-mono text-[10.5px] uppercase text-ink-soft"
+                            className="w-full border-t border-line bg-paper px-3 py-1.5 text-left font-mono text-[10.5px] uppercase text-ink-soft"
                           >
                             {o.driverNote ? "✎ Change note" : "📝 Not delivered? add a note"}
                           </button>
                         ) : (
-                        <div className="flex flex-wrap items-center gap-1 rounded-b border border-t-0 border-line bg-paper px-2 py-1.5">
+                        <div className="flex flex-wrap items-center gap-1 border-t border-line bg-paper px-2 py-1.5">
                           {OPEN_NOTES.map((n) => (
                             <button
                               key={n}
