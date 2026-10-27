@@ -7,6 +7,7 @@ import { hashPassword } from "../utils/password";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 import { monthRange } from "../utils/dates";
+import { recordSalaryChange, currentMonthStr } from "../lib/salary";
 
 const router = Router();
 router.use(authenticate);
@@ -76,6 +77,9 @@ const updateSchema = z.object({
   password: z.string().min(6).max(100).optional(),
   baseSalary: z.number().int().min(0).optional(),
   isAgent: z.boolean().optional(),
+  // Month the new baseSalary starts from ("YYYY-MM"). Earlier months keep the
+  // old salary. Defaults to the current month.
+  salaryEffectiveFrom: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
 });
 
 router.put(
@@ -83,7 +87,21 @@ router.put(
   requireRole("SUPER_ADMIN"),
   asyncHandler(async (req, res) => {
     const data = updateSchema.parse(req.body);
-    const { password, ...rest } = data;
+    const { password, salaryEffectiveFrom, ...rest } = data;
+
+    if (rest.baseSalary !== undefined) {
+      const current = await prisma.user.findUnique({ where: { id: req.params.id }, select: { baseSalary: true } });
+      if (!current) throw new ApiError(404, "Employee not found");
+      if (current.baseSalary !== rest.baseSalary) {
+        rest.baseSalary = await recordSalaryChange(
+          req.params.id,
+          current.baseSalary,
+          rest.baseSalary,
+          salaryEffectiveFrom ?? currentMonthStr()
+        );
+      }
+    }
+
     const employee = await prisma.user.update({
       where: { id: req.params.id },
       data: { ...rest, ...(password ? { passwordHash: await hashPassword(password) } : {}) },

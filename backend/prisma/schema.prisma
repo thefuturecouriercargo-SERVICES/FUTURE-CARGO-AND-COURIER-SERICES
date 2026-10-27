@@ -78,6 +78,7 @@ phone         String?
   updatedAt     DateTime @updatedAt
 
   ordersAssigned     Order[]         @relation("OrderEmployee")
+  salaryChanges      SalaryChange[]
   transfersFrom      OrderTransfer[] @relation("TransferFrom")
   transfersTo        OrderTransfer[] @relation("TransferTo")
   cashClosings       CashClosing[]
@@ -311,6 +312,22 @@ model Payroll {
   @@unique([month, employeeId])
   @@index([month])
   @@map("payrolls")
+}
+
+// Salary history: each row says "from this month on, the salary is X".
+// effectiveMonth "0000-00" is the starting salary before any change.
+// Lets a raise apply from a given month without changing earlier months.
+model SalaryChange {
+  id             String   @id @default(cuid())
+  employeeId     String
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  effectiveMonth String
+  baseSalary     Int
+  createdAt      DateTime @default(now())
+
+  @@unique([employeeId, effectiveMonth])
+  @@index([employeeId])
+  @@map("salary_changes")
 }
 
 model PayrollEntry {

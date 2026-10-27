@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, previousMonthStr } from "@/lib/format";
+import { currentMonthStr, fmtNumber, previousMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
 interface PayrollRow {
@@ -43,7 +43,10 @@ export default function PayrollPage() {
   const [saving, setSaving] = useState(false);
 
   const [showAddStaff, setShowAddStaff] = useState(false);
-  const [staffForm, setStaffForm] = useState({ name: "", username: "", password: "", baseSalary: "" });
+  const [staffForm, setStaffForm] = useState({ name: "", username: "", password: "", baseSalary: "", salaryFrom: currentMonthStr() });
+  const [originalSalary, setOriginalSalary] = useState<number | null>(null);
+  // Salary per employee for the selected month, where it differs over time.
+  const [monthSalaries, setMonthSalaries] = useState<Record<string, number>>({});
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
@@ -53,11 +56,13 @@ export default function PayrollPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [empList, rows, entryList] = await Promise.all([
+      const [empList, rows, entryList, salaries] = await Promise.all([
         apiFetch<Employee[]>("/employees", { query: { includeInactive: false, role: "ALL", isAgent: "false" } }),
         apiFetch<PayrollRow[]>("/payroll", { query: { month } }),
         apiFetch<PayrollEntry[]>("/payroll/entries", { query: { month } }),
+        apiFetch<Record<string, number>>("/payroll/salaries", { query: { month } }).catch(() => ({})),
       ]);
+      setMonthSalaries(salaries);
       setEmployees(empList);
       setPayrollRows(rows);
       setEntries(entryList);
@@ -82,13 +87,15 @@ export default function PayrollPage() {
 
   function startEditStaff(e: Employee) {
     setEditingStaffId(e.id);
-    setStaffForm({ name: e.name, username: e.username, password: "", baseSalary: String(e.baseSalary ?? "") });
+    setStaffForm({ name: e.name, username: e.username, password: "", baseSalary: String(e.baseSalary ?? ""), salaryFrom: currentMonthStr() });
+    setOriginalSalary(e.baseSalary ?? 0);
     setShowAddStaff(true);
     setStaffError(null);
   }
 
   function resetStaffForm() {
-    setStaffForm({ name: "", username: "", password: "", baseSalary: "" });
+    setStaffForm({ name: "", username: "", password: "", baseSalary: "", salaryFrom: currentMonthStr() });
+    setOriginalSalary(null);
     setEditingStaffId(null);
     setShowAddStaff(false);
     setStaffError(null);
@@ -109,6 +116,9 @@ export default function PayrollPage() {
           body: {
             name: staffForm.name,
             baseSalary: Number(staffForm.baseSalary) || 0,
+            ...((Number(staffForm.baseSalary) || 0) !== originalSalary && staffForm.salaryFrom
+              ? { salaryEffectiveFrom: staffForm.salaryFrom }
+              : {}),
             ...(staffForm.password ? { password: staffForm.password } : {}),
           },
         });
@@ -233,17 +243,18 @@ export default function PayrollPage() {
 
   const rows = employees.map((e) => {
     const workingDays = Number(workingDaysInput[e.id]) || 0;
-    const proratedSalary = Math.round((e.baseSalary / 30) * workingDays);
+    const baseSalary = monthSalaries[e.id] ?? e.baseSalary;
+    const proratedSalary = Math.round((baseSalary / 30) * workingDays);
     const short = sumFor(e.id, "SHORT");
     const paid = sumFor(e.id, "PAID");
     const bonus = sumFor(e.id, "BONUS");
     const balance = proratedSalary + bonus - short - paid;
-    return { employee: e, workingDays, proratedSalary, short, paid, bonus, balance };
+    return { employee: e, baseSalary, workingDays, proratedSalary, short, paid, bonus, balance };
   });
 
   const totals = rows.reduce(
     (acc, r) => ({
-      baseSalary: acc.baseSalary + r.employee.baseSalary,
+      baseSalary: acc.baseSalary + r.baseSalary,
       proratedSalary: acc.proratedSalary + r.proratedSalary,
     short: acc.short + r.short,
       paid: acc.paid + r.paid,
@@ -330,6 +341,19 @@ export default function PayrollPage() {
                 className="w-full rounded border border-line px-2.5 py-2 text-sm"
               />
             </div>
+            {editingStaffId && (Number(staffForm.baseSalary) || 0) !== originalSalary && (
+              <div>
+                <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">New salary from (month)</label>
+                <input
+                  type="month"
+                  required
+                  value={staffForm.salaryFrom}
+                  onChange={(e) => setStaffForm({ ...staffForm, salaryFrom: e.target.value })}
+                  className="w-full rounded border border-line px-2.5 py-2 text-sm"
+                />
+                <p className="mt-1 text-[10px] text-ink-soft">Months before this keep the old salary.</p>
+              </div>
+            )}
             <div className="col-span-2 flex items-end gap-3 md:col-span-4">
               <button
                 type="submit"
@@ -469,7 +493,7 @@ export default function PayrollPage() {
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Base Salary</span>
-                      <span>{fmtNumber(r.employee.baseSalary)}</span>
+                      <span>{fmtNumber(r.baseSalary)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-ink-soft">Working Days</span>
@@ -554,7 +578,7 @@ export default function PayrollPage() {
                 {rows.map((r) => (
                   <tr key={r.employee.id}>
                     <td>{r.employee.name}</td>
-                    <td className="text-right font-mono">{fmtNumber(r.employee.baseSalary)}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.baseSalary)}</td>
                     <td className="text-right font-mono">
                       <div className="flex items-center justify-end gap-1.5">
                         <input

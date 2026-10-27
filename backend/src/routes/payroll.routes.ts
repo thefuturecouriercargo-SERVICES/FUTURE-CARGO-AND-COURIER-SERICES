@@ -5,6 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
+import { salariesForMonth } from "../lib/salary";
 
 const router = Router();
 router.use(authenticate);
@@ -18,6 +19,18 @@ router.get(
     if (!month) throw new ApiError(400, "month is required");
     const rows = await prisma.payroll.findMany({ where: { month } });
     res.json(rows);
+  })
+);
+
+// GET /payroll/salaries?month=2026-10 -> { employeeId: salary } for employees
+// whose salary changed over time. Anyone missing uses their current baseSalary.
+router.get(
+  "/salaries",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const month = req.query.month as string;
+    if (!month) throw new ApiError(400, "month is required");
+    res.json(await salariesForMonth(month));
   })
 );
 

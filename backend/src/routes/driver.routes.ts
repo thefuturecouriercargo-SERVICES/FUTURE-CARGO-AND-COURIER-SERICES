@@ -9,6 +9,7 @@ import { assignByScan, scanBillVendors } from "../services/booking.service";
 import { withScanLog } from "../services/scanLog.service";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
+import { salariesForMonth } from "../lib/salary";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -144,8 +145,9 @@ router.get(
       }),
     ]);
 
+    const salaryThatMonth = (await salariesForMonth(month, [employeeId]))[employeeId];
     res.json({
-      employee,
+      employee: employee && salaryThatMonth !== undefined ? { ...employee, baseSalary: salaryThatMonth } : employee,
       workingDays: payrollRow?.workingDays ?? 30,
       entries,
     });
