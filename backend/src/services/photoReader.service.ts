@@ -38,6 +38,8 @@ How these slips usually look:
 - Quantity like "1pce", "2 pcs", "1 pc" and any product name → items, written like "1 × Perfume" or "1 piece" when no product is named.
 - Shoes are common: "1 shoe", "2 shoes", "1 pair", "1 sh" → items "1 × Shoe" / "2 × Shoe". Read the number before it carefully.
 - An amount like "55/-", "AED 55", "55 dhs" → codAmount (whole number). "Paid" / "prepaid" → 0.
+- "Refund" / "Rfd" / "return money" next to an amount means the courier PAYS the customer → codAmount is MINUS (e.g. "Refund 120" → -120), and put "REFUND" in notes.
+- "Whoop" (a fitness band) is a common product — the handwritten "W" often looks like "L". Read it as "Whoop", never "Loop" (e.g. "1 × Whoop").
 - Words like "Top Urgent", "Urgent", "Call before", "Evening" → notes (e.g. "TOP URGENT").
 - Customer names are often NOT written — then customerName is null. Do not invent one.
 - A short name or initials written on its own (e.g. "Haira", "K", "KD", "Sam") is usually the vendor's AGENT / salesman, not the customer → put it in "agent", and leave customerName null unless the slip clearly labels a customer name.
@@ -131,7 +133,7 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg"): 
     address: o.address?.trim() || null,
     emirate: o.emirate && (EMIRATES as readonly string[]).includes(o.emirate) ? o.emirate : null,
     items: o.items?.trim() || null,
-    codAmount: typeof o.codAmount === "number" && Number.isFinite(o.codAmount) ? Math.max(0, Math.round(o.codAmount)) : null,
+    codAmount: typeof o.codAmount === "number" && Number.isFinite(o.codAmount) ? Math.round(o.codAmount) : null,
     notes: o.notes?.trim() || null,
     unclear: Array.isArray(o.unclear) ? o.unclear : [],
   }));
