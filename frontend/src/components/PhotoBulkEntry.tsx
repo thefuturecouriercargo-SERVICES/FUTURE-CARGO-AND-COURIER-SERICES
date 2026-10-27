@@ -492,7 +492,29 @@ export default function PhotoBulkEntry({
                     </div>
                     <div>
                       <label className={lbl}>COD (AED) *</label>
-                      <input value={c.fields.codAmount} onChange={(e) => setField(c.key, "codAmount", e.target.value.replace(/[^\d]/g, ""))} className={`${cls(c, "codAmount")} font-mono font-bold`} inputMode="numeric" />
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          title="Make amount minus / plus"
+                          onClick={() => {
+                            const v = c.fields.codAmount;
+                            setField(c.key, "codAmount", v.startsWith("-") ? v.slice(1) : "-" + v);
+                          }}
+                          className="shrink-0 rounded border border-line px-2 font-mono font-bold"
+                        >
+                          ±
+                        </button>
+                        <input
+                          value={c.fields.codAmount}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim();
+                            const neg = raw.startsWith("-") || raw.startsWith("−");
+                            setField(c.key, "codAmount", (neg ? "-" : "") + raw.replace(/[^\d]/g, ""));
+                          }}
+                          className={`${cls(c, "codAmount")} min-w-0 flex-1 font-mono font-bold ${c.fields.codAmount.startsWith("-") ? "text-cancelled" : ""}`}
+                          inputMode="text"
+                        />
+                      </div>
                     </div>
                     <div className="col-span-2">
                       <label className={lbl}>Address / area *</label>
