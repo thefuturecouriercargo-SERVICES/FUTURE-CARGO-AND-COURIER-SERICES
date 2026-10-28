@@ -4,8 +4,9 @@ import { useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { readAgentReport, ReportRow } from "@/lib/agentReport";
+import AgentReportHistory from "@/components/AgentReportHistory";
 
-type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting";
+type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
 
 interface Item {
   tracking: string;
@@ -39,6 +40,7 @@ interface Summary {
   conflict: number;
   pending: number;
   notFound: number;
+  driver: number;
 }
 
 const TABS: { key: string; label: string; match: (i: Item) => boolean }[] = [
@@ -47,6 +49,7 @@ const TABS: { key: string; label: string; match: (i: Item) => boolean }[] = [
   { key: "pending", label: "Still pending", match: (i) => i.action === "pending" },
   { key: "already", label: "Already done", match: (i) => i.action === "already" },
   { key: "notFound", label: "Not found", match: (i) => i.action === "notFound" || i.action === "awaiting" },
+  { key: "driver", label: "With our drivers", match: (i) => i.action === "driver" },
 ];
 
 const ST_CLS: Record<string, string> = {
@@ -73,6 +76,7 @@ export default function AgentReportPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tab, setTab] = useState("change");
   const [result, setResult] = useState("");
+  const [historyKey, setHistoryKey] = useState(0);
 
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -129,6 +133,7 @@ export default function AgentReportPage() {
           updates: chosen.map((i) => ({ orderId: i.order!.id, status: i.target, tracking: i.tracking })),
         },
       });
+      setHistoryKey((k) => k + 1);
       setResult(`✓ Updated ${r.updated} order${r.updated === 1 ? "" : "s"}${r.skipped.length ? ` · ${r.skipped.length} skipped` : ""}.`);
       // Reflect the change on screen.
       const doneIds = new Set(chosen.map((i) => i.order!.id));
@@ -183,7 +188,7 @@ export default function AgentReportPage() {
           <p className="mb-3 text-xs text-ink-soft">
             {fileName} · {summary.rows} rows · {summary.unique} unique CNs
           </p>
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {[
               ["To Delivered", summary.toDeliver, "text-delivered"],
               ["To Cancelled (RTO)", summary.toCancel, "text-cancelled"],
@@ -191,6 +196,7 @@ export default function AgentReportPage() {
               ["Still pending", summary.pending, "text-ink-soft"],
               ["Already done", summary.already, "text-ink-soft"],
               ["Not found", summary.notFound, "text-cancelled"],
+              ["With drivers (skipped)", summary.driver, "text-ink-soft"],
             ].map(([l, n, c]) => (
               <div key={l as string} className="border border-line bg-white p-3">
                 <p className="font-mono text-[10px] uppercase tracking-wide text-ink-soft">{l}</p>
@@ -231,6 +237,9 @@ export default function AgentReportPage() {
             <p className="mb-2 text-xs text-pending">
               Report says Delivered but ours is Cancelled. Not ticked — tick only if the report is right.
             </p>
+          )}
+          {tab === "driver" && visible.length > 0 && (
+            <p className="mb-2 text-xs text-ink-soft">These CNs are with our own drivers, not the agent — the upload never changes them.</p>
           )}
           {tab === "notFound" && visible.length > 0 && (
             <p className="mb-2 text-xs text-ink-soft">
@@ -307,6 +316,8 @@ export default function AgentReportPage() {
           </div>
         </>
       )}
+
+      <AgentReportHistory refreshKey={historyKey} />
     </div>
   );
 }

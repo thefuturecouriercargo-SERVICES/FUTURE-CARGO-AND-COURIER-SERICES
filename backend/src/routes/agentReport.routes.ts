@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange } from "../utils/dates";
+import { dayRange, dubaiDateStr, parseDateParam } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -96,8 +96,10 @@ router.post(
       // Only the tracking number counts. Sender Name is the vendor's bill no (repeats),
       // so matching on it hit unrelated old orders — never used.
 
-      let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting";
+      let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
       if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
+      // Never touch consignments held by our own drivers — only the agent's.
+      else if (!order.employee?.isAgent) action = "driver";
       else if (target === "PENDING") action = "pending";
       else if (order.status === target) action = "already";
       // The report always wins: Delivered → Delivered, RTO → Cancelled, whatever we had before.
@@ -108,7 +110,7 @@ router.post(
       const notWithAgent = !!order && !order.employee?.isAgent;
       const dup = !!order && dupCn.has(order.cnNo);
       if (amountDiff) warnings.push(`Amount differs: report ${r.cod}, ours ${order!.total} — check it's the same parcel`);
-      if (notWithAgent) warnings.push(`With driver ${order!.employee?.name ?? "—"}, not the agent — check it's the same parcel`);
+      if (notWithAgent) warnings.push(`With driver ${order!.employee?.name ?? "—"} — not touched`);
       if (dup) warnings.push(`CN ${order!.cnNo} is on more than one order — check the date`);
       if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
       if (order && target === "DELIVERED" && order.status === "CANCELLED") warnings.push("Was Cancelled — report says Delivered");
@@ -153,6 +155,7 @@ router.post(
         conflict: count("conflict"),
         pending: count("pending"),
         notFound: count("notFound") + count("awaiting"),
+        driver: count("driver"),
       },
     });
   })
@@ -171,13 +174,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const { updates, fileName } = applySchema.parse(req.body);
     const { start: todayStart } = dayRange();
+    const batch = new Date().toISOString(); // groups this upload's updates in the history
     const done: string[] = [];
     const skipped: { orderId: string; reason: string }[] = [];
 
     for (const u of updates) {
-      const existing = await prisma.order.findUnique({ where: { id: u.orderId } });
+      const existing = await prisma.order.findUnique({ where: { id: u.orderId }, include: { employee: { select: { name: true, isAgent: true } } } });
       if (!existing) {
         skipped.push({ orderId: u.orderId, reason: "Order not found" });
+        continue;
+      }
+      // Hard rule: an agent report can only change consignments held by an agent.
+      if (!existing.employee?.isAgent) {
+        skipped.push({ orderId: u.orderId, reason: `With driver ${existing.employee?.name ?? "—"} — not touched` });
         continue;
       }
       if (existing.status === u.status) {
@@ -211,13 +220,97 @@ router.post(
         action: "STATUS_UPDATE",
         entity: "Order",
         entityId: order.id,
-        meta: { from: existing.status, to: u.status, reason, carriedOverToToday: isCarryover, source: "AGENT_REPORT", file: fileName, tracking: u.tracking },
+        meta: {
+          from: existing.status,
+          to: u.status,
+          reason,
+          carriedOverToToday: isCarryover,
+          source: "AGENT_REPORT",
+          batch,
+          file: fileName,
+          tracking: u.tracking,
+          cnNo: order.cnNo,
+          vendor: order.vendor.name,
+          total: order.total,
+          orderDate: existing.date.toISOString(),
+        },
       });
       emitGlobal("order:changed", { type: "updated", order });
       done.push(order.id);
     }
 
     res.json({ updated: done.length, skipped });
+  })
+);
+
+/**
+ * Date-wise history of what agent-report uploads changed.
+ * GET /history?date=YYYY-MM-DD (Dubai day, default today) →
+ *   days: last 60 days that had updates (with counts), entries: that day's updates.
+ */
+router.get(
+  "/history",
+  asyncHandler(async (req, res) => {
+    const DUBAI = 4 * 60 * 60 * 1000;
+    const day = parseDateParam(typeof req.query.date === "string" && req.query.date ? req.query.date : undefined);
+    const from = new Date(day.getTime() - DUBAI);
+    const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+    const where = { action: "STATUS_UPDATE", entity: "Order", meta: { path: ["source"], equals: "AGENT_REPORT" } };
+
+    const recent = await prisma.auditLog.findMany({
+      where: { ...where, createdAt: { gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) } },
+      select: { createdAt: true },
+    });
+    const counts = new Map<string, number>();
+    for (const r of recent) {
+      const d = dubaiDateStr(r.createdAt);
+      counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    const days = [...counts.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, count]) => ({ date, count }));
+
+    const logs = await prisma.auditLog.findMany({
+      where: { ...where, createdAt: { gte: from, lt: to } },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    // Current state of those orders (customer, status now) for checking.
+    const ids = [...new Set(logs.map((l) => l.entityId).filter((x): x is string => !!x))];
+    const orders = await prisma.order.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        cnNo: true,
+        status: true,
+        total: true,
+        vendor: { select: { name: true } },
+        employee: { select: { name: true } },
+        booking: { select: { customerName: true } },
+      },
+    });
+    const byId = new Map(orders.map((o) => [o.id, o]));
+
+    const entries = logs.map((l) => {
+      const m = (l.meta ?? {}) as Record<string, unknown>;
+      const o = l.entityId ? byId.get(l.entityId) : undefined;
+      return {
+        id: l.id,
+        at: l.createdAt.toISOString(),
+        batch: (m.batch as string) ?? l.createdAt.toISOString().slice(0, 16),
+        file: (m.file as string) ?? null,
+        by: l.user?.name ?? null,
+        from: (m.from as string) ?? null,
+        to: (m.to as string) ?? null,
+        tracking: (m.tracking as string) ?? null,
+        cnNo: o?.cnNo ?? (m.cnNo as number) ?? null,
+        vendor: o?.vendor.name ?? (m.vendor as string) ?? null,
+        customer: o?.booking?.customerName ?? null,
+        holder: o?.employee?.name ?? null,
+        total: o?.total ?? (m.total as number) ?? null,
+        statusNow: o?.status ?? null,
+      };
+    });
+
+    res.json({ date: day.toISOString().slice(0, 10), days, entries });
   })
 );
 
