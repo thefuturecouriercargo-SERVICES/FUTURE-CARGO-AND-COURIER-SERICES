@@ -14,6 +14,7 @@ const NAV = [
   { href: "/awaiting-pickup", label: "Awaiting Pickup", short: "Pickup", roles: ["SUPER_ADMIN", "MANAGER"] },
   { href: "/employees", label: "Employees", short: "Staff", roles: ["SUPER_ADMIN"] },
   { href: "/agents", label: "Agents", short: "Agents", roles: ["SUPER_ADMIN", "MANAGER"] },
+  { href: "/agent-report", label: "Agent Report Upload", short: "A.Report", roles: ["SUPER_ADMIN", "MANAGER"] },
   { href: "/payroll", label: "Payroll", short: "Payroll", roles: ["SUPER_ADMIN", "MANAGER"] },
   { href: "/vendors", label: "Vendors", short: "Vendors", roles: ["SUPER_ADMIN"] },
   { href: "/vendor-credit", label: "Vendor Credit", short: "V.Credit", roles: ["SUPER_ADMIN", "MANAGER"] },

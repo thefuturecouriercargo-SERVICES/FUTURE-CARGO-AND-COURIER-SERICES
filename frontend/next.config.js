@@ -2,6 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  // pdf.js (agent PDF reports) optionally requires "canvas" for Node — not needed in the browser.
+  webpack: (config) => {
+    config.resolve.alias.canvas = false;
+    return config;
+  },
   // Proxies /api/* requests through the frontend's own domain to the actual
   // backend, instead of the browser calling the backend's separate Railway
   // subdomain directly. This makes every request same-origin from the
