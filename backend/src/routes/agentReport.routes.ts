@@ -104,7 +104,6 @@ router.post(
       const warnings: string[] = [];
       if (order && r.cod != null && r.cod !== order.total) warnings.push(`Amount: report ${r.cod}, ours ${order.total}`);
       if (order && dupCn.has(order.cnNo)) warnings.push("CN used on more than one order — newest picked");
-      if (order && !order.employee?.isAgent) warnings.push(`Not with an agent (with ${order.employee?.name ?? "—"})`);
       if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
       if (order && target === "DELIVERED" && order.status === "CANCELLED") warnings.push("Was Cancelled — report says Delivered");
 
