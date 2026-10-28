@@ -374,7 +374,7 @@ router.post(
     const data = z.object({ image: z.string().min(100), thumb: z.string().optional() }).parse(req.body);
     const m = data.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
     if (!m) throw new ApiError(400, "Unsupported image");
-    const orders = await readOrderPhoto(m[2], m[1]);
+    const orders = await readOrderPhoto(m[2], m[1], req.vendor!.sub);
     const photoId = await storeSlipPhoto(req.vendor!.sub, data.thumb);
     res.json({ orders, photoId });
   })
