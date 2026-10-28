@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AdminVoiceAssistant from "@/components/AdminVoiceAssistant";
+import AdminSearch from "@/components/AdminSearch";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", short: "Home", roles: ["SUPER_ADMIN", "MANAGER"] },
@@ -40,6 +41,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             Operations
           </span>
         </div>
+        <div className="mx-6 hidden max-w-xl flex-1 md:block">
+          <AdminSearch />
+        </div>
         <div className="flex items-center gap-2.5 md:gap-4">
           <span className="hidden font-mono text-xs text-line md:inline">
             {user?.name} · <span className="text-brass-light">{user?.role?.replace("_", " ")}</span>
@@ -51,6 +55,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             Sign out
           </button>
         </div>
+      </div>
+
+      {/* Phone: search gets its own row under the top bar. */}
+      <div className="sticky top-0 z-40 border-b border-line bg-navy px-3 py-2 md:hidden">
+        <AdminSearch />
       </div>
 
       <div className="flex">

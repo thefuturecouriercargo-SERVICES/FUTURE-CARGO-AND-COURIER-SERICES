@@ -20,6 +20,7 @@ import scanRoutes from "./scan.routes";
 import bookingRoutes from "./booking.routes";
 import integrationRoutes from "./integration.routes";
 import publicRoutes from "./public.routes";
+import searchRoutes from "./search.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -45,4 +46,5 @@ router.use("/scan", scanRoutes);
 router.use("/bookings", bookingRoutes);
 router.use("/integrations", integrationRoutes);
 router.use("/public", publicRoutes);
+router.use("/search", searchRoutes);
 export default router;
