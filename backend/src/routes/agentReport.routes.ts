@@ -55,8 +55,6 @@ router.post(
     for (const [cn, r] of byCn) {
       const n = toNum(cn);
       if (Number.isSafeInteger(n)) cnNums.add(n);
-      const sd = (r.sender ?? "").replace(/\D/g, "");
-      if (sd && sd === (r.sender ?? "").trim() && Number.isSafeInteger(toNum(sd))) cnNums.add(toNum(sd));
     }
 
     const orders = await prisma.order.findMany({
@@ -90,17 +88,11 @@ router.post(
 
     const items = [...byCn.entries()].map(([cn, r]) => {
       const target = targetOf(r.status);
-      let n = toNum(cn);
-      let order = Number.isSafeInteger(n) ? orderByCn.get(n) : undefined;
-      let matchedBy: "cn" | "sender" | null = order ? "cn" : null;
-      if (!order) {
-        const sd = (r.sender ?? "").trim();
-        if (/^\d+$/.test(sd) && orderByCn.has(toNum(sd))) {
-          n = toNum(sd);
-          order = orderByCn.get(n);
-          matchedBy = "sender";
-        }
-      }
+      const n = toNum(cn);
+      const order = Number.isSafeInteger(n) ? orderByCn.get(n) : undefined;
+      const matchedBy: "cn" | "sender" | null = order ? "cn" : null;
+      // Only the tracking number counts. Sender Name is the vendor's bill no (repeats),
+      // so matching on it hit unrelated old orders — never used.
 
       let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting";
       if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
@@ -115,7 +107,6 @@ router.post(
       if (order && !order.employee?.isAgent) warnings.push(`Not with an agent (with ${order.employee?.name ?? "—"})`);
       if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
       if (order && target === "DELIVERED" && order.status === "CANCELLED") warnings.push("Was Cancelled — report says Delivered");
-      if (matchedBy === "sender") warnings.push(`Matched by Sender Name ${r.sender}, not tracking no`);
 
       return {
         tracking: r.tracking,
