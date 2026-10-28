@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { Vendor } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
@@ -30,6 +31,7 @@ export default function VendorsPage() {
 
   function startEdit(v: Vendor) {
     setEditingId(v.id);
+    revealEditForm("vendor-form");
     setForm({ name: v.name, deliveryCharge: String(v.deliveryCharge), username: v.username ?? "", password: "" });
   }
 
@@ -96,7 +98,7 @@ export default function VendorsPage() {
         </button>
       </div>
 
-      <div className="mb-6 border border-line bg-white p-5">
+      <div id="vendor-form" className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Vendor" : "Add Vendor"}</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
           <div>

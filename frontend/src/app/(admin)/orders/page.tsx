@@ -3,6 +3,7 @@
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
@@ -235,6 +236,7 @@ const filteredOrders = useMemo(() => {
 
   function startEdit(order: Order) {
     setEditingId(order.id);
+    revealEditForm("order-form");
     setForm({
       cnNo: String(order.cnNo),
       vendorId: order.vendorId,
@@ -335,7 +337,7 @@ return (
         </div>
       </div>
 
-      <div className="mb-6 border border-line bg-white p-5">
+      <div id="order-form" className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Consignment" : "New Consignment"}</h2>
         <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
           {editingId && (

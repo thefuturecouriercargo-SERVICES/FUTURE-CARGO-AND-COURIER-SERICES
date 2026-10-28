@@ -554,3 +554,13 @@ body {
     transform: translate(-50%, 0);
   }
 }
+
+/* Gold pulse on a form that was just filled by a row's "Edit" action. */
+@keyframes edit-flash {
+  0% { box-shadow: 0 0 0 0 rgba(212, 175, 90, 0.7); }
+  100% { box-shadow: 0 0 0 14px rgba(212, 175, 90, 0); }
+}
+.edit-flash {
+  border-color: rgb(212, 175, 90) !important;
+  animation: edit-flash 1.2s ease-out 1;
+}

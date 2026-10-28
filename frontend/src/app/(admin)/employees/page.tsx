@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
@@ -49,6 +50,7 @@ export default function EmployeesPage() {
 
   function startEdit(e: Employee) {
     setEditingId(e.id);
+    revealEditForm("employee-form");
    setForm({ name: e.name, username: e.username, email: e.email ?? "", phone: e.phone ?? "", password: "", baseSalary: String(e.baseSalary ?? ""), isAgent: e.isAgent ?? false });
   }
 
@@ -107,7 +109,7 @@ export default function EmployeesPage() {
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Team</p>
       <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Employee Management</h1>
 
-      <div className="mb-6 border border-line bg-white p-5">
+      <div id="employee-form" className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Employee" : "Add Employee"}</h2>
         <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <div>

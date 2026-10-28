@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { currentMonthStr, fmtNumber, previousMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
@@ -91,6 +92,7 @@ export default function PayrollPage() {
 
   function startEditStaff(e: Employee) {
     setEditingStaffId(e.id);
+    revealEditForm("staff-form");
     setStaffForm({ name: e.name, username: e.username, password: "", baseSalary: String(e.baseSalary ?? ""), salaryFrom: currentMonthStr() });
     setOriginalSalary(e.baseSalary ?? 0);
     setShowAddStaff(true);
@@ -218,6 +220,7 @@ export default function PayrollPage() {
 
   function startEditEntry(e: PayrollEntry) {
     setEditingEntryId(e.id);
+    revealEditForm("entry-form");
     setFormEmployeeId(e.employeeId);
     setFormType(e.type);
     setFormAmount(String(e.amount));
@@ -296,7 +299,7 @@ export default function PayrollPage() {
       </div>
 
       {!isReadOnly && showAddStaff && (
-        <div className="mb-6 border border-line bg-white p-5">
+        <div id="staff-form" className="mb-6 border border-line bg-white p-5">
           <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">
             {editingStaffId ? "Edit Staff" : "Add Staff (Payroll Only)"}
           </h2>
@@ -381,7 +384,7 @@ export default function PayrollPage() {
       )}
 
       {!isReadOnly && (
-      <div className={`mb-6 border p-5 ${editingEntryId ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
+      <div id="entry-form" className={`mb-6 border p-5 ${editingEntryId ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
         <form onSubmit={onSubmitEntry} className={`grid grid-cols-2 gap-3 ${editingEntryId ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>

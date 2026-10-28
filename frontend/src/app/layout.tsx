@@ -5,10 +5,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Future Courier — Operations",
   description: "Delivery management system for The Future Courier Service L.L.C",
-  manifest: "/manifest.json",
+  manifest: "/manifest.json?v=2",
   icons: {
-    icon: "/favicon.png",
-    apple: "/apple-touch-icon.png",
+    icon: "/favicon.png?v=2",
+    apple: "/apple-touch-icon.png?v=2",
   },
   // Makes "Add to Home Screen" on iOS behave like a real app (own status bar,
   // no Safari address bar) — iOS reads these meta tags, not the web manifest.

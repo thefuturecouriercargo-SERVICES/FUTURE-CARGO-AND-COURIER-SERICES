@@ -6,6 +6,7 @@ import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, ApiClientError, agentCreditExportUrl } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { fmtNumber, todayStr, addDays, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
@@ -126,6 +127,7 @@ export default function AgentsPage() {
 
   function startEdit(a: Employee) {
     setEditingId(a.id);
+    revealEditForm("agent-form");
     setForm({ name: a.name, username: a.username, email: a.email ?? "", phone: a.phone ?? "", password: "", baseSalary: String(a.baseSalary ?? "") });
   }
 
@@ -235,7 +237,7 @@ export default function AgentsPage() {
         </p>
 
         {isSuperAdmin && (
-          <div className="mb-6 border border-line bg-white p-5">
+          <div id="agent-form" className="mb-6 border border-line bg-white p-5">
             <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Agent" : "Add Agent"}</h2>
             <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <div>

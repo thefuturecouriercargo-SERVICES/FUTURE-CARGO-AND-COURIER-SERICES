@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError, expenseReportUrl } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { addDays } from "@/lib/format";
 
 import { confirmDialog } from "@/components/ui/Feedback";
@@ -101,6 +102,7 @@ export default function ExpensesPage() {
 
   function startEdit(entry: ExpenseEntry) {
     setEditingId(entry.id);
+    revealEditForm("expense-form");
     setForm({
       date: entry.date.slice(0, 10),
       category: entry.category,
@@ -186,7 +188,7 @@ export default function ExpensesPage() {
         </select>
       </div>
 
-      <div className="mb-6 border border-line bg-white p-5">
+      <div id="expense-form" className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Expense" : "Add Expense"}</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
           <div>

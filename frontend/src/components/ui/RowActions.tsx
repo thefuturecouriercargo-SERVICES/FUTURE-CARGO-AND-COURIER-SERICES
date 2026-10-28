@@ -16,24 +16,35 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
 
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
+    function onDown(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    function onScroll() {
-      setOpen(false);
+    // Phones fire small scroll/resize events on their own (toolbar hiding,
+    // momentum, the tap itself), which used to shut the menu before the tap on
+    // "Edit" landed. Only close once the page has really moved.
+    const startY = window.scrollY;
+    const startW = window.innerWidth;
+    function onScroll(e: Event) {
+      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      if (Math.abs(window.scrollY - startY) > 60) setOpen(false);
+    }
+    function onResize() {
+      if (window.innerWidth !== startW) setOpen(false);
     }
     document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown, { passive: true });
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 
@@ -77,7 +88,7 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
                 role="menuitem"
                 onClick={() => {
                   setOpen(false);
-                  a.onClick();
+                  window.setTimeout(a.onClick, 0);
                 }}
                 className={`flex h-10 w-full items-center rounded-lg px-3 text-left text-[13px] ${
                   a.danger ? "text-cancelled hover:bg-cancelled-bg" : "text-ink hover:bg-paper-2"

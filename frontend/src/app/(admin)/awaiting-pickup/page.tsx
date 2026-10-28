@@ -5,6 +5,7 @@ import { isTouchDevice } from "@/components/BarcodeScanner";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { revealEditForm } from "@/lib/editForm";
 import { fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
@@ -313,7 +314,7 @@ export default function AwaitingPickupPage() {
       )}
 
       {(showForm || editing) && canEdit && (
-        <div className="mb-6 max-w-2xl">
+        <div id="booking-form" className="mb-6 max-w-2xl rounded-xl">
           <BookingForm
             editing={editing}
             vendors={vendors}
@@ -625,7 +626,7 @@ export default function AwaitingPickupPage() {
                                     onClick: () => {
                                       setEditing(b);
                                       setShowForm(true);
-                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                      revealEditForm("booking-form");
                                     },
                                   },
                                 ]
