@@ -10,6 +10,7 @@ import { Employee } from "@/types";
 import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import RowActions from "@/components/ui/RowActions";
 interface PayrollRow {
   id: string;
   month: string;
@@ -574,7 +575,7 @@ export default function PayrollPage() {
                   <th className="text-right">Bonus</th>
                   <th className="text-right">Paid</th>
                   <th className="text-right">Balance</th>
-                  {!isReadOnly && <th>Actions</th>}
+                  {!isReadOnly && <th className="text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -604,16 +605,15 @@ export default function PayrollPage() {
                     <td className="text-right font-mono">{fmtNumber(r.paid)}</td>
                     <td className="text-right font-mono font-semibold">{fmtNumber(r.balance)}</td>
                     {!isReadOnly && (
-                      <td className="whitespace-nowrap">
+                      <td className="whitespace-nowrap text-right">
                         {isStaffRecord(r.employee) && (
-                          <>
-                            <button onClick={() => startEditStaff(r.employee)} className="mr-2 text-xs text-brass hover:underline">
-                              Edit
-                            </button>
-                            <button onClick={() => deactivateStaff(r.employee)} className="text-xs text-cancelled hover:underline">
-                              Remove
-                            </button>
-                          </>
+                          <RowActions
+                            label={`Actions for ${r.employee.name}`}
+                            actions={[
+                              { label: "Edit", onClick: () => startEditStaff(r.employee) },
+                              { label: "Remove", onClick: () => deactivateStaff(r.employee), danger: true },
+                            ]}
+                          />
                         )}
                       </td>
                     )}
@@ -648,7 +648,7 @@ export default function PayrollPage() {
               <th>Type</th>
               <th className="text-right">Amount</th>
               <th>Note</th>
-              <th></th>
+              <th className="text-right"></th>
             </tr>
           </thead>
           <tbody>
@@ -668,16 +668,15 @@ export default function PayrollPage() {
                   </td>
                   <td className="text-right font-mono">{fmtNumber(e.amount)}</td>
                   <td className="text-ink-soft">{e.note || "—"}</td>
-                  <td className="whitespace-nowrap">
+                  <td className="whitespace-nowrap text-right">
                     {!isReadOnly && (
-                      <>
-                        <button onClick={() => startEditEntry(e)} className="mr-3 text-xs text-brass hover:underline">
-                          Edit
-                        </button>
-                        <button onClick={() => deleteEntry(e.id)} className="text-xs text-cancelled hover:underline">
-                          Delete
-                        </button>
-                      </>
+                      <RowActions
+                        label="Entry actions"
+                        actions={[
+                          { label: "Edit", onClick: () => startEditEntry(e) },
+                          { label: "Delete", onClick: () => deleteEntry(e.id), danger: true },
+                        ]}
+                      />
                     )}
                   </td>
                 </tr>

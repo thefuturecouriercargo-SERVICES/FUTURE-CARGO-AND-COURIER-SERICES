@@ -5,6 +5,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { Vendor } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
+import RowActions from "@/components/ui/RowActions";
 const emptyForm = { name: "", deliveryCharge: "", username: "", password: "" };
 
 export default function VendorsPage() {
@@ -154,7 +155,7 @@ export default function VendorsPage() {
               <th className="text-right">Delivery Charge (AED)</th>
               <th>Portal Login</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -169,19 +170,14 @@ export default function VendorsPage() {
                 <td>
                   <span className={`stamp ${v.active ? "delivered" : "cancelled"}`}>{v.active ? "Active" : "Inactive"}</span>
                 </td>
-                <td className="whitespace-nowrap">
-                  <button onClick={() => startEdit(v)} className="mr-2 text-xs text-brass hover:underline">
-                    Edit
-                  </button>
-                  {v.active ? (
-                    <button onClick={() => removeVendor(v)} className="text-xs text-cancelled hover:underline">
-                      Remove
-                    </button>
-                  ) : (
-                    <button onClick={() => activateVendor(v)} className="text-xs text-delivered hover:underline">
-                      Activate
-                    </button>
-                  )}
+                <td className="whitespace-nowrap text-right">
+                  <RowActions
+                    label={`Actions for ${v.name}`}
+                    actions={[
+                      { label: "Edit", onClick: () => startEdit(v) },
+                      v.active ? { label: "Remove", onClick: () => removeVendor(v), danger: true } : { label: "Activate", onClick: () => activateVendor(v) },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}

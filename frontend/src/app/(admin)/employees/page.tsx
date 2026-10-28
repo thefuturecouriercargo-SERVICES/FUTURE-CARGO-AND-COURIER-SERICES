@@ -7,6 +7,7 @@ import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
+import RowActions from "@/components/ui/RowActions";
 const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "", isAgent: false };
 
 interface PerformanceMap {
@@ -186,7 +187,7 @@ export default function EmployeesPage() {
               <th className="text-right">Sales (MTD)</th>
               <th className="text-right">DL Charge (MTD)</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -211,16 +212,15 @@ export default function EmployeesPage() {
                   <td>
                     <span className={`stamp ${e.active ? "delivered" : "cancelled"}`}>{e.active ? "Active" : "Inactive"}</span>
                   </td>
-                  <td className="whitespace-nowrap">
-                    <button onClick={() => startEdit(e)} className="mr-2 text-xs text-brass hover:underline">
-                      Edit
-                    </button>
-                    <button onClick={() => toggleActive(e)} className="mr-2 text-xs text-cancelled hover:underline">
-                      {e.active ? "Deactivate" : "Reactivate"}
-                    </button>
-                    <button onClick={() => removeEmployee(e)} className="text-xs text-cancelled hover:underline">
-                      Remove
-                    </button>
+                  <td className="whitespace-nowrap text-right">
+                    <RowActions
+                      label={`Actions for ${e.name}`}
+                      actions={[
+                        { label: "Edit", onClick: () => startEdit(e) },
+                        { label: e.active ? "Deactivate" : "Reactivate", onClick: () => toggleActive(e) },
+                        { label: "Remove", onClick: () => removeEmployee(e), danger: true },
+                      ]}
+                    />
                   </td>
                 </tr>
               );

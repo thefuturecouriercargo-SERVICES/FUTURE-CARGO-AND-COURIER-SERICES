@@ -12,6 +12,8 @@ import { Employee } from "@/types";
 import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import RowActions from "@/components/ui/RowActions";
+import TrashButton from "@/components/ui/TrashButton";
 const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "" };
 
 interface AgentBreakdownRow {
@@ -325,7 +327,7 @@ export default function AgentsPage() {
                 <th className="font-mono">Username</th>
                 <th>Contact</th>
                 <th>Status</th>
-                {isSuperAdmin && <th>Actions</th>}
+                {isSuperAdmin && <th className="text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -338,16 +340,15 @@ export default function AgentsPage() {
                     <span className={`stamp ${a.active ? "delivered" : "cancelled"}`}>{a.active ? "Active" : "Inactive"}</span>
                   </td>
                   {isSuperAdmin && (
-                    <td className="whitespace-nowrap">
-                      <button onClick={() => startEdit(a)} className="mr-2 text-xs text-brass hover:underline">
-                        Edit
-                      </button>
-                      <button onClick={() => toggleActive(a)} className="mr-2 text-xs text-cancelled hover:underline">
-                        {a.active ? "Deactivate" : "Reactivate"}
-                      </button>
-                      <button onClick={() => removeAgent(a)} className="text-xs text-cancelled hover:underline">
-                        Remove
-                      </button>
+                    <td className="whitespace-nowrap text-right">
+                      <RowActions
+                        label={`Actions for ${a.name}`}
+                        actions={[
+                          { label: "Edit", onClick: () => startEdit(a) },
+                          { label: a.active ? "Deactivate" : "Reactivate", onClick: () => toggleActive(a) },
+                          { label: "Remove", onClick: () => removeAgent(a), danger: true },
+                        ]}
+                      />
                     </td>
                   )}
                 </tr>
@@ -611,9 +612,7 @@ export default function AgentsPage() {
                             <span className="flex items-center gap-2">
                               <span className="font-mono">{fmtNumber(p.amount)}</span>
                               {isSuperAdmin && (
-                                <button onClick={() => removePayment(r.agent.id, p.id)} className="text-cancelled hover:underline">
-                                  Remove
-                                </button>
+                                <TrashButton label="Remove payment" onClick={() => removePayment(r.agent.id, p.id)} />
                               )}
                             </span>
                           </div>
@@ -637,7 +636,7 @@ export default function AgentsPage() {
                 <th className="text-right">DL Charge (Kept)</th>
                 <th className="text-right">Paid Back</th>
                 <th className="text-right">Balance Owed</th>
-                <th>Actions</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -653,8 +652,8 @@ export default function AgentsPage() {
                       {fmtNumber(r.balance)}
                     </td>
                     <td>
-                      <button onClick={() => toggleExpand(r.agent.id)} className="text-xs text-brass hover:underline">
-                        {expandedAgentId === r.agent.id ? "Close" : "Add / View Payments"}
+                      <button onClick={() => toggleExpand(r.agent.id)} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brass/40 px-3 py-1.5 text-xs font-medium text-brass transition hover:bg-brass/10">
+                        {expandedAgentId === r.agent.id ? "Close ▴" : "Payments ▾"}
                       </button>
                     </td>
                   </tr>
@@ -717,7 +716,7 @@ export default function AgentsPage() {
                                 <th>Date</th>
                                 <th className="text-right">Amount</th>
                                 <th>Note</th>
-                                {isSuperAdmin && <th>Actions</th>}
+                                {isSuperAdmin && <th className="text-right">Actions</th>}
                               </tr>
                             </thead>
                             <tbody>
@@ -727,10 +726,8 @@ export default function AgentsPage() {
                                   <td className="text-right font-mono">{fmtNumber(p.amount)}</td>
                                   <td className="text-ink-soft">{p.note || "—"}</td>
                                   {isSuperAdmin && (
-                                    <td>
-                                      <button onClick={() => removePayment(r.agent.id, p.id)} className="text-xs text-cancelled hover:underline">
-                                        Remove
-                                      </button>
+                                    <td className="text-right">
+                                      <TrashButton label="Remove payment" onClick={() => removePayment(r.agent.id, p.id)} />
                                     </td>
                                   )}
                                 </tr>

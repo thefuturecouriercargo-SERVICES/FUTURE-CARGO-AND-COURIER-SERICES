@@ -102,7 +102,7 @@ export default function AgentReportHistory({ refreshKey }: { refreshKey: number 
               </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="data-table min-w-[640px]">
                 <thead className="font-mono text-[10px] uppercase tracking-wide text-ink-soft">
                   <tr>
                     <th className="p-2 text-left">CN</th>

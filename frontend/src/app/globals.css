@@ -257,30 +257,62 @@ select.status-pill.transferred { color: rgb(var(--c-transferred)); background-co
 
 table.data-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 table.data-table th {
   text-align: left;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  font-family: "Inter", sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: rgb(var(--c-ink-soft));
   font-weight: 600;
-  padding: 10px 10px;
+  padding: 11px 12px;
   border-bottom: 1px solid rgb(var(--c-line));
   position: sticky;
   top: 0;
+  z-index: 1;
   background: rgb(var(--c-surface));
+  white-space: nowrap;
+}
+/* Respect alignment utilities on header cells (the rule above would win otherwise). */
+table.data-table th.text-right {
+  text-align: right;
+}
+table.data-table th.text-center {
+  text-align: center;
 }
 table.data-table td {
-  padding: 10px 10px;
+  padding: 12px;
   border-bottom: 1px solid rgb(var(--c-row-line));
+  vertical-align: middle;
+}
+/* Numbers read cleaner in the UI font with even-width digits than in mono. */
+table.data-table .font-mono {
+  font-family: "Inter", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+table.data-table tbody tr {
+  transition: background-color 120ms ease;
 }
 table.data-table tbody tr:hover {
   background: rgb(var(--c-surface-hover));
+}
+table.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* Totals rows. */
+table.data-table tfoot td,
+table.data-table tbody tr.font-semibold td,
+table.data-table tbody tr.font-bold td {
+  border-top: 1px solid rgb(var(--c-line));
+  background: rgb(var(--c-surface-hover));
+  font-weight: 650;
+  color: rgb(var(--c-navy));
 }
 
 /* Keep the first column (usually a name) visible while scrolling a wide table
@@ -291,10 +323,14 @@ table.data-table td:first-child {
   left: 0;
   z-index: 2;
   background: rgb(var(--c-surface));
-  box-shadow: 1px 0 0 rgb(var(--c-row-line));
 }
 table.data-table th:first-child {
   z-index: 3;
+}
+table.data-table tfoot td:first-child,
+table.data-table tbody tr.font-semibold td:first-child,
+table.data-table tbody tr.font-bold td:first-child {
+  background: rgb(var(--c-surface-hover));
 }
 table.data-table tbody tr:hover td:first-child {
   background: rgb(var(--c-surface-hover));
@@ -422,4 +458,15 @@ body {
 .touch-target {
   min-height: 44px;
   min-width: 44px;
+}
+
+/* Tables that scroll with the page (not inside their own scroll box) keep
+   their header row visible just below the sticky admin top bar. */
+.admin-shell :not(.table-scroll):not(.overflow-x-auto):not(.overflow-auto) > table.data-table th {
+  top: 60px;
+}
+@media (min-width: 768px) {
+  .admin-shell :not(.table-scroll):not(.overflow-x-auto):not(.overflow-auto) > table.data-table th {
+    top: 72px;
+  }
 }

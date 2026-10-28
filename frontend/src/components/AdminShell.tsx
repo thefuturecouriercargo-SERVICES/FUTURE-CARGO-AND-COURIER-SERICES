@@ -77,7 +77,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <FeedbackHost />
       <CommandPalette links={visibleNav.map((n) => ({ href: n.href, label: n.label, group: n.group }))} />
       <AdminVoiceAssistant />
-      <div className="flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:px-6">
+      <div className="z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF5A] font-display text-[15px] font-bold text-[#0A1020] shadow-[0_0_24px_rgba(212,175,90,0.25)]">
             FC
@@ -129,7 +129,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {/* Desktop sidebar — full, or collapsed to an icon rail. */}
         <nav
           aria-label="Main"
-          className={`sticky top-0 hidden h-[calc(100vh-72px)] shrink-0 flex-col overflow-y-auto border-r border-[#1B2438] bg-[#0A1020] py-5 transition-[width] duration-200 md:flex ${
+          className={`sticky top-[72px] hidden h-[calc(100vh-72px)] shrink-0 flex-col overflow-y-auto border-r border-[#1B2438] bg-[#0A1020] py-5 transition-[width] duration-200 md:flex ${
             collapsed ? "w-[76px] items-center px-2" : "w-60 px-4"
           }`}
         >

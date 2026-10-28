@@ -6,6 +6,7 @@ import { apiFetch, ApiClientError, expenseReportUrl } from "@/lib/api";
 import { addDays } from "@/lib/format";
 
 import { confirmDialog } from "@/components/ui/Feedback";
+import RowActions from "@/components/ui/RowActions";
 const CATEGORIES = [
   "FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT",
   "STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB",
@@ -242,7 +243,7 @@ export default function ExpensesPage() {
               <th>Source</th>
               <th>Driver</th>
               <th>Remarks</th>
-              <th>Actions</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -254,13 +255,14 @@ export default function ExpensesPage() {
                 <td>{e.source}</td>
                 <td>{e.employee?.name ?? "-"}</td>
                 <td>{e.remarks ?? "-"}</td>
-                <td className="whitespace-nowrap">
-                  <button onClick={() => startEdit(e)} className="mr-2 text-xs text-brass hover:underline">
-                    Edit
-                  </button>
-                  <button onClick={() => removeEntry(e)} className="text-xs text-cancelled hover:underline">
-                    Remove
-                  </button>
+                <td className="whitespace-nowrap text-right">
+                  <RowActions
+                    label={`Actions for ${e.category} expense`}
+                    actions={[
+                      { label: "Edit", onClick: () => startEdit(e) },
+                      { label: "Remove", onClick: () => removeEntry(e), danger: true },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}

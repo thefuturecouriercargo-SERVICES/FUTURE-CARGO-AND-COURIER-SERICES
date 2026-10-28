@@ -7,6 +7,7 @@ import { readAgentReport, ReportRow } from "@/lib/agentReport";
 import AgentReportHistory from "@/components/AgentReportHistory";
 
 import { confirmDialog } from "@/components/ui/Feedback";
+import EmptyState from "@/components/ui/EmptyState";
 type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
 
 interface Item {
@@ -256,7 +257,7 @@ export default function AgentReportPage() {
           )}
 
           <div className="overflow-x-auto border border-line bg-white">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="data-table min-w-[760px]">
               <thead className="bg-paper font-mono text-[10px] uppercase tracking-wide text-ink-soft">
                 <tr>
                   <th className="w-8 p-2"></th>
@@ -272,7 +273,7 @@ export default function AgentReportPage() {
               <tbody>
                 {visible.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-4 text-center text-ink-soft">Nothing here.</td>
+                    <td colSpan={8} className="!static !shadow-none"><EmptyState compact icon="inbox" title="Nothing here" /></td>
                   </tr>
                 )}
                 {visible.map((i) => {

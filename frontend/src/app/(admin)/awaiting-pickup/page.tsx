@@ -16,6 +16,7 @@ import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
+import RowActions from "@/components/ui/RowActions";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -564,7 +565,7 @@ export default function AwaitingPickupPage() {
                 <th className="text-right">COD</th>
                 <th>Status</th>
                 <th>Entered</th>
-                <th>Actions</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -611,42 +612,29 @@ export default function AwaitingPickupPage() {
                           </div>
                         )}
                       </td>
-                      <td className="whitespace-nowrap">
-                        {b.hasPhoto && (
-                          <a href={`/api/bookings/${b.id}/photo`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
-                            📷
-                          </a>
-                        )}
-                        <button onClick={() => printLabels([b.id])} className="mr-2 text-xs text-brass hover:underline">
-                          Label
-                        </button>
-                        {canEdit && b.status !== "ACCEPTED" && (
-                          <button
-                            onClick={() => {
-                              setEditing(b);
-                              setShowForm(true);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="mr-2 text-xs text-brass hover:underline"
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {canEdit && b.status === "AWAITING_PICKUP" && (
-                          <button onClick={() => reject(b)} className="mr-2 text-xs text-cancelled hover:underline">
-                            Reject
-                          </button>
-                        )}
-                        {canEdit && b.status === "REJECTED" && (
-                          <>
-                            <button onClick={() => reopen(b)} className="mr-2 text-xs text-brass hover:underline">
-                              Reopen
-                            </button>
-                            <button onClick={() => remove(b)} className="text-xs text-cancelled hover:underline">
-                              Delete
-                            </button>
-                          </>
-                        )}
+                      <td className="whitespace-nowrap text-right">
+                        <RowActions
+                          label={`Actions for CN ${b.cnNo}`}
+                          actions={[
+                            { label: "Print label", onClick: () => printLabels([b.id]) },
+                            ...(b.hasPhoto ? [{ label: "View slip photo", onClick: () => window.open(`/api/bookings/${b.id}/photo`, "_blank", "noopener,noreferrer") }] : []),
+                            ...(canEdit && b.status !== "ACCEPTED"
+                              ? [
+                                  {
+                                    label: "Edit",
+                                    onClick: () => {
+                                      setEditing(b);
+                                      setShowForm(true);
+                                      window.scrollTo({ top: 0, behavior: "smooth" });
+                                    },
+                                  },
+                                ]
+                              : []),
+                            ...(canEdit && b.status === "REJECTED" ? [{ label: "Reopen", onClick: () => reopen(b) }] : []),
+                            ...(canEdit && b.status === "AWAITING_PICKUP" ? [{ label: "Reject", onClick: () => reject(b), danger: true }] : []),
+                            ...(canEdit && b.status === "REJECTED" ? [{ label: "Delete", onClick: () => remove(b), danger: true }] : []),
+                          ]}
+                        />
                       </td>
                     </tr>,
                   ];

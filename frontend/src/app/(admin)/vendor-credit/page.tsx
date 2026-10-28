@@ -10,6 +10,7 @@ import { fmtNumber } from "@/lib/format";
 import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import TrashButton from "@/components/ui/TrashButton";
 interface VendorCreditRow {
   vendor: { id: string; name: string; active: boolean };
   openingAmount: number;
@@ -288,7 +289,7 @@ export default function VendorCreditPage() {
                     <th className="text-right">Total Amount</th>
                     <th className="text-right">Delivery Charge</th>
                     <th className="text-right">Balance</th>
-                    <th></th>
+                    <th className="text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -439,9 +440,7 @@ export default function VendorCreditPage() {
                             </span>
                             <span className="flex items-center gap-2">
                               <span className="font-mono">{fmtNumber(p.amount)}</span>
-                              <button onClick={() => removePayment(r.vendor.id, p.id)} className="text-cancelled hover:underline">
-                                Remove
-                              </button>
+                              <TrashButton label="Remove payment" onClick={() => removePayment(r.vendor.id, p.id)} />
                             </span>
                           </div>
                         ))}
@@ -485,7 +484,7 @@ export default function VendorCreditPage() {
                 <th className="text-right">Delivery Charge</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
-                <th>Actions</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
 
@@ -533,9 +532,9 @@ export default function VendorCreditPage() {
                     <td>
                       <button
                         onClick={() => toggleExpand(r.vendor.id)}
-                        className="text-xs text-brass hover:underline"
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brass/40 px-3 py-1.5 text-xs font-medium text-brass transition hover:bg-brass/10"
                       >
-                        {expandedVendorId === r.vendor.id ? "Close" : "Add / View Payments"}
+                        {expandedVendorId === r.vendor.id ? "Close ▴" : "Payments ▾"}
                       </button>
                     </td>
                   </tr>
@@ -605,7 +604,7 @@ export default function VendorCreditPage() {
                                 <th>Date</th>
                                 <th className="text-right">Amount</th>
                                 <th>Note</th>
-                                <th>Actions</th>
+                                <th className="text-right">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -614,13 +613,8 @@ export default function VendorCreditPage() {
                                   <td>{p.date.slice(0, 10)}</td>
                                   <td className="text-right font-mono">{fmtNumber(p.amount)}</td>
                                   <td className="text-ink-soft">{p.note || "—"}</td>
-                                  <td>
-                                    <button
-                                      onClick={() => removePayment(r.vendor.id, p.id)}
-                                      className="text-xs text-cancelled hover:underline"
-                                    >
-                                      Remove
-                                    </button>
+                                  <td className="text-right">
+                                    <TrashButton label="Remove payment" onClick={() => removePayment(r.vendor.id, p.id)} />
                                   </td>
                                 </tr>
                               ))}

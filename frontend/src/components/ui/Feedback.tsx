@@ -150,7 +150,7 @@ export function FeedbackHost() {
         </div>
       )}
 
-      <div className="safe-bottom-fixed pointer-events-none fixed right-4 z-[110] flex w-[min(340px,calc(100vw-2rem))] flex-col gap-2.5 max-md:bottom-24">
+      <div className="pointer-events-none fixed right-4 top-[132px] z-[110] flex w-[min(340px,calc(100vw-2rem))] flex-col gap-2.5 md:top-[88px]">
         {toasts.map((t) => {
           const s = KIND_STYLE[t.kind];
           return (
