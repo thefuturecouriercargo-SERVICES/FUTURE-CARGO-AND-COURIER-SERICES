@@ -72,12 +72,14 @@ router.post(
       },
       orderBy: { date: "desc" },
     });
-    // Newest order per CN.
+    // One order per CN. If a CN was used more than once, prefer the one with the agent, then the newest.
+    const allByCn = new Map<number, (typeof orders)[number][]>();
+    for (const o of orders) allByCn.set(o.cnNo, [...(allByCn.get(o.cnNo) ?? []), o]);
     const orderByCn = new Map<number, (typeof orders)[number]>();
     const dupCn = new Set<number>();
-    for (const o of orders) {
-      if (orderByCn.has(o.cnNo)) dupCn.add(o.cnNo);
-      else orderByCn.set(o.cnNo, o);
+    for (const [cnNo, list] of allByCn) {
+      if (list.length > 1) dupCn.add(cnNo);
+      orderByCn.set(cnNo, list.find((o) => o.employee?.isAgent) ?? list[0]); // list is newest-first
     }
     // CNs still sitting in Awaiting Pickup (not yet in Daily Entry).
     const waiting = await prisma.booking.findMany({
@@ -102,8 +104,12 @@ router.post(
       else action = "change";
 
       const warnings: string[] = [];
-      if (order && r.cod != null && r.cod !== order.total) warnings.push(`Amount: report ${r.cod}, ours ${order.total}`);
-      if (order && dupCn.has(order.cnNo)) warnings.push("CN used on more than one order — newest picked");
+      const amountDiff = !!order && r.cod != null && r.cod !== order.total;
+      const notWithAgent = !!order && !order.employee?.isAgent;
+      const dup = !!order && dupCn.has(order.cnNo);
+      if (amountDiff) warnings.push(`Amount differs: report ${r.cod}, ours ${order!.total} — check it's the same parcel`);
+      if (notWithAgent) warnings.push(`With driver ${order!.employee?.name ?? "—"}, not the agent — check it's the same parcel`);
+      if (dup) warnings.push(`CN ${order!.cnNo} is on more than one order — check the date`);
       if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
       if (order && target === "DELIVERED" && order.status === "CANCELLED") warnings.push("Was Cancelled — report says Delivered");
 
@@ -116,8 +122,9 @@ router.post(
         sheet: r.sheet ?? null,
         action,
         matchedBy,
-        // Tick by default only for clean changes.
-        selected: action === "change" && matchedBy === "cn",
+        // Ticked by default only when it's clearly the same parcel: CN equal, with the agent,
+        // same amount, CN used once. Anything doubtful is shown but left for you to tick.
+        selected: action === "change" && matchedBy === "cn" && !amountDiff && !notWithAgent && !dup,
         warnings,
         order: order
           ? {
