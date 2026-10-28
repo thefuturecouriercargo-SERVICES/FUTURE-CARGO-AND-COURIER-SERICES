@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface RowAction {
   label: string;
@@ -13,11 +14,14 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -28,7 +32,7 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
     const startY = window.scrollY;
     const startW = window.innerWidth;
     function onScroll(e: Event) {
-      if (ref.current && e.target instanceof Node && ref.current.contains(e.target)) return;
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
       if (Math.abs(window.scrollY - startY) > 60) setOpen(false);
     }
     function onResize() {
@@ -74,8 +78,9 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
       >
         ⋯
       </button>
-      {open && pos && (
+      {open && pos && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           style={pos ?? undefined}
           className="fixed z-[80] w-44 rounded-xl border border-line bg-white p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
@@ -98,7 +103,10 @@ export default function RowActions({ actions, label = "Row actions" }: { actions
               </button>
             </div>
           ))}
-        </div>
+        </div>,
+        // Rendered at the app shell (outside the page's animated blocks) so it
+        // always sits at the button, and still picks up the dark-theme colours.
+        (ref.current?.closest(".admin-shell, .vendor-shell") as HTMLElement | null) ?? document.body
       )}
     </div>
   );

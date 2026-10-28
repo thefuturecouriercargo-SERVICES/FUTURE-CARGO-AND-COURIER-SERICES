@@ -31,7 +31,7 @@ export default function AuditLogPage() {
       <p className="mb-6 text-sm text-ink-soft">Every create, update, status change, transfer and cash closing is recorded here. Showing latest {logs.length} of {total}.</p>
 
       <div className="border border-line bg-white p-5">
-        <table className="data-table">
+        <div className="table-wrap"><table className="data-table">
           <thead>
             <tr>
               <th>When</th>
@@ -55,7 +55,7 @@ export default function AuditLogPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

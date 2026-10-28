@@ -189,7 +189,7 @@ export default function PnlPage() {
               Expense Breakdown by Category
             </h2>
             <p className="mb-3 text-xs text-ink-soft">Click any category to see the individual entries behind its total.</p>
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <thead>
                 <tr>
                   <th>Category</th>
@@ -250,7 +250,7 @@ export default function PnlPage() {
                   </Fragment>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {thisMonthData && lastMonthData && (
@@ -258,7 +258,7 @@ export default function PnlPage() {
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 This Month vs. Last Month
               </h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Metric</th>
@@ -292,10 +292,10 @@ export default function PnlPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
 
               <h3 className="mb-2 mt-5 font-mono text-[11px] uppercase tracking-wide text-ink-soft">By Category</h3>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Category</th>
@@ -324,7 +324,7 @@ export default function PnlPage() {
                       );
                     })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </>

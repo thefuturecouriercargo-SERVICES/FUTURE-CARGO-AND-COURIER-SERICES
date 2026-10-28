@@ -497,7 +497,7 @@ export default function PayrollPage() {
                       </button>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Base Salary</span>
                       <span>{fmtNumber(r.baseSalary)}</span>
@@ -541,7 +541,7 @@ export default function PayrollPage() {
                   <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
                   <span className="font-mono text-sm font-semibold text-navy">{fmtNumber(totals.balance)} AED</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                   <div className="flex justify-between">
                     <span className="text-ink-soft">Base Salary</span>
                     <span>{fmtNumber(totals.baseSalary)}</span>
@@ -567,7 +567,7 @@ export default function PayrollPage() {
             </div>
 
             {/* Desktop: full table */}
-            <table className="data-table hidden md:table">
+            <div className="table-wrap"><table className="data-table hidden md:table">
               <thead>
                 <tr>
                   <th>Employee</th>
@@ -634,7 +634,7 @@ export default function PayrollPage() {
                   {!isReadOnly && <td></td>}
                 </tr>
               </tbody>
-            </table>
+            </table></div>
           </>
         )}
       </div>
@@ -643,7 +643,7 @@ export default function PayrollPage() {
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Entry Log — {month}
         </h2>
-        <table className="data-table">
+        <div className="table-wrap"><table className="data-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -686,7 +686,7 @@ export default function PayrollPage() {
               ))
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
     </AuthGate>

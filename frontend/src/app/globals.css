@@ -497,8 +497,10 @@ body {
 
 /* ─── Page transitions ──────────────────────────────────────────────────
    Each admin page fades and rises in; its top-level blocks follow one after
-   another. Ends at transform:none so fixed menus/drawers inside position
-   correctly once the animation finishes. */
+   another. Fill mode is `backwards`, not `both`: an animation that keeps
+   holding a transform (even `none`) makes the browser position every
+   fixed pop-up inside the page relative to that block instead of the
+   screen — which pushed the ⋯ row menus off-screen. */
 @keyframes page-rise {
   from {
     opacity: 0;
@@ -512,7 +514,7 @@ body {
 .page-enter > *,
 .page-enter > * > *,
 .stagger > * {
-  animation: page-rise 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: page-rise 380ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 .page-enter > * > :nth-child(2),
 .stagger > :nth-child(2) { animation-delay: 60ms; }
@@ -563,4 +565,74 @@ body {
 .edit-flash {
   border-color: rgb(212, 175, 90) !important;
   animation: edit-flash 1.2s ease-out 1;
+}
+
+/* ───────────────────────── iPhone / phone layout ─────────────────────────
+   Wide tables now scroll sideways inside their own box (with momentum), so
+   the page itself never gets wider than the screen and stops shaking. */
+html {
+  -webkit-text-size-adjust: 100%; /* no surprise font jump when rotating */
+  text-size-adjust: 100%;
+}
+/* Grid children may shrink below their content, instead of pushing the
+   page wider than the phone. */
+.admin-shell .grid > * {
+  min-width: 0;
+}
+.table-wrap {
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  /* Nothing may make the page itself scroll sideways. `clip` (unlike
+     `hidden`) keeps the sticky top bar working. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  .table-wrap,
+  .table-scroll,
+  .overflow-x-auto:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain; /* swiping the table doesn't drag the page */
+    /* Soft shadow at an edge while there's more table to scroll to. */
+    background:
+      linear-gradient(to right, rgb(var(--c-surface)) 30%, transparent) left / 24px 100% no-repeat local,
+      linear-gradient(to left, rgb(var(--c-surface)) 30%, transparent) right / 24px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.35), transparent) left / 10px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.35), transparent) right / 10px 100% no-repeat scroll;
+  }
+  /* A box that scrolls up/down inside the page fights the page's own scroll
+     on iPhone — on phones these tables just grow with the page instead. */
+  .table-scroll {
+    max-height: none;
+    overflow-y: visible;
+  }
+  /* Header cells: stuck to the top of their box, not offset under the top
+     bar (that offset only works when the table scrolls with the page). */
+  .admin-shell .table-wrap > table.data-table th,
+  .admin-shell .table-scroll > table.data-table th,
+  .admin-shell .overflow-x-auto > table.data-table th {
+    top: 0;
+  }
+
+  /* One line per row, scrolled sideways, instead of tall squashed rows. */
+  table.data-table th,
+  table.data-table td {
+    white-space: nowrap;
+    padding: 10px 10px;
+  }
+  table.data-table {
+    font-size: 13px;
+  }
+
+  /* iOS zooms the whole page in when you tap a field with text under 16px
+     and leaves it zoomed — the main cause of the "jumping" layout. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

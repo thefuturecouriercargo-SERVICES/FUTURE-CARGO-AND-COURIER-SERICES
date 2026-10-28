@@ -235,7 +235,7 @@ function VendorPortalContent() {
           {payments.length === 0 ? (
             <p className="text-sm text-ink-soft">No payments recorded yet.</p>
           ) : (
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -252,7 +252,7 @@ function VendorPortalContent() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
 

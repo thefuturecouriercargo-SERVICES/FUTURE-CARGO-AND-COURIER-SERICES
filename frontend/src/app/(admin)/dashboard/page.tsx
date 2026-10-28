@@ -364,7 +364,7 @@ return (
                         <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
                         <span className="font-mono text-sm font-semibold text-navy">{empTotal} total</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                         <div className="flex justify-between">
                           <span className="text-ink-soft">Delivered</span>
                           <span>{r.delivered}</span>
@@ -404,7 +404,7 @@ return (
                       total
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                     <div className="flex justify-between">
                       <span className="text-ink-soft">Delivered</span>
                       <span>{employeeRows.reduce((s, r) => s + r.delivered, 0)}</span>
@@ -434,7 +434,7 @@ return (
               </div>
 
               {/* Desktop: full table */}
-              <table className="data-table hidden md:table">
+              <div className="table-wrap"><table className="data-table hidden md:table">
                 <thead>
                   <tr>
                    <th>Employee</th>
@@ -480,7 +480,7 @@ return (
   </td>
 </tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-5 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Delivery Status</h2>
@@ -643,7 +643,7 @@ return (
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Payment-wise Summary
               </h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Method</th>
@@ -660,13 +660,13 @@ return (
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Emirate-wise Summary
               </h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Emirate</th>
@@ -683,7 +683,7 @@ return (
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
 

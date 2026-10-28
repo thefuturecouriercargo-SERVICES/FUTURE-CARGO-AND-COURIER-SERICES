@@ -97,7 +97,7 @@ export default function MonthlyDashboardPage() {
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Employee-wise Deliveries &amp; Charges
               </h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Employee</th>
@@ -116,7 +116,7 @@ export default function MonthlyDashboardPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
@@ -150,7 +150,7 @@ export default function MonthlyDashboardPage() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Emirate-wise Summary</h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Emirate</th>
@@ -167,11 +167,11 @@ export default function MonthlyDashboardPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Payment-wise Summary</h2>
-              <table className="data-table">
+              <div className="table-wrap"><table className="data-table">
                 <thead>
                   <tr>
                     <th>Method</th>
@@ -188,7 +188,7 @@ export default function MonthlyDashboardPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         </>

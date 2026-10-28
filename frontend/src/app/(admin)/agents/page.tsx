@@ -322,7 +322,7 @@ export default function AgentsPage() {
           </div>
 
           {/* Desktop: table */}
-          <table className="data-table hidden md:table">
+          <div className="table-wrap"><table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -363,7 +363,7 @@ export default function AgentsPage() {
                 </tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
 
         <div className="mb-6 border border-line bg-white p-5">
@@ -397,7 +397,7 @@ export default function AgentsPage() {
                     {r.totalOrders ?? 0} items · {fmtNumber(r.totalAssignedValue ?? 0)} AED
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                   <div className="flex justify-between"><span className="text-ink-soft">Delivered</span><span>{r.delivered}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Pending</span><span>{r.pending}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Sales</span><span>{fmtNumber(r.totalSales)}</span></div>
@@ -411,7 +411,7 @@ export default function AgentsPage() {
           </div>
 
           {/* Desktop: table */}
-          <table className="data-table hidden md:table">
+          <div className="table-wrap"><table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Agent</th>
@@ -449,7 +449,7 @@ export default function AgentsPage() {
                 </tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
 
         <div className="mb-6 border border-line bg-white p-5">
@@ -466,7 +466,7 @@ export default function AgentsPage() {
                 {monthlyRows.map((r) => (
                   <div key={r.employee.id} className="rounded border border-line p-3.5">
                     <div className="mb-2 font-display text-[15px] font-semibold text-navy">{r.employee.name}</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                       <div className="flex justify-between"><span className="text-ink-soft">Delivered</span><span>{r.delivered}</span></div>
                       <div className="flex justify-between"><span className="text-ink-soft">Pending</span><span>{r.pending}</span></div>
                       <div className="flex justify-between"><span className="text-ink-soft">Transfer</span><span>{r.transferred}</span></div>
@@ -480,7 +480,7 @@ export default function AgentsPage() {
               </div>
 
               {/* Desktop: table */}
-              <table className="data-table hidden md:table">
+              <div className="table-wrap"><table className="data-table hidden md:table">
                 <thead>
                   <tr>
                     <th>Agent</th>
@@ -512,7 +512,7 @@ export default function AgentsPage() {
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </>
           )}
         </div>
@@ -541,7 +541,7 @@ export default function AgentsPage() {
                     {fmtNumber(r.balance)}
                   </span>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs">
+                <div className="mb-3 grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                   <div className="flex justify-between"><span className="text-ink-soft">Total Amount</span><span>{fmtNumber(r.totalAmount)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Cancelled</span><span>{fmtNumber(r.cancelledTotal)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">DL Charge (Kept)</span><span>{fmtNumber(r.totalDeliveryCharge)}</span></div>
@@ -629,7 +629,7 @@ export default function AgentsPage() {
           </div>
 
           {/* Desktop: table */}
-          <table className="data-table hidden md:table">
+          <div className="table-wrap"><table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Agent</th>
@@ -750,7 +750,7 @@ export default function AgentsPage() {
                 </tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
 
         <div className="mt-6 border border-line bg-white p-5">
@@ -780,7 +780,7 @@ export default function AgentsPage() {
           ) : newEntriesRows.length === 0 ? (
             <EmptyState compact title="No new entries on this date" icon="inbox" />
           ) : (
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <thead>
                 <tr>
                   <th>Agent</th>
@@ -813,7 +813,7 @@ export default function AgentsPage() {
                   <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                 </tr>
               </tfoot>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

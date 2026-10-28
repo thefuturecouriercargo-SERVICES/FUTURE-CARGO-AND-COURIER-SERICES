@@ -105,7 +105,7 @@ export default function DriverHistoryPage() {
         ) : days.length === 0 ? (
           <p className="py-8 text-center text-sm text-ink-soft">No consignments this month.</p>
         ) : (
-          <table className="data-table">
+          <div className="table-wrap"><table className="data-table">
             <thead>
               <tr>
                 <th>Date</th>
@@ -176,7 +176,7 @@ export default function DriverHistoryPage() {
                 <td className="text-right font-mono">{fmtNumber(totals.totalDeliveryCharge)}</td>
               </tr>
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

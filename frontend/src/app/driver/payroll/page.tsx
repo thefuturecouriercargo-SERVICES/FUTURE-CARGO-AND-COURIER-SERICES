@@ -88,7 +88,7 @@ export default function DriverPayrollPage() {
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
               Summary — {month}
             </h2>
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <tbody>
                 <tr>
                   <td>Prorated Salary</td>
@@ -111,14 +111,14 @@ export default function DriverPayrollPage() {
                   <td className="text-right font-mono">{fmtNumber(balance)}</td>
                 </tr>
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           <div className="border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
               Entry Log — {month}
             </h2>
-            <table className="data-table">
+            <div className="table-wrap"><table className="data-table">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -153,7 +153,7 @@ export default function DriverPayrollPage() {
                   ))
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </>
       )}

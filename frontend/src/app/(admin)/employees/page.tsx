@@ -178,7 +178,7 @@ export default function EmployeesPage() {
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Drivers ({employees.filter((e) => e.active).length} active)
         </h2>
-        <table className="data-table">
+        <div className="table-wrap"><table className="data-table">
           <thead>
             <tr>
             <th>Name</th>
@@ -228,7 +228,7 @@ export default function EmployeesPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
      </div>
     </div>
     </AuthGate>

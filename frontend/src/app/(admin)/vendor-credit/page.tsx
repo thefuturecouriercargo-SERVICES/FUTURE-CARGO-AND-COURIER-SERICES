@@ -338,7 +338,7 @@ export default function VendorCreditPage() {
                     {fmtNumber(r.balance)}
                   </span>
                 </div>
-                <div className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
+                <div className="mb-3 grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                   <div className="flex justify-between"><span className="text-ink-soft">Opening Amount</span><span>{fmtNumber(r.openingAmount)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Opening Cancelled</span><span>{fmtNumber(r.openingCancelled)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Today&apos;s Amount</span><span>{fmtNumber(r.todayAmount)}</span></div>
@@ -458,7 +458,7 @@ export default function VendorCreditPage() {
                     {fmtNumber(totals.balance)}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
                   <div className="flex justify-between"><span className="text-ink-soft">Total Amount</span><span>{fmtNumber(totals.totalAmount)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Cancelled</span><span>{fmtNumber(totals.cancelledTotal)}</span></div>
                   <div className="flex justify-between"><span className="text-ink-soft">Delivery Charge</span><span>{fmtNumber(totals.totalDeliveryCharge)}</span></div>
@@ -690,7 +690,7 @@ export default function VendorCreditPage() {
           </div>
 
           {/* Desktop: table */}
-          <table className="data-table hidden md:table">
+          <div className="table-wrap"><table className="data-table hidden md:table">
             <thead>
               <tr>
                 <th>Vendor</th>
@@ -719,7 +719,7 @@ export default function VendorCreditPage() {
                 </tr>
               </tfoot>
             )}
-          </table>
+          </table></div>
         </div>
 
         <div className="mt-6 border border-line bg-white p-5">

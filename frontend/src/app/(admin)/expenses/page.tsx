@@ -236,7 +236,7 @@ export default function ExpensesPage() {
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Entries for {useRange ? `${fromDate} to ${toDate}` : date} ({entries.length}) · Total {total} AED
         </h2>
-        <table className="data-table">
+        <div className="table-wrap"><table className="data-table">
           <thead>
             <tr>
               <th>Date</th>
@@ -269,7 +269,7 @@ export default function ExpensesPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
      </div>
     </div>
     </AuthGate>
