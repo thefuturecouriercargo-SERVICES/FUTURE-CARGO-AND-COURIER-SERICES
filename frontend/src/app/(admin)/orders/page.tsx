@@ -2,7 +2,6 @@
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/AuthGate";
-import OrderDetails from "@/components/OrderDetails";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -63,6 +62,7 @@ import { confirmDialog } from "@/components/ui/Feedback";
 import { TableRowsSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
+import OrderDrawer from "@/components/OrderDrawer";
 const emptyForm = {
   cnNo: "",
   vendorId: "",
@@ -112,7 +112,7 @@ const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-const [expandedId, setExpandedId] = useState<string | null>(null);
+const [drawerId, setDrawerId] = useState<string | null>(null);
 const [bulkEmirate, setBulkEmirate] = useState("");
 const [bulkEmployeeId, setBulkEmployeeId] = useState("");
 const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
@@ -515,9 +515,17 @@ required
 </div>
 
 {selectedIds.size > 0 && (
-  <div className="mb-3 flex flex-wrap items-center gap-2.5 border border-brass bg-brass/10 px-3 py-2.5">
-    <span className="font-mono text-xs uppercase text-ink">{selectedIds.size} selected</span>
-    <select value={bulkEmirate} onChange={(e) => setBulkEmirate(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+  <div
+    role="toolbar"
+    aria-label="Bulk actions"
+    className="fixed bottom-24 left-1/2 z-[60] flex w-[min(980px,calc(100vw-1.5rem))] -translate-x-1/2 flex-wrap items-center gap-2 rounded-2xl border border-[#D4AF5A] bg-[#0A1020] px-3 py-2.5 text-[#E8ECF4] shadow-[0_18px_40px_rgba(0,0,0,0.6),0_0_30px_rgba(212,175,90,0.15)] md:bottom-6 md:left-[calc(50%+120px)] md:w-max md:max-w-[calc(100vw-300px)] md:flex-nowrap"
+    style={{ animation: "bar-up 220ms ease-out" }}
+  >
+    <span className="mr-1 flex items-center gap-2 pl-1 text-[13px] font-semibold text-[#F1D9A0]">
+      <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-[#D4AF5A] px-1.5 text-xs font-bold text-[#14100A]">{selectedIds.size}</span>
+      selected
+    </span>
+    <select value={bulkEmirate} onChange={(e) => setBulkEmirate(e.target.value)} className="h-10 rounded-xl border border-[#2A3550] bg-[#111827] px-3 text-sm text-[#E8ECF4]">
       <option value="">Set emirate…</option>
       {EMIRATES.map((em) => (
         <option key={em} value={em}>
@@ -525,7 +533,7 @@ required
         </option>
       ))}
     </select>
-    <select value={bulkEmployeeId} onChange={(e) => setBulkEmployeeId(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
+    <select value={bulkEmployeeId} onChange={(e) => setBulkEmployeeId(e.target.value)} className="h-10 rounded-xl border border-[#2A3550] bg-[#111827] px-3 text-sm text-[#E8ECF4]">
       <option value="">Set employee…</option>
       {employees.map((emp) => (
         <option key={emp.id} value={emp.id}>
@@ -533,7 +541,7 @@ required
         </option>
       ))}
     </select>
-    <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as OrderStatus | "")} className="rounded border border-line px-3 py-1.5 text-sm">
+    <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as OrderStatus | "")} className="h-10 rounded-xl border border-[#2A3550] bg-[#111827] px-3 text-sm text-[#E8ECF4]">
       <option value="">Set status…</option>
       {STATUSES.map((s) => (
         <option key={s} value={s}>
@@ -546,22 +554,24 @@ required
         value={bulkReason}
         onChange={(e) => setBulkReason(e.target.value)}
         placeholder="Reason for cancelling…"
-        className="rounded border border-cancelled px-3 py-1.5 text-sm"
+        className="h-10 rounded-xl border border-cancelled bg-[#111827] px-3 text-sm text-[#E8ECF4]"
       />
     )}
     <button
       onClick={applyBulkUpdate}
       disabled={bulkSaving || (!bulkEmirate && !bulkEmployeeId && !bulkStatus)}
-      className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60"
+      className="h-10 rounded-xl bg-[#D4AF5A] px-4 text-sm font-semibold text-[#14100A] hover:bg-[#E9CB82] disabled:opacity-50"
     >
       {bulkSaving ? "Applying…" : "Apply to selected"}
     </button>
     <button
       type="button"
       onClick={() => setSelectedIds(new Set())}
-      className="rounded border border-line px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass"
+      aria-label="Clear selection"
+      title="Clear selection"
+      className="h-10 w-10 rounded-xl text-lg text-[#8C97AD] hover:bg-[#1A1F2E] hover:text-white"
     >
-      Clear selection
+      ×
     </button>
   </div>
 )}
@@ -608,18 +618,18 @@ required
               ) : (
             filteredOrders.map((o, i) => (
                 <Fragment key={o.id}>
-                <tr className={expandedId === o.id ? "bg-paper-2" : ""}>
+                <tr className={drawerId === o.id ? "bg-paper-2" : ""}>
                   <td>
                     <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                   </td>
                   <td className="font-mono">{i + 1}</td>
                     <td className="font-mono">
                       <button
-                        onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
+                        onClick={() => setDrawerId(o.id)}
                         className="whitespace-nowrap text-left hover:text-brass hover:underline"
                         title="Show details"
                       >
-                        {expandedId === o.id ? "▾" : "▸"} {o.cnNo}
+                        {o.cnNo}
                         {o.booking && <span className="ml-1" title="Has customer details">👤</span>}
                       </button>
                     </td>
@@ -683,20 +693,12 @@ required
                         label={`Actions for CN ${o.cnNo}`}
                         actions={[
                           { label: "Edit", onClick: () => startEdit(o) },
-                          { label: expandedId === o.id ? "Hide details" : "Show details", onClick: () => setExpandedId(expandedId === o.id ? null : o.id) },
+                          { label: "Open details", onClick: () => setDrawerId(o.id) },
                           { label: "Delete", onClick: () => deleteOrder(o.id), danger: true },
                         ]}
                       />
                     </td>
                   </tr>
-                  {expandedId === o.id && (
-                    <tr className="bg-paper">
-                      <td />
-                      <td colSpan={13} className="py-3">
-                        <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} />
-                      </td>
-                    </tr>
-                  )}
                 </Fragment>
                 ))
               )}
@@ -705,6 +707,22 @@ required
         </div>
     </div>
     </div>
+      {(() => {
+        const o = drawerId ? orders.find((x) => x.id === drawerId) : undefined;
+        return o ? (
+          <OrderDrawer
+            order={o}
+            onClose={() => setDrawerId(null)}
+            onEdit={(ord) => {
+              setDrawerId(null);
+              startEdit(ord);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onStatus={(id, st) => quickStatus(id, st)}
+            onDelete={(id) => deleteOrder(id)}
+          />
+        ) : null;
+      })()}
     </AuthGate>
   );
 }

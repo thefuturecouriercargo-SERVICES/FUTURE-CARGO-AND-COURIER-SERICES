@@ -97,8 +97,8 @@ function Requests() {
 
   return (
     <>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Customer link</p>
-      <h1 className="mb-3 font-display text-3xl font-semibold text-navy">📥 Customer requests</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Customer link</p>
+      <h1 className="mb-3 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">📥 Customer requests</h1>
 
       <div className="mb-5 rounded border border-line bg-white p-3">
         <div className="mb-1.5 text-sm text-ink-soft">Send this link to your customer — they fill in their address and location:</div>

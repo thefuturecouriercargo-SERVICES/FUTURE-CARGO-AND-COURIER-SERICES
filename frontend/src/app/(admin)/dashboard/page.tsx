@@ -316,7 +316,7 @@ return (
             const series = (pick: (x: Summary) => number) => (hasHistory ? [...history.map((h) => Number(pick(h.summary)) || 0), Number(pick(data.summary)) || 0] : undefined);
             const diff = (pick: (x: Summary) => number) => (prev ? (Number(pick(data.summary)) || 0) - (Number(pick(prev)) || 0) : null);
             return (
-              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 md:gap-3.5">
+              <div className="stagger mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 md:gap-3.5">
                 <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" delta={diff((x) => x.totalSales)} spark={series((x) => x.totalSales)} />
                 <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} delta={diff((x) => x.totalDeliveryCharge)} spark={series((x) => x.totalDeliveryCharge)} />
                 <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} delta={diff((x) => x.delivered)} spark={series((x) => x.delivered)} />

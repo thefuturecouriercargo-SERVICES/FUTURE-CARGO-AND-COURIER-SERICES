@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ApiClientError } from "@/context/AuthContext";
 
+import AuthSplit from "@/components/AuthSplit";
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
@@ -27,34 +28,34 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="theme-midnight flex min-h-screen items-center justify-center bg-paper bg-[radial-gradient(ellipse_at_top,rgba(212,175,90,0.10),transparent_60%)] px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 shadow-2xl shadow-black/40">
-        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D4AF5A] font-display text-lg font-bold text-[#0A1020] shadow-[0_0_28px_rgba(212,175,90,0.3)]">FC</div>
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Operations</p>
-        <h1 className="mb-1 font-display text-2xl font-semibold text-navy">Future Courier</h1>
-        <p className="mb-8 text-sm text-ink-soft">Sign in to the delivery management system.</p>
+    <AuthSplit eyebrow="Operations">
+      <div className="rounded-[22px] border border-line bg-white p-7 shadow-2xl shadow-black/40 sm:p-8">
+        <h2 className="font-display text-2xl font-semibold text-white">Welcome back</h2>
+        <p className="mb-7 mt-1 text-sm text-ink-soft">Sign in to the delivery management system.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft">
+            <label htmlFor="login-user" className="mb-1.5 block text-xs font-medium text-ink-soft">
               Username or email
             </label>
             <input
+              id="login-user"
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-brass"
+              className="h-12 w-full rounded-xl border border-line px-3.5 text-[15px] outline-none focus:border-brass"
               placeholder="admin"
               required
             />
           </div>
           <div>
-            <label className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft">Password</label>
+            <label htmlFor="login-pass" className="mb-1.5 block text-xs font-medium text-ink-soft">Password</label>
             <input
+              id="login-pass"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-brass"
+              className="h-12 w-full rounded-xl border border-line px-3.5 text-[15px] outline-none focus:border-brass"
               placeholder="••••••••"
               required
             />
@@ -75,6 +76,6 @@ export default function LoginPage() {
           Drivers: use the username your admin created for you (e.g. your first name).
         </p>
       </div>
-    </div>
+    </AuthSplit>
   );
 }

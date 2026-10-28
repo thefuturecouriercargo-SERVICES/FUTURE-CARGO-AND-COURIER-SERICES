@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VendorAuthProvider, useVendorAuth, ApiClientError } from "@/context/VendorAuthContext";
 
+import AuthSplit from "@/components/AuthSplit";
 function VendorLoginForm() {
   const { login } = useVendorAuth();
   const router = useRouter();
@@ -27,30 +28,31 @@ function VendorLoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
-      <div className="w-full max-w-sm rounded border border-line bg-white p-8 shadow-sm">
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Vendor Portal</p>
-        <h1 className="mb-1 font-display text-2xl font-semibold text-navy">Future Courier</h1>
-        <p className="mb-8 text-sm text-ink-soft">Sign in to view your consignments and balance.</p>
+    <AuthSplit eyebrow="Vendor Portal">
+      <div className="rounded-[22px] border border-line bg-white p-7 shadow-2xl shadow-black/40 sm:p-8">
+        <h2 className="font-display text-2xl font-semibold text-white">Vendor sign in</h2>
+        <p className="mb-7 mt-1 text-sm text-ink-soft">View your consignments, labels and balance.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft">Username</label>
+            <label htmlFor="vlogin-user" className="mb-1.5 block text-xs font-medium text-ink-soft">Username</label>
             <input
+              id="vlogin-user"
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-brass"
+              className="h-12 w-full rounded-xl border border-line px-3.5 text-[15px] outline-none focus:border-brass"
               required
             />
           </div>
           <div>
-            <label className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft">Password</label>
+            <label htmlFor="vlogin-pass" className="mb-1.5 block text-xs font-medium text-ink-soft">Password</label>
             <input
+              id="vlogin-pass"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-brass"
+              className="h-12 w-full rounded-xl border border-line px-3.5 text-[15px] outline-none focus:border-brass"
               placeholder="••••••••"
               required
             />
@@ -61,7 +63,7 @@ function VendorLoginForm() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded bg-navy py-2.5 font-mono text-xs font-semibold uppercase tracking-widest text-paper transition hover:bg-navy-2 disabled:opacity-60"
+            className="w-full rounded-xl bg-navy py-3 text-sm font-semibold text-paper transition hover:bg-navy-2 disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
@@ -71,7 +73,7 @@ function VendorLoginForm() {
           Don&apos;t have login details? Ask your Future Courier contact to set them up for you.
         </p>
       </div>
-    </div>
+    </AuthSplit>
   );
 }
 

@@ -83,8 +83,8 @@ function Daily() {
     <>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Daily</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Daily</p>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
             {new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}
           </h1>
         </div>

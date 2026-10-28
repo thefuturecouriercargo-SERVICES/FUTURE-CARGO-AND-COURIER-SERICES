@@ -83,8 +83,8 @@ function Search() {
 
   return (
     <>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Search</p>
-      <h1 className="mb-1 font-display text-3xl font-semibold text-navy">Find any consignment</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Search</p>
+      <h1 className="mb-1 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Find any consignment</h1>
       <p className="mb-4 text-sm text-ink-soft">Searches consignments already picked up into Daily Entry.</p>
       <input
         ref={inputRef}

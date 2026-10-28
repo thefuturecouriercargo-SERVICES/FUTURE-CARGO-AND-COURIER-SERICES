@@ -12,6 +12,7 @@ import BookingStatusBadge from "@/components/BookingStatusBadge";
 import OrderDetails from "@/components/OrderDetails";
 import { Booking, BookingInput } from "@/types";
 
+import VendorHeader from "@/components/VendorHeader";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -130,24 +131,13 @@ function ConsignmentsContent() {
   const allShownSelected = shown.length > 0 && shown.every((b) => selected.has(b.id));
 
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="flex h-16 items-center justify-between border-b-[3px] border-brass bg-navy px-4 text-paper md:px-6">
-        <div className="flex items-baseline gap-2.5">
-          <span className="font-display text-lg font-bold md:text-xl">{vendor.name}</span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-widest text-brass-light sm:inline">Vendor Portal</span>
-        </div>
-        <button
-          onClick={logout}
-          className="rounded border border-white/25 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
-        >
-          Sign out
-        </button>
-      </div>
+    <div className="theme-midnight admin-shell min-h-screen bg-paper text-ink">
+      <VendorHeader name={vendor.name} onLogout={logout} />
       <VendorNav />
 
       <div className="mx-auto max-w-5xl p-4 md:p-8">
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Send a consignment</p>
-        <h1 className="mb-2 font-display text-3xl font-semibold text-navy">New Consignments &amp; Labels</h1>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Send a consignment</p>
+        <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">New Consignments &amp; Labels</h1>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">
           Enter each order here instead of writing a paper bill. Print the label and stick it on the parcel — Future
           Courier scans it at pickup. You can edit or delete a consignment until it&apos;s picked up.

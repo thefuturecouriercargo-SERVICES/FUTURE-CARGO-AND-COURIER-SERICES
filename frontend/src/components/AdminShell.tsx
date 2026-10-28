@@ -8,6 +8,7 @@ import AdminVoiceAssistant from "@/components/AdminVoiceAssistant";
 import AdminSearch from "@/components/AdminSearch";
 import CommandPalette from "@/components/CommandPalette";
 import { FeedbackHost } from "@/components/ui/Feedback";
+import AlertsBell from "@/components/AlertsBell";
 
 type NavItem = { href: string; label: string; short: string; roles: string[]; group: string };
 
@@ -101,7 +102,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           </button>
         </div>
         <div className="flex items-center gap-2.5 md:gap-3">
-          <ThemeSwitch mode={prefs.mode} onChange={prefs.setMode} />
+          <AlertsBell />
+          <div className="hidden sm:block">
+            <ThemeSwitch mode={prefs.mode} onChange={prefs.setMode} />
+          </div>
           <div className="hidden items-center gap-3 lg:flex">
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF5A] bg-[#18213A] text-[13px] font-semibold text-[#D4AF5A]">
               {initials}
@@ -198,7 +202,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <DensitySwitch compact={prefs.compact} onChange={prefs.setCompact} />
             </div>
           )}
-          {children}
+          <div key={pathname} className="page-enter">
+            {children}
+          </div>
         </main>
       </div>
 

@@ -9,6 +9,7 @@ import VendorNav from "@/components/VendorNav";
 import { EMIRATES, OrderBookingDetails } from "@/types";
 import OrderDetails from "@/components/OrderDetails";
 
+import VendorHeader from "@/components/VendorHeader";
 interface VendorOrder {
   id: string;
   date: string;
@@ -155,28 +156,15 @@ function VendorPortalContent() {
   });
 
   return (
-    <div className="min-h-screen bg-paper">
-      <div className="flex h-16 items-center justify-between border-b-[3px] border-brass bg-navy px-4 text-paper md:px-6">
-        <div className="flex items-baseline gap-2.5">
-          <span className="font-display text-lg font-bold md:text-xl">{vendor.name}</span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-widest text-brass-light sm:inline">
-            Vendor Portal
-          </span>
-        </div>
-        <button
-          onClick={logout}
-          className="rounded border border-white/25 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
-        >
-          Sign out
-        </button>
-      </div>
+    <div className="theme-midnight admin-shell min-h-screen bg-paper text-ink">
+      <VendorHeader name={vendor.name} onLogout={logout} />
       <VendorNav />
 
       <div className="mx-auto max-w-5xl p-4 md:p-8">
 
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Overview</p>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Overview</p>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="font-display text-3xl font-semibold text-navy">Your Account</h1>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Your Account</h1>
           <div className="flex items-center gap-2">
             <button onClick={() => setCreditDate(addDaysStr(creditDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
               ← Prev
