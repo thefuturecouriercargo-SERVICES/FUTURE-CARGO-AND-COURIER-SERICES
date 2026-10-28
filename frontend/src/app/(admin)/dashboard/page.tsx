@@ -56,7 +56,7 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 }
 import KpiCard from "@/components/KpiCard";
 import StatusStamp from "@/components/StatusStamp";
-import StatusDoughnut from "@/components/charts/StatusDoughnut";
+import DeliveryStatusRing from "@/components/charts/DeliveryStatusRing";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
 import { Order, OrderStatus, Summary, Vendor } from "@/types";
@@ -452,8 +452,13 @@ return (
               </table>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Delivery Status</h2>
-              <StatusDoughnut summary={data.summary} />
+              <h2 className="mb-5 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Delivery Status</h2>
+              <DeliveryStatusRing
+                delivered={data.summary.delivered}
+                pending={data.summary.pending + nonAgentPendingCarryover.length}
+                transferred={data.summary.transferred}
+                cancelled={data.summary.cancelled}
+              />
             </div>
           </div>
 
