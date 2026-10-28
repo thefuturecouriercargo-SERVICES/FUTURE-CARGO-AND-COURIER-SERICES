@@ -106,6 +106,8 @@ router.post(
       if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
       else if (target === "PENDING") action = "pending";
       else if (order.status === target) action = "already";
+      // RTO on the report always wins — an order we marked Delivered by mistake gets Cancelled.
+      else if (target === "CANCELLED") action = "change";
       else if (order.status === "DELIVERED" || order.status === "CANCELLED") action = "conflict";
       else action = "change";
 
@@ -113,6 +115,7 @@ router.post(
       if (order && r.cod != null && r.cod !== order.total) warnings.push(`Amount: report ${r.cod}, ours ${order.total}`);
       if (order && dupCn.has(order.cnNo)) warnings.push("CN used on more than one order — newest picked");
       if (order && !order.employee?.isAgent) warnings.push(`Not with an agent (with ${order.employee?.name ?? "—"})`);
+      if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
       if (matchedBy === "sender") warnings.push(`Matched by Sender Name ${r.sender}, not tracking no`);
 
       return {
