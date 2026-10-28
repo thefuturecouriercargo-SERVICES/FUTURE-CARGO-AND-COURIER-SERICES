@@ -43,6 +43,8 @@ router.get(
       where: {
         ...(ids ? { id: { in: ids } } : {}),
         ...(status ? { status } : {}),
+        // Website orders (Inspired, Escalo) show only once completed on the vendor's website.
+        ...(status === "AWAITING_PICKUP" ? { NOT: { createdBy: "WEBSITE", webStatus: { not: "completed" } } } : {}),
         ...(vendorId ? { vendorId } : {}),
         ...(range && !q ? { createdAt: { gte: range.start, lt: range.end } } : {}),
         ...(q
@@ -61,11 +63,12 @@ router.get(
       orderBy: { createdAt: status === "AWAITING_PICKUP" ? "asc" : "desc" },
       take: ids ? undefined : range && !q ? 3000 : 500,
     });
-    const awaitingCount = await prisma.booking.count({ where: { status: "AWAITING_PICKUP" } });
+    const awaitingCount = await prisma.booking.count({ where: { status: "AWAITING_PICKUP", NOT: { createdBy: "WEBSITE", webStatus: { not: "completed" } } } });
     // Still-waiting orders per Dubai day, so older unpicked ones are never forgotten.
     const awaitingDays = await prisma.$queryRaw<{ day: string; count: bigint }[]>`
       SELECT to_char("createdAt" + interval '4 hours', 'YYYY-MM-DD') AS day, count(*) AS count
-      FROM bookings WHERE status = 'AWAITING_PICKUP' GROUP BY 1 ORDER BY 1`.catch((err) => {
+      FROM bookings WHERE status = 'AWAITING_PICKUP'
+        AND NOT ("createdBy" = 'WEBSITE' AND "webStatus" IS NOT NULL AND "webStatus" <> 'completed') GROUP BY 1 ORDER BY 1`.catch((err) => {
       console.error("[bookings] awaitingDays query failed:", err);
       return [] as { day: string; count: bigint }[];
     });

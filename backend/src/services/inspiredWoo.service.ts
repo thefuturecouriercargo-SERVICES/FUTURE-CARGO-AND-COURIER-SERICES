@@ -16,7 +16,7 @@ import { createBooking, phoneDigits, isCnFree, CN_START } from "./booking.servic
  *   INSPIRED_WC_KEY      ck_…
  *   INSPIRED_WC_SECRET   cs_…
  *   INSPIRED_VENDOR_NAME vendor name in our Vendors list (default INSPIRED)
- *   INSPIRED_WC_STATUSES order statuses to import (default processing,on-hold,completed)
+ *   INSPIRED_WC_STATUSES order statuses to import (default completed)
  *   INSPIRED_WC_DAYS     how far back the first sync looks (default 2 days)
  */
 
@@ -43,8 +43,9 @@ export function wooConfig(conn: string) {
     key,
     secret,
     vendorName: env("VENDOR_NAME") || conn,
-    // Inspired marks an order "completed" when it is confirmed (ready to ship), not when delivered.
-    statuses: (env("WC_STATUSES") || "processing,on-hold,completed").split(",").map((x) => x.trim()).filter(Boolean),
+    // Vendors mark an order "completed" when it is confirmed (ready to ship), not when delivered.
+    // Only completed orders are brought in.
+    statuses: (env("WC_STATUSES") || "completed").split(",").map((x) => x.trim()).filter(Boolean),
     days: Math.max(1, parseInt(env("WC_DAYS") || "2", 10) || 2),
     configured: Boolean(url && key && secret),
   };
