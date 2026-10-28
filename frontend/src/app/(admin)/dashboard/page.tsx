@@ -218,14 +218,14 @@ return (
           <div>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Manifest Summary</p>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
           <h1 className="inline-flex items-center gap-2 font-display text-3xl font-semibold text-navy">
             Operations Dashboard
             <span id="assistant-anchor" className="inline-flex" />
           </h1>
        </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => setDate(addDays(date, -1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             ← Prev
           </button>
           <input
@@ -234,10 +234,10 @@ return (
             onChange={(e) => setDate(e.target.value)}
             className="rounded border border-line px-3 py-2 text-sm"
           />
-          <button onClick={() => setDate(addDays(date, 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
+          <button onClick={() => setDate(addDays(date, 1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             Next →
           </button>
-          <button onClick={() => setDate(todayStr())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper hover:bg-navy-2">
+          <button onClick={() => setDate(todayStr())} className="touch-target rounded-xl bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
             Today
           </button>
           {data && (
@@ -253,7 +253,7 @@ return (
               )}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded border border-delivered px-3 py-2 font-mono text-xs uppercase text-delivered hover:bg-delivered/10"
+              className="touch-target inline-flex items-center rounded-xl border border-delivered/50 bg-delivered/10 px-4 text-sm font-semibold text-delivered hover:bg-delivered/20"
             >
               📤 Share to WhatsApp
             </a>
@@ -278,38 +278,24 @@ return (
         <p className="text-sm text-ink-soft">Loading…</p>
       ) : data ? (
         <>
-         <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-3 lg:grid-cols-7">
-            <div className="bg-white">
-              <KpiCard label="Total Sales" value={data.summary.totalSales} unit="AED" />
-            </div>
-            <div className="bg-white">
-              <KpiCard label="DL Charge" value={data.summary.totalDeliveryCharge} unit="AED" />
-            </div>
-            <div className="bg-white">
-              <KpiCard label="Delivered" value={data.summary.delivered} />
-            </div>
-            <div className="bg-white">
-            <KpiCard label="Pending" value={data.summary.pending + nonAgentPendingCarryover.length} />
-            </div>
-           <div className="bg-white">
-              <KpiCard label="Transfer" value={data.summary.transferred} />
-            </div>
-            <div className="bg-white">
-              <KpiCard label="Cancelled" value={data.summary.cancelled} />
-            </div>
-            <div className="bg-white">
-              <KpiCard
-                label="Total Consignments"
-                value={
-                  data.summary.delivered +
-                  data.summary.pending +
-                  nonAgentPendingCarryover.length +
-                  data.summary.transferred +
-                  data.summary.cancelled
-                }
-              />
-            </div>
-          </div>
+          {(() => {
+            const pendingAll = data.summary.pending + nonAgentPendingCarryover.length;
+            const total = data.summary.delivered + pendingAll + data.summary.transferred + data.summary.cancelled;
+            const pct = (n: number) => (total > 0 ? `${Math.round((n / total) * 100)}% of consignments` : "—");
+            const sales = Number(data.summary.totalSales) || 0;
+            const dl = Number(data.summary.totalDeliveryCharge) || 0;
+            return (
+              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 md:gap-3.5">
+                <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" />
+                <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} />
+                <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} />
+                <KpiCard label="Pending" value={pendingAll} accent="pending" sub={pct(pendingAll)} />
+                <KpiCard label="Transfer" value={data.summary.transferred} accent="transferred" sub={pct(data.summary.transferred)} />
+                <KpiCard label="Cancelled" value={data.summary.cancelled} accent="cancelled" sub={pct(data.summary.cancelled)} />
+                <KpiCard label="Total Consignments" value={total} accent="neutral" sub="All statuses" />
+              </div>
+            );
+          })()}
 
           <LiveFlowPanel
             pending={data.summary.pending + nonAgentPendingCarryover.length}

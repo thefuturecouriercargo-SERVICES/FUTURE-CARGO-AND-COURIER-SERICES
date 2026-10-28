@@ -12,13 +12,21 @@ export default function StatusDoughnut({ summary }: { summary: Summary }) {
         datasets: [
           {
             data: [summary.delivered, summary.pending, summary.transferred, summary.cancelled],
-            backgroundColor: ["#1E7145", "#B9760C", "#2B5AA6", "#AC3529"],
+            backgroundColor: ["#34D399", "#F5B544", "#60A5FA", "#F87171"],
             borderWidth: 0,
+            spacing: 2,
+            hoverOffset: 6,
           },
         ],
       }}
       options={{
-        plugins: { legend: { position: "bottom", labels: { font: { family: "Inter", size: 11 } } } },
+        cutout: "68%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { usePointStyle: true, pointStyle: "rectRounded", padding: 16, font: { family: "Inter", size: 12 } },
+          },
+        },
       }}
     />
   );

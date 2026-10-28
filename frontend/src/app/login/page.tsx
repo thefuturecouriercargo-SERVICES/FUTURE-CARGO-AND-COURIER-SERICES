@@ -27,8 +27,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
-      <div className="w-full max-w-sm rounded border border-line bg-white p-8 shadow-sm">
+    <div className="theme-midnight flex min-h-screen items-center justify-center bg-paper bg-[radial-gradient(ellipse_at_top,rgba(212,175,90,0.10),transparent_60%)] px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-8 shadow-2xl shadow-black/40">
+        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#D4AF5A] font-display text-lg font-bold text-[#0A1020] shadow-[0_0_28px_rgba(212,175,90,0.3)]">FC</div>
         <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Operations</p>
         <h1 className="mb-1 font-display text-2xl font-semibold text-navy">Future Courier</h1>
         <p className="mb-8 text-sm text-ink-soft">Sign in to the delivery management system.</p>
@@ -64,7 +65,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded bg-navy py-2.5 font-mono text-xs font-semibold uppercase tracking-widest text-paper transition hover:bg-navy-2 disabled:opacity-60"
+            className="w-full rounded-xl bg-navy py-3 text-sm font-semibold text-paper transition hover:bg-navy-2 disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>

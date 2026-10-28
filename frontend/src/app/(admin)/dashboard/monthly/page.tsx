@@ -88,7 +88,7 @@ export default function MonthlyDashboardPage() {
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
               Daily Deliveries — {data.month}
             </h2>
-            <BarChart labels={data.dailyBreakdown.map((d) => d.date.slice(8))} data={data.dailyBreakdown.map((d) => d.delivered)} color="#141F33" />
+            <BarChart labels={data.dailyBreakdown.map((d) => d.date.slice(8))} data={data.dailyBreakdown.map((d) => d.delivered)} color="#D4AF5A" />
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">

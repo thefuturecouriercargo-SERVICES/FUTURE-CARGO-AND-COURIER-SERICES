@@ -118,7 +118,7 @@ export default function AdminSearch() {
   return (
     <div ref={boxRef} className="relative w-full">
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-soft" aria-hidden>
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink-soft" aria-hidden>
           🔍
         </span>
         <input
@@ -138,7 +138,7 @@ export default function AdminSearch() {
           inputMode="search"
           enterKeyHint="search"
           placeholder="Search CN, order no, bill no, name, phone…"
-          className="h-9 w-full rounded border border-white/25 bg-white/10 pl-9 pr-8 text-sm text-white placeholder:text-line/70 focus:border-brass-light focus:bg-white focus:text-ink focus:placeholder:text-ink-soft focus:outline-none"
+          className="h-11 w-full rounded-xl border border-line bg-[#121A2B] pl-10 pr-9 text-sm text-white placeholder:text-ink-soft focus:border-brass focus:outline-none"
         />
         {q && (
           <button
@@ -153,7 +153,7 @@ export default function AdminSearch() {
       </div>
 
       {showPanel && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[75vh] overflow-y-auto rounded border border-line bg-white text-ink shadow-xl md:min-w-[560px]">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[75vh] overflow-y-auto rounded-2xl border border-line bg-white text-ink shadow-2xl shadow-black/50 md:min-w-[560px]">
           {loading && <p className="p-3 text-sm text-ink-soft">Searching…</p>}
           {!loading && error && <p className="p-3 text-sm text-cancelled">{error}</p>}
           {!loading && !error && hits && hits.length === 0 && (
