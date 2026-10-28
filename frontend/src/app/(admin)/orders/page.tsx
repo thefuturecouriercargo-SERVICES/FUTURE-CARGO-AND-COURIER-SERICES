@@ -710,7 +710,7 @@ required
     </div>
     </div>
       {(() => {
-        const o = drawerId ? orders.find((x) => x.id === drawerId) : undefined;
+        const o = drawerId ? [...orders, ...pendingCarryover].find((x) => x.id === drawerId) : undefined;
         return o ? (
           <OrderDrawer
             order={o}
