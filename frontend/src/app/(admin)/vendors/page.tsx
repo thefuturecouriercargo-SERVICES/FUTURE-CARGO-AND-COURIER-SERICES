@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Vendor } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 const emptyForm = { name: "", deliveryCharge: "", username: "", password: "" };
 
 export default function VendorsPage() {
@@ -57,7 +58,7 @@ export default function VendorsPage() {
   }
 
   async function removeVendor(v: Vendor) {
-    if (!confirm(`Remove vendor ${v.name}?`)) return;
+    if (!(await confirmDialog(`Remove vendor ${v.name}?`))) return;
     await apiFetch(`/vendors/${v.id}`, { method: "DELETE" });
     await load();
   }
@@ -69,8 +70,8 @@ export default function VendorsPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Vendor Management</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Partners</p>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Vendor Management</h1>
       <p className="mb-6 max-w-2xl text-sm text-ink-soft">
         Each vendor has a fixed delivery charge. Whenever a vendor is selected while creating a consignment, its
         delivery charge is populated automatically. Set a portal username and password to give a vendor their
@@ -83,7 +84,7 @@ export default function VendorsPage() {
         </span>
         <button
           onClick={async () => {
-            if (!confirm("Reset EVERY vendor's portal login to NAME / NAME321? Any custom passwords will be replaced.")) return;
+            if (!(await confirmDialog("Reset EVERY vendor's portal login to NAME / NAME321? Any custom passwords will be replaced."))) return;
             await apiFetch("/vendors/reset-logins", { method: "POST" });
             await load();
             alert("Done — all vendors now use NAME / NAME321.");
@@ -95,7 +96,7 @@ export default function VendorsPage() {
       </div>
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Vendor" : "Add Vendor"}</h2>
+        <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Vendor" : "Add Vendor"}</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Vendor name</label>
@@ -145,7 +146,7 @@ export default function VendorsPage() {
       </div>
 
       <div className="border border-line bg-white p-5">
-        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Vendors ({vendors.length})</h2>
+        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Vendors ({vendors.length})</h2>
         <table className="data-table">
           <thead>
             <tr>

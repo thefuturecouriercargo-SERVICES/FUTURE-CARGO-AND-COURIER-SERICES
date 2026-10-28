@@ -6,6 +6,7 @@ import { fmtNumber } from "@/lib/format";
 import { readAgentReport, ReportRow } from "@/lib/agentReport";
 import AgentReportHistory from "@/components/AgentReportHistory";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
 
 interface Item {
@@ -122,7 +123,7 @@ export default function AgentReportPage() {
   async function apply() {
     if (chosen.length === 0) return;
     const msg = `Mark ${chosenDeliver} as DELIVERED and ${chosenCancel} as CANCELLED (RTO)?\n\nOlder orders move to today's sheet, same as marking by hand.`;
-    if (!window.confirm(msg)) return;
+    if (!(await confirmDialog(msg))) return;
     setBusy("applying");
     setError("");
     try {
@@ -152,8 +153,8 @@ export default function AgentReportPage() {
 
   return (
     <div className="max-w-6xl">
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Agents</p>
-      <h1 className="mb-1 font-display text-3xl font-semibold text-navy">Agent report upload</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Agents</p>
+      <h1 className="mb-1 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Agent report upload</h1>
       <p className="mb-5 max-w-2xl text-sm text-ink-soft">
         Upload the agent&apos;s Excel status sheet or PDF cash-return report. Tracking number = our CN.
         <b> Delivered</b> → Delivered, <b>RTO</b> → Cancelled — the report always wins, even over what we marked before. Anything else stays Pending. Nothing changes until you press Update.

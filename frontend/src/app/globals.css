@@ -80,7 +80,7 @@ body:has(.theme-midnight) {
   .theme-midnight .hover\:bg-white:hover {
     background-color: rgb(var(--c-surface));
   }
-  .theme-midnight .bg-white.border {
+  .admin-shell .bg-white.border {
     border-radius: 16px;
   }
   /* Primary buttons ("bg-navy text-paper") become gold with dark text. */
@@ -173,19 +173,29 @@ body:has(.theme-midnight) {
   }
 }
 
+/* Status pill (class name kept as "stamp" so every page picks it up). */
 .stamp {
-  display: inline-block;
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "Inter", sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 3px 9px;
-  border: 1.5px dashed currentColor;
-  border-radius: 3px;
-  transform: rotate(-1.5deg);
+  white-space: nowrap;
+  padding: 4px 10px 4px 9px;
+  border-radius: 999px;
+  line-height: 1.2;
 }
-
+.stamp::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
 .stamp.delivered {
   color: rgb(var(--c-delivered));
   background: rgb(var(--c-delivered-bg));
@@ -198,9 +208,45 @@ body:has(.theme-midnight) {
   color: rgb(var(--c-cancelled));
   background: rgb(var(--c-cancelled-bg));
 }
-.stamp.transfer {
+.stamp.transfer,
+.stamp.transferred {
   color: rgb(var(--c-transferred));
   background: rgb(var(--c-transferred-bg));
+}
+
+/* Status picker inside tables, tinted like a pill. */
+select.status-pill {
+  border-radius: 999px !important;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 4px 26px 4px 10px;
+  border-width: 1px;
+}
+select.status-pill.delivered { color: rgb(var(--c-delivered)); background-color: rgb(var(--c-delivered-bg)) !important; border-color: rgb(var(--c-delivered) / 0.35) !important; }
+select.status-pill.pending { color: rgb(var(--c-pending)); background-color: rgb(var(--c-pending-bg)) !important; border-color: rgb(var(--c-pending) / 0.35) !important; }
+select.status-pill.cancelled { color: rgb(var(--c-cancelled)); background-color: rgb(var(--c-cancelled-bg)) !important; border-color: rgb(var(--c-cancelled) / 0.35) !important; }
+select.status-pill.transferred { color: rgb(var(--c-transferred)); background-color: rgb(var(--c-transferred-bg)) !important; border-color: rgb(var(--c-transferred) / 0.35) !important; }
+
+/* Loading skeleton shimmer. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgb(var(--c-paper-2));
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.07), transparent);
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .table-scroll {
@@ -252,6 +298,20 @@ table.data-table th:first-child {
 }
 table.data-table tbody tr:hover td:first-child {
   background: rgb(var(--c-surface-hover));
+  box-shadow: inset 3px 0 0 rgb(var(--c-brass)), 1px 0 0 rgb(var(--c-row-line));
+}
+table.data-table td.num,
+table.data-table th.num {
+  text-align: right;
+}
+
+/* Compact table density (toggle in the admin header). */
+.density-compact table.data-table th {
+  padding: 6px 8px;
+}
+.density-compact table.data-table td {
+  padding: 5px 8px;
+  font-size: 12.5px;
 }
 
 /* Achievement unlock badge — bouncy scale/rotate entrance for the driver portal's

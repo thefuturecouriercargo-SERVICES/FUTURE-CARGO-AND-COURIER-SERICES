@@ -9,6 +9,9 @@ import { apiFetch, ApiClientError, agentCreditExportUrl } from "@/lib/api";
 import { fmtNumber, todayStr, addDays, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import { PageSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "" };
 
 interface AgentBreakdownRow {
@@ -158,7 +161,7 @@ export default function AgentsPage() {
 
   async function toggleActive(a: Employee) {
     if (a.active) {
-      if (!confirm(`Deactivate ${a.name}? They will no longer be able to log in.`)) return;
+      if (!(await confirmDialog(`Deactivate ${a.name}? They will no longer be able to log in.`))) return;
       await apiFetch(`/employees/${a.id}`, { method: "DELETE" });
     } else {
       await apiFetch(`/employees/${a.id}`, { method: "PUT", body: { active: true } });
@@ -167,7 +170,7 @@ export default function AgentsPage() {
   }
 
   async function removeAgent(a: Employee) {
-    if (!confirm(`Permanently remove ${a.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`)) return;
+    if (!(await confirmDialog(`Permanently remove ${a.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`))) return;
     try {
       await apiFetch(`/employees/${a.id}/permanent`, { method: "DELETE" });
       await load();
@@ -212,7 +215,7 @@ export default function AgentsPage() {
   }
 
   async function removePayment(agentId: string, paymentId: string) {
-    if (!confirm("Remove this payment entry?")) return;
+    if (!(await confirmDialog("Remove this payment entry?"))) return;
     await apiFetch(`/agent-credit/payments/${paymentId}`, { method: "DELETE" });
     setPayments(await apiFetch<AgentPayment[]>(`/agent-credit/${agentId}/payments`));
     await load();
@@ -221,8 +224,8 @@ export default function AgentsPage() {
   return (
     <AuthGate allow={["SUPER_ADMIN", "MANAGER"]}>
       <div>
-        <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-        <h1 className="mb-2 font-display text-3xl font-semibold text-navy">Agent Management</h1>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Delivery partners</p>
+        <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Agent Management</h1>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">
           Agents are tracked completely separately from drivers — their own performance, cash collection, and
           credit balance never mix into employee reports. An agent keeps the delivery charge on their own
@@ -231,7 +234,7 @@ export default function AgentsPage() {
 
         {isSuperAdmin && (
           <div className="mb-6 border border-line bg-white p-5">
-            <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Agent" : "Add Agent"}</h2>
+            <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Agent" : "Add Agent"}</h2>
             <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <div>
                 <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>
@@ -281,7 +284,7 @@ export default function AgentsPage() {
         )}
 
         <div className="mb-6 border border-line bg-white p-5">
-          <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+          <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
             Agents ({agents.filter((a) => a.active).length} active)
           </h2>
 
@@ -311,7 +314,7 @@ export default function AgentsPage() {
                 )}
               </div>
             ))}
-            {agents.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agents added yet.</p>}
+            {agents.length === 0 && <EmptyState compact title="No agents added yet" />}
           </div>
 
           {/* Desktop: table */}
@@ -351,8 +354,8 @@ export default function AgentsPage() {
               ))}
               {agents.length === 0 && (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 5 : 4} className="py-8 text-center text-ink-soft">
-                    No agents added yet.
+                  <td colSpan={isSuperAdmin ? 5 : 4} className="!static !shadow-none">
+                    <EmptyState compact title="No agents added yet" />
                   </td>
                 </tr>
               )}
@@ -362,7 +365,7 @@ export default function AgentsPage() {
 
         <div className="mb-6 border border-line bg-white p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
-            <h2 className="font-display text-[17px] font-semibold text-navy">Agent Performance &amp; Cash Collection</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">Agent Performance &amp; Cash Collection</h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
@@ -401,7 +404,7 @@ export default function AgentsPage() {
                 </div>
               </div>
             ))}
-            {performance.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agent activity on this date.</p>}
+            {performance.length === 0 && <EmptyState compact title="No agent activity on this date" icon="inbox" />}
           </div>
 
           {/* Desktop: table */}
@@ -437,8 +440,8 @@ export default function AgentsPage() {
               ))}
               {performance.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-ink-soft">
-                    No agent activity on this date.
+                  <td colSpan={10} className="!static !shadow-none">
+                    <EmptyState compact title="No agent activity on this date" icon="inbox" />
                   </td>
                 </tr>
               )}
@@ -448,11 +451,11 @@ export default function AgentsPage() {
 
         <div className="mb-6 border border-line bg-white p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
-            <h2 className="font-display text-[17px] font-semibold text-navy">Agent Monthly Report</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">Agent Monthly Report</h2>
             <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm" />
           </div>
           {loadingMonthly ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : (
             <>
               {/* Mobile: stacked cards */}
@@ -470,7 +473,7 @@ export default function AgentsPage() {
                     </div>
                   </div>
                 ))}
-                {monthlyRows.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agent activity this month.</p>}
+                {monthlyRows.length === 0 && <EmptyState compact title="No agent activity this month" icon="inbox" />}
               </div>
 
               {/* Desktop: table */}
@@ -500,8 +503,8 @@ export default function AgentsPage() {
                   ))}
                   {monthlyRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-ink-soft">
-                        No agent activity this month.
+                      <td colSpan={7} className="!static !shadow-none">
+                        <EmptyState compact title="No agent activity this month" icon="inbox" />
                       </td>
                     </tr>
                   )}
@@ -513,7 +516,7 @@ export default function AgentsPage() {
 
         <div className="border border-line bg-white p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
-            <h2 className="font-display text-[17px] font-semibold text-navy">
+            <h2 className="font-display text-[18px] font-semibold text-navy">
               Agent Credit — What They Owe Back
             </h2>
             <a
@@ -594,7 +597,7 @@ export default function AgentsPage() {
 
                     <h3 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Payment history</h3>
                     {loadingPayments ? (
-                      <p className="text-sm text-ink-soft">Loading…</p>
+                      <div className="space-y-2.5 py-3" role="status" aria-label="Loading"><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-1/3" /><Skeleton className="h-3 w-2/5" /></div>
                     ) : payments.length === 0 ? (
                       <p className="text-sm text-ink-soft">No payments logged yet.</p>
                     ) : (
@@ -621,7 +624,7 @@ export default function AgentsPage() {
                 )}
               </div>
             ))}
-            {creditRows.length === 0 && <p className="py-8 text-center text-sm text-ink-soft">No agents added yet.</p>}
+            {creditRows.length === 0 && <EmptyState compact title="No agents added yet" />}
           </div>
 
           {/* Desktop: table */}
@@ -704,7 +707,7 @@ export default function AgentsPage() {
 
                         <h3 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Payment history</h3>
                         {loadingPayments ? (
-                          <p className="text-sm text-ink-soft">Loading…</p>
+                          <div className="space-y-2.5 py-3" role="status" aria-label="Loading"><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-1/3" /><Skeleton className="h-3 w-2/5" /></div>
                         ) : payments.length === 0 ? (
                           <p className="text-sm text-ink-soft">No payments logged yet.</p>
                         ) : (
@@ -742,8 +745,8 @@ export default function AgentsPage() {
               ))}
               {creditRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-ink-soft">
-                    No agents added yet.
+                  <td colSpan={7} className="!static !shadow-none">
+                    <EmptyState compact title="No agents added yet" />
                   </td>
                 </tr>
               )}
@@ -753,7 +756,7 @@ export default function AgentsPage() {
 
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date</h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setNewEntriesDate(addDays(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
@@ -774,9 +777,9 @@ export default function AgentsPage() {
           </p>
 
           {loadingNewEntries ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : newEntriesRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
+            <EmptyState compact title="No new entries on this date" icon="inbox" />
           ) : (
             <table className="data-table">
               <thead>

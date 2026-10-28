@@ -59,6 +59,10 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 import DriverSheet from "@/components/DriverSheet";
 import { Employee, Order, OrderStatus, PAYMENTS, EMIRATES, STATUSES, Vendor } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import { TableRowsSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import RowActions from "@/components/ui/RowActions";
 const emptyForm = {
   cnNo: "",
   vendorId: "",
@@ -278,13 +282,13 @@ await load();
   }
 
   async function deleteOrder(id: string) {
-    if (!confirm("Delete this consignment? This cannot be undone.")) return;
+    if (!(await confirmDialog("Delete this consignment? This cannot be undone."))) return;
     await apiFetch(`/orders/${id}`, { method: "DELETE" });
     await load();
   }
 
   async function deleteDuplicate(id: string) {
-    if (!confirm("Delete this duplicate consignment entry? This cannot be undone.")) return;
+    if (!(await confirmDialog("Delete this duplicate consignment entry? This cannot be undone."))) return;
     await apiFetch(`/orders/${id}`, { method: "DELETE" });
     await loadDuplicates();
     await load();
@@ -314,8 +318,8 @@ return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Daily Entry</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">Consignments — {date}</h1>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Daily Entry</p>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Consignments — {date}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
@@ -332,7 +336,7 @@ return (
       </div>
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Consignment" : "New Consignment"}</h2>
+        <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Consignment" : "New Consignment"}</h2>
         <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
           {editingId && (
             <div>
@@ -459,7 +463,7 @@ required
 
           <div className="border border-line bg-white p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-[17px] font-semibold text-navy">
+              <h2 className="font-display text-[18px] font-semibold text-navy">
                {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
           </h2>
           <div className="font-mono text-xs text-ink-soft">
@@ -585,20 +589,20 @@ required
                 <th>Entry Date</th>
                 <th>Delivered / Cancelled</th>
                 <th>Reason</th>
-                <th>Actions</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={14} className="py-8 text-center text-ink-soft">
-                    Loading…
-                  </td>
-                </tr>
+                <TableRowsSkeleton cols={14} />
              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-8 text-center text-ink-soft">
-                    No consignments entered for this date yet.
+                  <td colSpan={14} className="!static !shadow-none">
+                    {orders.length === 0 ? (
+                      <EmptyState compact title={`No consignments yet for ${date}`} hint="Add the first one with the form above, or scan barcode labels on Scan & Assign." />
+                    ) : (
+                      <EmptyState compact icon="search" title="No consignments match these filters" hint="Clear a filter or search for a different CN." />
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -642,7 +646,8 @@ required
                         <select
                           value={o.status}
                           onChange={(e) => quickStatus(o.id, e.target.value as OrderStatus)}
-                          className="rounded border border-line bg-transparent px-1.5 py-1 text-xs"
+                          aria-label={`Status of CN ${o.cnNo}`}
+                          className={`status-pill ${o.status.toLowerCase()}`}
                         >
                           {STATUSES.map((s) => (
                             <option key={s} value={s}>
@@ -673,13 +678,15 @@ required
                       {o.remarks || (o.driverNote ? "" : "—")}
                       {o.driverNote && <span className="ml-1 rounded bg-pending-bg px-1 text-[11px] font-semibold text-pending">🚚 {o.driverNote}</span>}
                     </td>
-                    <td className="whitespace-nowrap">
-                      <button onClick={() => startEdit(o)} className="mr-2 text-xs text-brass hover:underline">
-                        Edit
-                      </button>
-                      <button onClick={() => deleteOrder(o.id)} className="text-xs text-cancelled hover:underline">
-                        Delete
-                      </button>
+                    <td className="whitespace-nowrap text-right">
+                      <RowActions
+                        label={`Actions for CN ${o.cnNo}`}
+                        actions={[
+                          { label: "Edit", onClick: () => startEdit(o) },
+                          { label: expandedId === o.id ? "Hide details" : "Show details", onClick: () => setExpandedId(expandedId === o.id ? null : o.id) },
+                          { label: "Delete", onClick: () => deleteOrder(o.id), danger: true },
+                        ]}
+                      />
                     </td>
                   </tr>
                   {expandedId === o.id && (

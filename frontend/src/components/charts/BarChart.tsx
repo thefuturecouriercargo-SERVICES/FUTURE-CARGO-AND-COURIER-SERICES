@@ -10,7 +10,7 @@ export default function BarChart({ labels, data, color = "#D4AF5A" }: { labels: 
       options={{
         plugins: { legend: { display: false } },
         scales: {
-          y: { beginAtZero: true, grid: { color: "#1B2438" }, border: { display: false } },
+          y: { beginAtZero: true, grid: { color: "rgba(138,149,171,0.16)" }, border: { display: false } },
           x: { grid: { display: false } },
         },
       }}

@@ -5,6 +5,7 @@ import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError, expenseReportUrl } from "@/lib/api";
 import { addDays } from "@/lib/format";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 const CATEGORIES = [
   "FUEL","INSURANCE","SALARY","WORKSHOP","CAR_WASH","ROOM_RENT","CAR_RENT",
   "STATIONARY","PARKING","VISA","MEDICAL","COMMISSION","OTHER","DARB",
@@ -109,7 +110,7 @@ export default function ExpensesPage() {
   }
 
   async function removeEntry(entry: ExpenseEntry) {
-    if (!confirm(`Remove this ${entry.category} expense?`)) return;
+    if (!(await confirmDialog(`Remove this ${entry.category} expense?`))) return;
     await apiFetch(`/expenses/${entry.id}`, { method: "DELETE" });
     await load();
   }
@@ -119,9 +120,9 @@ export default function ExpensesPage() {
  return (
     <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Accounts</p>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl font-semibold text-navy">Expense Ledger</h1>
+        <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Expense Ledger</h1>
         <div className="flex gap-2">
           <a
             href={expenseReportUrl(
@@ -185,7 +186,7 @@ export default function ExpensesPage() {
       </div>
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Expense" : "Add Expense"}</h2>
+        <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Expense" : "Add Expense"}</h2>
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
@@ -229,7 +230,7 @@ export default function ExpensesPage() {
       </div>
 
       <div className="border border-line bg-white p-5">
-        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Entries for {useRange ? `${fromDate} to ${toDate}` : date} ({entries.length}) · Total {total} AED
         </h2>
         <table className="data-table">

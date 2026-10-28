@@ -55,8 +55,8 @@ export function agingDays(status: string, dateStr: string): number | null {
 /** Tailwind classes for the aging badge, graded by how many days old it is —
  * both tiers blink to draw the eye, red blinks faster since it's more urgent. */
 export function agingBadgeClass(days: number): string {
-  if (days >= 5) return "bg-cancelled text-white animate-[badge-blink_0.8s_ease-in-out_infinite]";
-  return "bg-pending text-white animate-[badge-blink_1.6s_ease-in-out_infinite]";
+  if (days >= 5) return "!rounded-full border border-cancelled/50 bg-cancelled-bg text-cancelled animate-[badge-blink_1.2s_ease-in-out_infinite]";
+  return "!rounded-full border border-pending/50 bg-pending-bg text-pending";
 }
 
 /** dd/mm/yyyy for a timestamp, or "—" when empty. */

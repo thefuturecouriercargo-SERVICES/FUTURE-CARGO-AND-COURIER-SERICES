@@ -66,6 +66,18 @@ export default function AdminSearch() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Ctrl+K palette hands a chosen CN over here, so its full details open below.
+  useEffect(() => {
+    function onSearch(e: Event) {
+      const term = String((e as CustomEvent).detail ?? "");
+      setQ(term);
+      setOpen(true);
+      inputRef.current?.focus();
+    }
+    window.addEventListener("fc-search", onSearch);
+    return () => window.removeEventListener("fc-search", onSearch);
+  }, []);
+
   // Close when clicking outside.
   useEffect(() => {
     function onDown(e: MouseEvent) {

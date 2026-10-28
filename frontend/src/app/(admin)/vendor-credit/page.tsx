@@ -7,6 +7,9 @@ import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError, vendorCreditExportUrl } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import { PageSkeleton, Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 interface VendorCreditRow {
   vendor: { id: string; name: string; active: boolean };
   openingAmount: number;
@@ -161,7 +164,7 @@ export default function VendorCreditPage() {
   }
 
   async function removePayment(vendorId: string, paymentId: string) {
-    if (!confirm("Remove this payment entry?")) return;
+    if (!(await confirmDialog("Remove this payment entry?"))) return;
     await apiFetch(`/vendor-credit/payments/${paymentId}`, { method: "DELETE" });
     setPayments(await apiFetch<VendorPayment[]>(`/vendor-credit/${vendorId}/payments`));
     await load();
@@ -215,8 +218,8 @@ export default function VendorCreditPage() {
       <div>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Accounts</p>
-            <h1 className="font-display text-3xl font-semibold text-navy">Vendor Credit</h1>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Accounts</p>
+            <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Vendor Credit</h1>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setDate(addDaysStr(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
@@ -247,7 +250,7 @@ export default function VendorCreditPage() {
 
         <div className="mb-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
@@ -269,9 +272,9 @@ export default function VendorCreditPage() {
           </p>
 
           {loadingNewEntries ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : newEntriesRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No new entries on this date.</p>
+            <EmptyState compact title="No new entries on this date" icon="inbox" />
           ) : (
             <div className="table-scroll">
               <table className="data-table">
@@ -423,7 +426,7 @@ export default function VendorCreditPage() {
 
                     <h3 className="mb-2 font-mono text-[11px] uppercase tracking-wide text-ink-soft">Payment history</h3>
                     {loadingPayments ? (
-                      <p className="text-sm text-ink-soft">Loading…</p>
+                      <div className="space-y-2.5 py-3" role="status" aria-label="Loading"><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-1/3" /><Skeleton className="h-3 w-2/5" /></div>
                     ) : payments.length === 0 ? (
                       <p className="text-sm text-ink-soft">No payments logged yet.</p>
                     ) : (
@@ -592,7 +595,7 @@ export default function VendorCreditPage() {
                           Payment history
                         </h3>
                         {loadingPayments ? (
-                          <p className="text-sm text-ink-soft">Loading…</p>
+                          <div className="space-y-2.5 py-3" role="status" aria-label="Loading"><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-1/3" /><Skeleton className="h-3 w-2/5" /></div>
                         ) : payments.length === 0 ? (
                           <p className="text-sm text-ink-soft">No payments logged yet.</p>
                         ) : (
@@ -653,7 +656,7 @@ export default function VendorCreditPage() {
         </div>
 
         <div className="mt-6 border border-line bg-white p-5">
-          <h2 className="mb-1 font-display text-[17px] font-semibold text-navy">Pending Consignments Summary</h2>
+          <h2 className="mb-1 font-display text-[18px] font-semibold text-navy">Pending Consignments Summary</h2>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
             View only — what&apos;s sitting in currently Pending orders per vendor, and what would be payable to
             them (Pending Total minus Delivery Charge) once delivered. Not part of the Balance above.
@@ -727,7 +730,7 @@ export default function VendorCreditPage() {
 
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[17px] font-semibold text-navy">Delivered Consignments Summary</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">Delivered Consignments Summary</h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setDeliveredDate(addDaysStr(deliveredDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
@@ -748,9 +751,9 @@ export default function VendorCreditPage() {
           </p>
 
           {loadingDelivered ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : deliveredRows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No deliveries on this date.</p>
+            <EmptyState compact title="No deliveries on this date" />
           ) : (
             <div className="table-scroll">
               <table className="data-table">

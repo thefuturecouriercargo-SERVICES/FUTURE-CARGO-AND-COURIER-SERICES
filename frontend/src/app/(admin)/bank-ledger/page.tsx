@@ -7,6 +7,9 @@ import { addDays, fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { Employee, EMIRATES, Order, STATUSES, Vendor } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import { PageSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 type SortKey = "cnNo" | "total" | "confirmed";
 type SortDir = "asc" | "desc";
 
@@ -76,7 +79,7 @@ export default function BankLedgerPage() {
   }
 
   async function bulkConfirmBeforeToday() {
-    if (!confirm(`Mark every BANK payment dated before ${date} as confirmed? This is meant as a one-time cleanup — use carefully.`)) return;
+    if (!(await confirmDialog(`Mark every BANK payment dated before ${date} as confirmed? This is meant as a one-time cleanup — use carefully.`))) return;
     setBulkConfirmBusy(true);
     try {
       const res = await apiFetch<{ updated: number }>("/orders/bulk-confirm-bank", { method: "PATCH", body: { beforeDate: date } });
@@ -181,8 +184,8 @@ export default function BankLedgerPage() {
       <div>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Bank Payments Only</p>
-            <h1 className="font-display text-3xl font-semibold text-navy">Bank Ledger</h1>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Bank Payments Only</p>
+            <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Bank Ledger</h1>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
@@ -368,14 +371,14 @@ export default function BankLedgerPage() {
         )}
 
         <div className="border border-line bg-white p-5">
-          <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+          <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
             {sorted.length} bank consignment{sorted.length === 1 ? "" : "s"} on {date}
           </h2>
 
           {loading ? (
-            <p className="py-8 text-center text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : sorted.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink-soft">No bank consignments for this date.</p>
+            <EmptyState compact title="No bank consignments for this date" />
           ) : (
             <div className="table-scroll">
               <table className="data-table">

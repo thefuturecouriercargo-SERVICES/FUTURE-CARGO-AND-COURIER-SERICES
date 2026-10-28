@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -61,6 +61,9 @@ import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
 import { Order, OrderStatus, Summary, Vendor } from "@/types";
 
+import { DashboardSkeleton, PageSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ShareReportButton from "@/components/ShareReportButton";
 interface DailyResponse {
   date: string;
   summary: Summary;
@@ -147,6 +150,37 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   useEffect(() => {
     load();
   }, [load]);
+
+  // Previous 6 days' summaries, for the KPI "vs yesterday" chips and 7-day lines.
+  // Cached per date so moving between days only fetches what's new.
+  const historyCache = useRef(new Map<string, Summary>());
+  const [history, setHistory] = useState<{ date: string; summary: Summary }[]>([]);
+  useEffect(() => {
+    if (useRange) {
+      setHistory([]);
+      return;
+    }
+    let cancelled = false;
+    const days = Array.from({ length: 6 }, (_, i) => addDays(date, -(6 - i)));
+    Promise.all(
+      days.map(async (d) => {
+        const hit = historyCache.current.get(d);
+        if (hit) return { date: d, summary: hit };
+        const r = await apiFetch<DailyResponse>("/dashboard/daily", { query: { date: d } });
+        historyCache.current.set(d, r.summary);
+        return { date: d, summary: r.summary };
+      })
+    )
+      .then((rows) => {
+        if (!cancelled) setHistory(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date, useRange]);
   useEffect(() => {
     apiFetch<Vendor[]>("/vendors").then(setVendors);
   }, []);
@@ -219,7 +253,7 @@ return (
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
-          <h1 className="inline-flex items-center gap-2 font-display text-3xl font-semibold text-navy">
+          <h1 className="inline-flex items-center gap-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
             Operations Dashboard
             <span id="assistant-anchor" className="inline-flex" />
           </h1>
@@ -241,22 +275,15 @@ return (
             Today
           </button>
           {data && (
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(
-                `📦 *Deliveries — ${date}*\n\n` +
-                  `Delivered: ${data.summary.delivered}\n` +
-                  `Pending: ${data.summary.pending + nonAgentPendingCarryover.length}\n` +
-                  `Transfer: ${data.summary.transferred}\n` +
-                  `Cancelled: ${data.summary.cancelled}\n\n` +
-                  `Total Sales: ${data.summary.totalSales} AED\n` +
-                  `DL Charge: ${data.summary.totalDeliveryCharge} AED`
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="touch-target inline-flex items-center rounded-xl border border-delivered/50 bg-delivered/10 px-4 text-sm font-semibold text-delivered hover:bg-delivered/20"
-            >
-              📤 Share to WhatsApp
-            </a>
+            <ShareReportButton
+              date={useRange ? `${fromDate} → ${toDate}` : date}
+              sales={Number(data.summary.totalSales) || 0}
+              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
+              delivered={data.summary.delivered}
+              pending={data.summary.pending + nonAgentPendingCarryover.length}
+              transferred={data.summary.transferred}
+              cancelled={data.summary.cancelled}
+            />
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +302,7 @@ return (
       </div>
 
       {loading && !data ? (
-        <p className="text-sm text-ink-soft">Loading…</p>
+        <DashboardSkeleton />
       ) : data ? (
         <>
           {(() => {
@@ -284,14 +311,18 @@ return (
             const pct = (n: number) => (total > 0 ? `${Math.round((n / total) * 100)}% of consignments` : "—");
             const sales = Number(data.summary.totalSales) || 0;
             const dl = Number(data.summary.totalDeliveryCharge) || 0;
+            const hasHistory = !useRange && history.length === 6;
+            const prev = hasHistory ? history[5].summary : null;
+            const series = (pick: (x: Summary) => number) => (hasHistory ? [...history.map((h) => Number(pick(h.summary)) || 0), Number(pick(data.summary)) || 0] : undefined);
+            const diff = (pick: (x: Summary) => number) => (prev ? (Number(pick(data.summary)) || 0) - (Number(pick(prev)) || 0) : null);
             return (
               <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 md:gap-3.5">
-                <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" />
-                <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} />
-                <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} />
+                <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" delta={diff((x) => x.totalSales)} spark={series((x) => x.totalSales)} />
+                <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} delta={diff((x) => x.totalDeliveryCharge)} spark={series((x) => x.totalDeliveryCharge)} />
+                <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} delta={diff((x) => x.delivered)} spark={series((x) => x.delivered)} />
                 <KpiCard label="Pending" value={pendingAll} accent="pending" sub={pct(pendingAll)} />
-                <KpiCard label="Transfer" value={data.summary.transferred} accent="transferred" sub={pct(data.summary.transferred)} />
-                <KpiCard label="Cancelled" value={data.summary.cancelled} accent="cancelled" sub={pct(data.summary.cancelled)} />
+                <KpiCard label="Transfer" value={data.summary.transferred} accent="transferred" sub={pct(data.summary.transferred)} delta={diff((x) => x.transferred)} upIsGood={false} spark={series((x) => x.transferred)} />
+                <KpiCard label="Cancelled" value={data.summary.cancelled} accent="cancelled" sub={pct(data.summary.cancelled)} delta={diff((x) => x.cancelled)} upIsGood={false} spark={series((x) => x.cancelled)} />
                 <KpiCard label="Total Consignments" value={total} accent="neutral" sub="All statuses" />
               </div>
             );
@@ -310,7 +341,7 @@ return (
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
            <div className="border border-line bg-white p-5">
               <div className="mb-3 flex items-center justify-between border-b border-line pb-2.5">
-                <h2 className="font-display text-[17px] font-semibold text-navy">
+                <h2 className="font-display text-[18px] font-semibold text-navy">
                   Employee-wise Performance
                 </h2>
                 <a
@@ -452,7 +483,7 @@ return (
               </table>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-5 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Delivery Status</h2>
+              <h2 className="mb-5 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Delivery Status</h2>
               <DeliveryStatusRing
                 delivered={data.summary.delivered}
                 pending={data.summary.pending + nonAgentPendingCarryover.length}
@@ -463,7 +494,7 @@ return (
           </div>
 
 <div className="mb-5 border border-line bg-white p-5">
-            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
               Cash Closing Summary — {data.date}
             </h2>
             <div className="table-scroll">
@@ -572,7 +603,7 @@ return (
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
          
                 Vendor-wise Performance
               </h2>
@@ -600,7 +631,7 @@ return (
               </div>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Employee Sales (AED)
               </h2>
               <BarChart labels={employeeRows.map((r) => r.employee.name)} data={employeeRows.map((r) => r.totalSales)} />
@@ -609,7 +640,7 @@ return (
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Payment-wise Summary
               </h2>
               <table className="data-table">
@@ -632,7 +663,7 @@ return (
               </table>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Emirate-wise Summary
               </h2>
               <table className="data-table">
@@ -658,7 +689,7 @@ return (
 
        
             <div className="border border-line bg-white p-5">
-           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy flex items-center justify-between">
+           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy flex items-center justify-between">
              <span>
   Consignment Ledger — {search.trim() ? "All dates (search)" : data.date}
   {globalSearching && <span className="ml-2 text-xs text-ink-soft">searching…</span>}
@@ -738,8 +769,8 @@ return (
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-10 text-center text-ink-soft">
-                        No consignments match this filter.
+                      <td colSpan={12} className="!static !shadow-none">
+                        <EmptyState compact icon="search" title="No consignments match this filter" hint="Try a different status, vendor or employee." />
                       </td>
                     </tr>
                   ) : (
@@ -778,7 +809,7 @@ return (
 
           <div className="mt-5 border border-line bg-white p-5">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-display text-[17px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
+              <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
               <input
                 type="month"
                 value={newEntriesMonth}
@@ -792,9 +823,9 @@ return (
             </p>
 
             {loadingNewEntries ? (
-              <p className="text-sm text-ink-soft">Loading…</p>
+              <PageSkeleton rows={6} />
             ) : newEntriesRows.length === 0 ? (
-              <p className="py-8 text-center text-sm text-ink-soft">No new entries this month.</p>
+              <EmptyState compact title="No new entries this month" icon="inbox" />
             ) : (
               <div className="table-scroll">
                 <table className="data-table">

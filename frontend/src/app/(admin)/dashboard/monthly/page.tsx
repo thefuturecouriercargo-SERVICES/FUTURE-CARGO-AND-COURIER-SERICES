@@ -8,6 +8,7 @@ import KpiCard from "@/components/KpiCard";
 import BarChart from "@/components/charts/BarChart";
 import { Summary } from "@/types";
 
+import { PageSkeleton } from "@/components/ui/Skeleton";
 interface MonthlyResponse {
   month: string;
   summary: Summary;
@@ -43,8 +44,8 @@ export default function MonthlyDashboardPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Automatic Roll-up</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">Monthly Dashboard</h1>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Automatic Roll-up</p>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Monthly Dashboard</h1>
         </div>
         <div className="flex items-center gap-2">
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded border border-line px-3 py-2 text-sm" />
@@ -60,7 +61,7 @@ export default function MonthlyDashboardPage() {
       </div>
 
       {loading && !data ? (
-        <p className="text-sm text-ink-soft">Loading…</p>
+        <PageSkeleton rows={6} />
       ) : data ? (
         <>
           <div className="mb-8 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
@@ -85,7 +86,7 @@ export default function MonthlyDashboardPage() {
           </div>
 
           <div className="mb-5 border border-line bg-white p-5">
-            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+            <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
               Daily Deliveries — {data.month}
             </h2>
             <BarChart labels={data.dailyBreakdown.map((d) => d.date.slice(8))} data={data.dailyBreakdown.map((d) => d.delivered)} color="#D4AF5A" />
@@ -93,7 +94,7 @@ export default function MonthlyDashboardPage() {
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Employee-wise Deliveries &amp; Charges
               </h2>
               <table className="data-table">
@@ -118,7 +119,7 @@ export default function MonthlyDashboardPage() {
               </table>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 Vendor-wise Deliveries &amp; Charges
               </h2>
               <div className="table-scroll">
@@ -148,7 +149,7 @@ export default function MonthlyDashboardPage() {
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Emirate-wise Summary</h2>
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Emirate-wise Summary</h2>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -169,7 +170,7 @@ export default function MonthlyDashboardPage() {
               </table>
             </div>
             <div className="border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">Payment-wise Summary</h2>
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Payment-wise Summary</h2>
               <table className="data-table">
                 <thead>
                   <tr>

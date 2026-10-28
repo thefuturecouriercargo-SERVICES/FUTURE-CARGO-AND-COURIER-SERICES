@@ -94,8 +94,8 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Reports</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Report Builder</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Reports</p>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Report Builder</h1>
       <p className="mb-6 max-w-2xl text-sm text-ink-soft">
         Filter by any combination of date range, employee, vendor, status, payment mode, or emirate, then export to
         Excel or PDF.
@@ -200,7 +200,7 @@ export default function ReportsPage() {
       {preview && (
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-[17px] font-semibold text-navy">Preview</h2>
+            <h2 className="font-display text-[18px] font-semibold text-navy">Preview</h2>
             <span className="font-mono text-xs text-ink-soft">
               {preview.totalRows} row{preview.totalRows === 1 ? "" : "s"}
               {preview.carriedCount > 0 && ` (${preview.rangeCount} in range + ${preview.carriedCount} carried forward)`}

@@ -26,8 +26,8 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Audit Log</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Security</p>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Audit Log</h1>
       <p className="mb-6 text-sm text-ink-soft">Every create, update, status change, transfer and cash closing is recorded here. Showing latest {logs.length} of {total}.</p>
 
       <div className="border border-line bg-white p-5">

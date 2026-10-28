@@ -15,7 +15,7 @@ ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement
 // Midnight Gold defaults — muted labels and gridlines that sit quietly on the
 // dark admin surfaces.
 ChartJS.defaults.color = "#8A95AB"; // readable on both the dark admin and the light driver portal
-ChartJS.defaults.borderColor = "#1B2438";
+ChartJS.defaults.borderColor = "rgba(138,149,171,0.16)";
 ChartJS.defaults.font.family = "Inter, sans-serif";
 ChartJS.defaults.plugins.tooltip.backgroundColor = "#0A1020";
 ChartJS.defaults.plugins.tooltip.borderColor = "#3A3220";

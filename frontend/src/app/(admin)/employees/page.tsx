@@ -6,6 +6,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 const emptyForm = { name: "", username: "", email: "", phone: "", password: "", baseSalary: "", isAgent: false };
 
 interface PerformanceMap {
@@ -81,7 +82,7 @@ export default function EmployeesPage() {
 
   async function toggleActive(e: Employee) {
     if (e.active) {
-      if (!confirm(`Deactivate ${e.name}? They will no longer be able to log in.`)) return;
+      if (!(await confirmDialog(`Deactivate ${e.name}? They will no longer be able to log in.`))) return;
       await apiFetch(`/employees/${e.id}`, { method: "DELETE" });
     } else {
       await apiFetch(`/employees/${e.id}`, { method: "PUT", body: { active: true } });
@@ -90,7 +91,7 @@ export default function EmployeesPage() {
   }
 
   async function removeEmployee(e: Employee) {
-    if (!confirm(`Permanently remove ${e.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`)) return;
+    if (!(await confirmDialog(`Permanently remove ${e.name}? This only works if they have no order or cash history — otherwise deactivate them instead.`))) return;
     try {
       await apiFetch(`/employees/${e.id}/permanent`, { method: "DELETE" });
       await load();
@@ -102,11 +103,11 @@ export default function EmployeesPage() {
  return (
     <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Employee Management</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Team</p>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Employee Management</h1>
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingId ? "Edit Employee" : "Add Employee"}</h2>
+        <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Employee" : "Add Employee"}</h2>
         <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>
@@ -171,7 +172,7 @@ export default function EmployeesPage() {
       </div>
 
       <div className="border border-line bg-white p-5">
-        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Drivers ({employees.filter((e) => e.active).length} active)
         </h2>
         <table className="data-table">

@@ -7,6 +7,7 @@ import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScann
 import ScanHistory from "@/components/ScanHistory";
 import { Employee } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 interface ScanLog {
   at: Date;
   code: string;
@@ -78,7 +79,7 @@ export default function AssignPage() {
       // A match by vendor bill No., or moving a parcel from another driver: ask first.
       if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
         beep(true);
-        if (window.confirm(err.message)) return onCode(code, true, vendorId);
+        if (await confirmDialog(err.message)) return onCode(code, true, vendorId);
         setLog((prev) => [{ at: new Date(), code, ok: false, kind: "ERROR", message: `Skipped — ${err.message}`, driver: driverName }, ...prev]);
         return;
       }
@@ -108,8 +109,8 @@ export default function AssignPage() {
 
   return (
     <div className="max-w-2xl">
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Dispatch</p>
-      <h1 className="mb-2 font-display text-3xl font-semibold text-navy">Scan &amp; Assign</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Dispatch</p>
+      <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Scan &amp; Assign</h1>
       <p className="mb-5 text-sm text-ink-soft">
         Choose the driver, then scan each parcel. Vendor orders waiting for pickup go into Daily Entry for that driver as
         Pending (Cash). A pending order of another driver is moved to this driver.

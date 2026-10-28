@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiFetch, pnlExportUrl } from "@/lib/api";
 
+import { Skeleton } from "@/components/ui/Skeleton";
 interface PnlData {
   revenue: number;
   totalExpenses: number;
@@ -111,9 +112,9 @@ export default function PnlPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Reports</p>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Reports</p>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl font-semibold text-navy">Profit &amp; Loss</h1>
+        <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Profit &amp; Loss</h1>
         <div className="flex gap-2">
           <a
             href={pnlExportUrl({ from, to, format: "pdf" })}
@@ -184,7 +185,7 @@ export default function PnlPage() {
           )}
 
           <div className="border border-line bg-white p-5">
-            <h2 className="mb-1 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+            <h2 className="mb-1 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
               Expense Breakdown by Category
             </h2>
             <p className="mb-3 text-xs text-ink-soft">Click any category to see the individual entries behind its total.</p>
@@ -216,7 +217,7 @@ export default function PnlPage() {
                       <tr>
                         <td colSpan={3} className="bg-paper-2 p-0">
                           {loadingDetails ? (
-                            <p className="px-4 py-3 text-sm text-ink-soft">Loading…</p>
+                            <div className="space-y-2.5 py-3" role="status" aria-label="Loading"><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-1/3" /><Skeleton className="h-3 w-2/5" /></div>
                           ) : expenseDetails.length === 0 ? (
                             <p className="px-4 py-3 text-sm text-ink-soft">No individual entries found.</p>
                           ) : (
@@ -254,7 +255,7 @@ export default function PnlPage() {
 
           {thisMonthData && lastMonthData && (
             <div className="mb-6 border border-line bg-white p-5">
-              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+              <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
                 This Month vs. Last Month
               </h2>
               <table className="data-table">

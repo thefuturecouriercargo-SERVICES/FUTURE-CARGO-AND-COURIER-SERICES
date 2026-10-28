@@ -14,6 +14,8 @@ import BookingStatusBadge from "@/components/BookingStatusBadge";
 import { WebsiteSyncPanels } from "@/components/InspiredSyncPanel";
 import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import EmptyState from "@/components/ui/EmptyState";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -215,7 +217,7 @@ export default function AwaitingPickupPage() {
   }
 
   async function remove(b: Booking) {
-    if (!confirm(`Delete booking CN ${b.cnNo} (${b.customerName})? This can't be undone.`)) return;
+    if (!(await confirmDialog(`Delete booking CN ${b.cnNo} (${b.customerName})? This can't be undone.`))) return;
     try {
       await apiFetch(`/bookings/${b.id}`, { method: "DELETE" });
       await load();
@@ -246,9 +248,9 @@ export default function AwaitingPickupPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Vendor bookings</p>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Vendor bookings</p>
       <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-display text-3xl font-semibold text-navy">Awaiting Pickup</h1>
+        <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Awaiting Pickup</h1>
         {canEdit && (
           <span className="flex flex-wrap gap-2">
           <button
@@ -568,8 +570,12 @@ export default function AwaitingPickupPage() {
             <tbody>
               {shown.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-ink-soft">
-                    {filter === "AWAITING_PICKUP" ? `Nothing waiting for this day${totalAwaiting ? ` (${totalAwaiting} awaiting in total)` : ""}.` : "No bookings here."}
+                  <td colSpan={10} className="!static !shadow-none">
+                    {filter === "AWAITING_PICKUP" ? (
+                      <EmptyState compact icon="check" tone="green" title="All caught up" hint={`Nothing waiting for pickup on this day${totalAwaiting ? ` — ${totalAwaiting} awaiting in total` : ""}.`} />
+                    ) : (
+                      <EmptyState compact icon="inbox" title="No bookings here" />
+                    )}
                   </td>
                 </tr>
               ) : (

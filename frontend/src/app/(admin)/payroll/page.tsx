@@ -7,6 +7,9 @@ import { apiFetch } from "@/lib/api";
 import { currentMonthStr, fmtNumber, previousMonthStr } from "@/lib/format";
 import { Employee } from "@/types";
 
+import { confirmDialog } from "@/components/ui/Feedback";
+import { PageSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 interface PayrollRow {
   id: string;
   month: string;
@@ -157,7 +160,7 @@ export default function PayrollPage() {
   }
 
   async function deactivateStaff(e: Employee) {
-    if (!confirm(`Remove ${e.name} from payroll? This can be reversed later if needed.`)) return;
+    if (!(await confirmDialog(`Remove ${e.name} from payroll? This can be reversed later if needed.`))) return;
     await apiFetch(`/employees/${e.id}`, { method: "DELETE" });
     await load();
     }
@@ -232,7 +235,7 @@ export default function PayrollPage() {
   }
 
   async function deleteEntry(id: string) {
-    if (!confirm("Delete this entry?")) return;
+    if (!(await confirmDialog("Delete this entry?"))) return;
     await apiFetch(`/payroll/entries/${id}`, { method: "DELETE" });
     await load();
   }
@@ -269,8 +272,8 @@ export default function PayrollPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-          <h1 className="font-display text-3xl font-semibold text-navy">Payroll Statement</h1>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Salaries</p>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Payroll Statement</h1>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -293,7 +296,7 @@ export default function PayrollPage() {
 
       {!isReadOnly && showAddStaff && (
         <div className="mb-6 border border-line bg-white p-5">
-          <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">
+          <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">
             {editingStaffId ? "Edit Staff" : "Add Staff (Payroll Only)"}
           </h2>
           <p className="mb-4 text-xs text-ink-soft">
@@ -378,7 +381,7 @@ export default function PayrollPage() {
 
       {!isReadOnly && (
       <div className={`mb-6 border p-5 ${editingEntryId ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
-        <h2 className="mb-4 font-display text-[17px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
+        <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
         <form onSubmit={onSubmitEntry} className={`grid grid-cols-2 gap-3 ${editingEntryId ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Employee</label>
@@ -465,11 +468,11 @@ export default function PayrollPage() {
       )}
 
       <div className="mb-6 border border-line bg-white p-5">
-        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Payroll Statement — {month}
         </h2>
        {loading ? (
-          <p className="py-8 text-center text-sm text-ink-soft">Loading…</p>
+          <PageSkeleton rows={6} />
         ) : (
           <>
             {/* Mobile: stacked cards */}
@@ -634,7 +637,7 @@ export default function PayrollPage() {
       </div>
 
       <div className="border border-line bg-white p-5">
-        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[17px] font-semibold text-navy">
+        <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
           Entry Log — {month}
         </h2>
         <table className="data-table">
@@ -651,8 +654,8 @@ export default function PayrollPage() {
           <tbody>
             {entries.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-ink-soft">
-                  No entries yet.
+                <td colSpan={6} className="!static !shadow-none">
+                  <EmptyState compact title="No entries yet" icon="inbox" />
                 </td>
               </tr>
             ) : (

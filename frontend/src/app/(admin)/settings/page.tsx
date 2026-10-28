@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, settingsBackupUrl } from "@/lib/api";
 
+import { PageSkeleton } from "@/components/ui/Skeleton";
 interface BackupStatus {
   configured: boolean;
   hasApiKey: boolean;
@@ -65,8 +66,8 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">Settings</p>
-      <h1 className="mb-6 font-display text-3xl font-semibold text-navy">Company Profile</h1>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Settings</p>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Company Profile</h1>
 
       {settings && (
         <form onSubmit={onSubmit} className="mb-8 max-w-xl border border-line bg-white p-6">
@@ -96,7 +97,7 @@ export default function SettingsPage() {
       )}
 
       <div className="max-w-xl border border-line bg-white p-6">
-        <h2 className="mb-3 font-display text-[17px] font-semibold text-navy">Appearance</h2>
+        <h2 className="mb-3 font-display text-[18px] font-semibold text-navy">Appearance</h2>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
           Dark mode (this browser only)
@@ -104,7 +105,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="mt-8 max-w-xl border border-line bg-white p-6">
-        <h2 className="mb-3 font-display text-[17px] font-semibold text-navy">Backup</h2>
+        <h2 className="mb-3 font-display text-[18px] font-semibold text-navy">Backup</h2>
         <p className="mb-4 text-sm text-ink-soft">
           Downloads every record (orders, vendors, staff, payroll, expenses, credits, audit log) as one JSON file. Keep a copy somewhere safe.
         </p>
@@ -118,7 +119,7 @@ export default function SettingsPage() {
         <div className="mt-6 border-t border-line pt-4">
           <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-brass">Weekly email backup</h3>
           {!backup ? (
-            <p className="text-sm text-ink-soft">Loading…</p>
+            <PageSkeleton rows={6} />
           ) : backup.configured ? (
             <div className="text-sm">
               <p>

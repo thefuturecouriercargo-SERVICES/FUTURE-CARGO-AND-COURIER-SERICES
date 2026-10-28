@@ -6,6 +6,7 @@ import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { ESCALO_PRODUCTS, INSPIRED_PRODUCTS } from "@/lib/products";
 
+import { confirmDialog } from "@/components/ui/Feedback";
 interface Props {
   /** When set, the form edits this booking instead of creating a new one. */
   editing?: Booking | null;
@@ -155,7 +156,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         // Same phone + amount already entered recently → ask before saving a second CN.
         const details = err instanceof ApiClientError ? (err.details as { code?: string } | undefined) : undefined;
         if (details?.code === "POSSIBLE_DUPLICATE") {
-          if (!window.confirm(`${err instanceof Error ? err.message : "Possible duplicate."}\n\nIs this a different order? Press OK to save it anyway, or Cancel to stop.`)) {
+          if (!(await confirmDialog(`${err instanceof Error ? err.message : "Possible duplicate."}\n\nIs this a different order? Press OK to save it anyway, or Cancel to stop.`))) {
             setError("Not saved — looks like a duplicate.");
             return;
           }
