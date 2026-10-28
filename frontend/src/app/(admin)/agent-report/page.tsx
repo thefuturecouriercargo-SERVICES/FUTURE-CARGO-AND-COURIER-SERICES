@@ -151,7 +151,7 @@ export default function AgentReportPage() {
       <h1 className="mb-1 font-display text-3xl font-semibold text-navy">Agent report upload</h1>
       <p className="mb-5 max-w-2xl text-sm text-ink-soft">
         Upload the agent&apos;s Excel status sheet or PDF cash-return report. Tracking number = our CN.
-        <b> Delivered</b> → Delivered, <b>RTO</b> → Cancelled (even if we marked it Delivered), anything else stays Pending. Nothing changes until you press Update.
+        <b> Delivered</b> → Delivered, <b>RTO</b> → Cancelled — the report always wins, even over what we marked before. Anything else stays Pending. Nothing changes until you press Update.
       </p>
 
       <label
