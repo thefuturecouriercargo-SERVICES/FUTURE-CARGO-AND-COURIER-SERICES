@@ -27,6 +27,25 @@ export function photoReaderConfigured() {
 
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
+/** The vendors' agents / salesmen. Every slip agent is snapped to one of these. */
+export const AGENTS = ["F", "N", "T", "KD", "SULU", "RAHIMA"] as const;
+
+/** Match what was read to a real agent. Returns the agent and whether it was a guess. */
+function matchAgent(raw: string | null | undefined): { agent: string | null; sure: boolean } {
+  const t = String(raw ?? "").toUpperCase().replace(/^AGENT\s*/, "").replace(/[^A-Z]/g, "");
+  if (!t) return { agent: null, sure: true };
+  if ((AGENTS as readonly string[]).includes(t)) return { agent: t, sure: true };
+  // Fast-written T is read as K / L / 7 / I.
+  if (["K", "L", "I", "J", "Y", "X"].includes(t)) return { agent: "T", sure: false };
+  if (t === "D" || t === "KO" || t === "XD" || t === "HD") return { agent: "KD", sure: false };
+  if (t === "M" || t === "H" || t === "W") return { agent: "N", sure: false };
+  if (t === "E" || t === "P") return { agent: "F", sure: false };
+  if (t.startsWith("SU") || t.startsWith("SO") || t.startsWith("SL")) return { agent: "SULU", sure: false };
+  if (t.startsWith("RA") || t.startsWith("RH") || t.startsWith("RE")) return { agent: "RAHIMA", sure: false };
+  // Unknown: keep what was read so nothing is lost, but flag it.
+  return { agent: t, sure: false };
+}
+
 const PROMPT = `You are reading a photo of an order slip for a courier company in the UAE.
 Vendors write these by hand (or send a screenshot/printed bill). Extract every order on it.
 
@@ -42,12 +61,15 @@ How these slips usually look:
 - "Whoop" (a fitness band) is a common product — the handwritten "W" often looks like "L". Read it as "Whoop", never "Loop" (e.g. "1 × Whoop").
 - Words like "Top Urgent", "Urgent", "Call before", "Evening" → notes (e.g. "TOP URGENT").
 - Customer names are often NOT written — then customerName is null. Do not invent one.
-- A short name or initials written on its own, often next to the bill number (e.g. "Haira", "Sam", or one or two capital letters) is usually the vendor's AGENT / salesman, not the customer → put it in "agent", and leave customerName null unless the slip clearly labels a customer name.
-- Agent letters are written fast and look alike. Read the actual strokes, do not default to a common letter:
-  · "T" is often written with a slanted or hooked top bar that runs into the stem, so it can look like "K", "L" or "7". A "K" has a straight vertical stem with TWO separate diagonal arms meeting near the middle; if there is only one stroke coming off the stem from the top, it is a "T".
-  · If you are not fully sure of an agent letter, still give your best reading and add "agent" to unclear.
+- The AGENT (salesman) is written on its own, usually in a top corner next to the bill number. It is NOT the customer → put it in "agent" and leave customerName null unless the slip clearly labels a customer name.
+- The ONLY agents are: ${AGENTS.join(", ")}. The agent must be exactly one of these — never anything else (there is NO agent "K").
+  · "T" is often written fast with a hooked or slanted top bar that runs into the stem, so it can look like "K", "L" or "7" → it is "T".
+  · "KD" is two letters together; a single letter on its own is "T", "F" or "N", never "KD".
+  · "N" and "F" are real agents — a lone "N" or "F" in a corner IS the agent, not a stray mark.
+  · SULU and RAHIMA are written as names; read them even if the spelling is rough (e.g. "Sulu", "Rahima", "Rahema").
+  · If you are not fully sure which agent it is, give your best match from the list and add "agent" to unclear.
 - The bill number (vendorRef) is important — always look for it and read every digit.
-- Ignore single stray letters or ticks in the corners (e.g. a lone "N") — they are internal marks, not data.
+- Ignore ticks and check marks — they are internal marks, not data.
 Never guess data that is not on the slip; use null. List any field you were unsure about in "unclear".`;
 
 const TOOL = {
@@ -63,7 +85,7 @@ const TOOL = {
           properties: {
             vendorRef: { type: ["string", "null"], description: "Vendor's bill / order number" },
             customerName: { type: ["string", "null"] },
-            agent: { type: ["string", "null"], description: "Agent / salesman name or initials written on the slip (e.g. Haira, or one or two capital letters)" },
+            agent: { type: ["string", "null"], enum: [...AGENTS, null], description: "Agent / salesman written on the slip — one of the fixed agent list" },
             customerPhone: { type: ["string", "null"] },
             address: { type: ["string", "null"] },
             emirate: { type: ["string", "null"], enum: [...EMIRATES, null] },
@@ -84,10 +106,7 @@ const TOOL = {
 export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", vendorId?: string): Promise<ReadOrder[]> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new ApiError(503, "Photo reader is not set up yet — add ANTHROPIC_API_KEY in Railway");
-  const agents = vendorId ? await knownAgents(vendorId).catch(() => []) : [];
-  const agentHint = agents.length
-    ? `\n\nThis vendor's agents used recently (most used first): ${agents.join(", ")}. An agent on this slip is very likely one of these — compare the strokes with each before choosing, and add "agent" to unclear if it could be more than one.`
-    : "";
+  void vendorId; // kept for callers; the agent list is fixed (AGENTS)
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
@@ -102,7 +121,7 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", v
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: mime, data: imageBase64 } },
-            { type: "text", text: `${PROMPT}${agentHint}\n\nReply only by calling the ${TOOL.name} tool.` },
+            { type: "text", text: `${PROMPT}\n\nReply only by calling the ${TOOL.name} tool.` },
           ],
         },
       ],
@@ -133,11 +152,10 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", v
     }
   }
   return orders.map((o) => {
-    const agent = o.agent ? String(o.agent).trim() || null : null;
-    // The agent ends up in the notes box, so highlight notes when the agent letter is uncertain
-    // (a single letter is always worth a second look).
+    const { agent, sure } = matchAgent(o.agent);
+    // The agent ends up in the notes box, so highlight notes when the agent was guessed or unsure.
     const unclear = (Array.isArray(o.unclear) ? o.unclear : []).map((u) => (u === "agent" ? "notes" : u));
-    if (agent && agent.length === 1 && !unclear.includes("notes")) unclear.push("notes");
+    if (agent && !sure && !unclear.includes("notes")) unclear.push("notes");
     return {
     vendorRef: o.vendorRef ? String(o.vendorRef).trim() : null,
     customerName: o.customerName?.trim() || null,
@@ -153,22 +171,6 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", v
   });
 }
 
-/** Agent codes this vendor's bookings carried in the last 60 days ("Agent X" in notes), most used first. */
-async function knownAgents(vendorId: string): Promise<string[]> {
-  const since = new Date(Date.now() - 60 * 24 * 3600 * 1000);
-  const rows = await prisma.booking.findMany({
-    where: { vendorId, createdAt: { gte: since }, notes: { contains: "Agent " } },
-    select: { notes: true },
-    take: 2000,
-  });
-  const count = new Map<string, number>();
-  for (const r of rows) {
-    const m = r.notes?.match(/Agent\s+([^·\n]+?)\s*(?:·|$)/);
-    const a = m?.[1]?.trim();
-    if (a && a.length <= 20) count.set(a, (count.get(a) ?? 0) + 1);
-  }
-  return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([a]) => a);
-}
 
 const MESSAGE_PROMPT = `You are reading a WhatsApp order message that a vendor (a small UAE shop) pasted into a courier company's booking form. Fill the booking fields.
 
