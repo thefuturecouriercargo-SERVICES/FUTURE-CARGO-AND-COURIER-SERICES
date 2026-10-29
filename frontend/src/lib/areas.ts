@@ -57,7 +57,7 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?aweer\b|\bal[\s\-]*awir\b|\bras[\s\-']*al[\s\-']*khor[\s\-']*industrial\b/i, "AL AWIR"],
   [/\bras[\s\-']*al[\s\-']*khor\b/i, "RAS AL KHOR"],
   [/\bnad[\s\-']*al[\s\-']*hamm?ar\b|\bnadd[\s\-']*al[\s\-']*hamm?ar\b|\bnadal[\s\-']*hamm?ar\b|\bnad[\s\-']*alhamm?ar\b/i, "NAD AL HAMAR"],
-  [/\b(?:al[\s\-]*)?warqa'?a?\b|\bwarqaa\b/i, "AL WARQA"],
+  [/\b(?:al[\s\-]*)?warqa'?a?\b|\bwarqaa\b|\bal[\s\-']*war[kq]\b|\bwarqa[\s\-']*\d\b/i, "AL WARQA"],
   [/\bmirdif+\b|\bmirdiff\b|\buptown[\s\-']*mirdif\b|\bmirdif[\s\-']*city[\s\-']*cent(re|er)\b/i, "MIRDIF"],
   [/\b(?:al[\s\-]*)?mizhar\b/i, "AL MIZHAR"],
   [/\b(?:al[\s\-]*)?khawaneej\b|\bkhawanij\b/i, "AL KHAWANEEJ"],
@@ -91,10 +91,13 @@ const DUBAI: AreaRule[] = [
   [/\bal[\s\-]*manara\b/i, "AL MANARA"],
   [/\bal[\s\-]*safa\b/i, "AL SAFA"],
   [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
-  [/\bal[\s\-]*quoz\b|\bal[\s\-']*qouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
+  // Al Khail Gate / Al Khail Heights are inside Al Quoz (customers write "Alkhile gate", "khail gate"…).
+  [/\b(?:al[\s\-']*)?kh?[aeiy]{1,2}le?[\s\-']*(?:gates?|heights?)\b/i, "AL QUOZ"],
+  [/\bal[\s\-']*q[ou]{1,2}[sz]e?\b|\bal[\s\-']*koz\b|\bal[\s\-']*kouz\b|\balq[ou]{1,2}[sz]\b|\bquoz\b|\bqouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
   [/\bsobha[\s\-']*hartland\b|\bshoba[\s\-']*hartland\b|\bsobha\b|\bshoba\b|\bhartland\b/i, "SOBHA HARTLAND"],
   [/\bnad[\s\-']*al[\s\-']*sheba\b|\bnad[\s\-']*alsheba\b|\bnadal[\s\-']*sheba\b|\bnadal[\s\-']*shiba\b|\bnad[\s\-']*al[\s\-']*shiba\b|\bnad[\s\-']*el[\s\-']*sheba\b|\bnadd[\s\-']*al[\s\-']*sheba\b/i, "NAD AL SHEBA"],
-  [/\b(?:al[\s\-]*)?khail\b|\bmeydan\b|\bmbr[\s\-']*city\b|\bmohammed[\s\-']*bin[\s\-']*rashid[\s\-']*city\b|\bdistrict[\s\-']*one\b/i, "MEYDAN / NAD AL SHEBA"],
+  // Not bare "Al Khail": Al Khail Road runs past many areas, so it alone doesn't mean Meydan.
+  [/\bmeydan\b|\bmaidan[\s\-']*dubai\b|\bmeidan\b|\bmbr[\s\-']*city\b|\bmohammed[\s\-']*bin[\s\-']*rashid[\s\-']*city\b|\bdistrict[\s\-']*one\b/i, "MEYDAN / NAD AL SHEBA"],
   [/\bumm[\s\-']*ramool\b/i, "UMM RAMOOL"],
   [/\bdiscovery[\s\-']*gardens?\b/i, "DISCOVERY GARDENS"],
   [/\b(?:al[\s\-]*)?furjan\b|\bfurjan[\s\-']*west\b|\bfurjan[\s\-']*east\b/i, "AL FURJAN"],
@@ -555,7 +558,7 @@ function phon(t: string): string {
   x = x
     .replace(/kh/g, "k").replace(/q/g, "k").replace(/ck/g, "k").replace(/c/g, "k")
     .replace(/gh/g, "g").replace(/dh/g, "d").replace(/th/g, "t").replace(/ph/g, "f")
-    .replace(/ee|ie|ey/g, "i").replace(/oo|ou/g, "u").replace(/y/g, "i").replace(/w/g, "u")
+    .replace(/ee|ie|ey/g, "i").replace(/oo|ou|uo/g, "u").replace(/y/g, "i").replace(/w/g, "u").replace(/z/g, "s")
     .replace(/(?<=[aeiou])h(?![aeiou])/g, "").replace(/h$/, "")
     .replace(/(.)\1+/g, "$1");
   return x;
@@ -582,6 +585,9 @@ const NOT_AREA = new Set(
   "villa flat apt apartment room building bldg tower floor street road near opp opposite behind makani plot house no number office shop block sector zone area city new old the and dubai sharjah sharja ajman abu dhabi ain uae emirates united arab ras khaimah umm quwain fujairah call customer please deliver delivery before after morning evening night time phone mobile whatsapp location pin home work back front side next main metro station mall market masjid mosque school hospital clinic hotel park beach center centre".split(" ")
 );
 
+/** Road words are dropped when comparing, so "Al Khail road" isn't read as "Naif road". */
+const ROADWORD = new Set(["road", "rd", "street", "st"]);
+
 type Spelling = { key: string; words: number; area: string; emirate: string };
 let SPELLINGS: Spelling[] | null = null;
 
@@ -591,10 +597,10 @@ function spellings(): Spelling[] {
   const out: Spelling[] = [];
   const seen = new Set<string>();
   const add = (raw: string, area: string, emirate: string) => {
-    const words = raw.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+    const words = raw.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w && !ROADWORD.has(w));
     if (!words.length || words.every((w) => NOT_AREA.has(w))) return;
     const key = phon(words.join(""));
-    if (key.length < 4) return; // very short names (JLT, JVC) only match exactly
+    if (key.length < 3) return; // very short names (JLT, JVC) only match exactly
     const id = `${key}|${area}`;
     if (seen.has(id)) return;
     seen.add(id);
@@ -628,9 +634,11 @@ function fuzzyArea(text: string, emirate: string): string | undefined {
     for (let len = 1; len <= 3 && i + len <= tokens.length; len++) {
       const piece = tokens.slice(i, i + len);
       if (piece.some((w) => /\d/.test(w))) break;
+      if (piece.some((w) => ROADWORD.has(w))) continue; // "X road" vs "Y road" must not match on "road"
+
       if (piece.every((w) => NOT_AREA.has(w) || w === "al")) continue;
       const key = phon(piece.join(""));
-      if (key.length < 4) continue;
+      if (key.length < 3) continue;
       const after = tokens[i + len];
       for (const sp of list) {
         if (Math.abs(sp.key.length - key.length) > 3) continue;
