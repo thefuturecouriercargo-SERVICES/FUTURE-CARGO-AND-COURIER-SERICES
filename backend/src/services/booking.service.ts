@@ -58,13 +58,23 @@ export async function assertCnFree(cnNo: number, ignoreBookingId?: string) {
   if (booking) throw new ApiError(409, `CN No. ${cnNo} is already booked`);
 }
 
-/** Next free number in the system range (skips anything already taken). */
+/**
+ * Next number in the system range. Numbers are never reused: a counter keeps
+ * the highest CN ever issued, so deleting the newest booking doesn't free its
+ * number for the next parcel (its label may already be printed and in use).
+ * The single UPDATE is atomic, so two bookings at once can't get the same CN.
+ */
 async function nextSystemCn(): Promise<number> {
   const [maxBooking, maxOrder] = await Promise.all([
     prisma.booking.aggregate({ where: { cnNo: { gte: CN_START } }, _max: { cnNo: true } }),
     prisma.order.aggregate({ where: { cnNo: { gte: CN_START } }, _max: { cnNo: true } }),
   ]);
-  return Math.max(CN_START - 1, maxBooking._max.cnNo ?? 0, maxOrder._max.cnNo ?? 0) + 1;
+  const candidate = Math.max(CN_START - 1, maxBooking._max.cnNo ?? 0, maxOrder._max.cnNo ?? 0) + 1;
+  const rows = await prisma.$queryRaw<{ last_issued: number }[]>`
+    INSERT INTO cn_counter (id, last_issued) VALUES (1, ${candidate})
+    ON CONFLICT (id) DO UPDATE SET last_issued = GREATEST(cn_counter.last_issued + 1, EXCLUDED.last_issued)
+    RETURNING last_issued`;
+  return Number(rows[0].last_issued);
 }
 
 /** 409 if this vendor already has a booking with the same reference number. */

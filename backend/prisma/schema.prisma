@@ -476,3 +476,13 @@ model CustomerRequest {
   @@index([vendorId, phoneDigits])
   @@map("customer_requests")
 }
+
+/// Highest system CN ever handed out. Never goes down, so a CN freed by a
+/// deleted booking is never given to another parcel (its label may already
+/// be printed and stuck on a parcel).
+model CnCounter {
+  id         Int @id @default(1)
+  lastIssued Int @default(0) @map("last_issued")
+
+  @@map("cn_counter")
+}
