@@ -3,7 +3,7 @@
 import { OrderBookingDetails } from "@/types";
 import { useState } from "react";
 import { fmtNumber } from "@/lib/format";
-import { NotesText } from "@/lib/notes";
+import { NotesText, isPickup } from "@/lib/notes";
 
 /** Small "📋 Copy" — copies all the parcel details as plain text (to paste in WhatsApp etc.). */
 function CopyButton({ text }: { text: string }) {
@@ -118,6 +118,12 @@ export default function OrderDetails({
         <div className={row}>
           <span className={label}>Items</span>
           <span>{booking.items}</span>
+        </div>
+      )}
+      {isPickup(booking) && (
+        <div className={row}>
+          <span className={label}>Type</span>
+          <span className="font-extrabold uppercase tracking-wide text-navy">⇄ Pickup delivery {booking.codAmount > 0 ? "· collect delivery charge" : "· no payment"}</span>
         </div>
       )}
       {booking.notes && (

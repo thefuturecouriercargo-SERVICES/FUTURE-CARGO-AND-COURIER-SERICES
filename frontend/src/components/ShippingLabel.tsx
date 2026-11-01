@@ -1,6 +1,6 @@
 "use client";
 
-import { NotesText, parseNotes } from "@/lib/notes";
+import { NotesText, isPickup, parseNotes, visibleParts } from "@/lib/notes";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
@@ -151,6 +151,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   });
   const fit = levels[Math.min(level, levels.length - 1)];
   const parsed = parseNotes(booking.notes);
+  const pickup = isPickup(booking);
+  const noteParts = visibleParts(parsed.parts, pickup);
   const hasOrderNo = Boolean(booking.vendorRef && booking.vendorRef !== String(booking.cnNo));
   const billNo = (booking as { billNo?: string | null }).billNo || parsed.bill;
 
@@ -183,10 +185,31 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       </div>
 
+      {/* Pickup delivery — we collect the parcel from the customer. */}
+      {pickup && (
+        <div className="mt-1.5 border-black text-center" style={{ borderWidth: 3, borderStyle: "solid", padding: "2px 4px", fontSize: sq ? 17 : 20, fontWeight: 900, letterSpacing: 1.5, lineHeight: 1.1 }}>
+          ⇄ PICKUP DELIVERY
+        </div>
+      )}
+
       {/* COD */}
       <div className="mt-1.5 flex items-center justify-between border-2 border-black px-2 py-1">
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{booking.codAmount > 0 ? "Cash on delivery" : booking.codAmount < 0 ? "Refund — give customer" : "Payment"}</span>
-        <span style={{ fontSize: sq ? 18 : 22, fontWeight: 800 }}>{booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : "PREPAID"}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>
+          {pickup
+            ? booking.codAmount > 0
+              ? "Collect delivery charge"
+              : booking.codAmount < 0
+                ? "Refund — give customer"
+                : "Pickup payment"
+            : booking.codAmount > 0
+              ? "Cash on delivery"
+              : booking.codAmount < 0
+                ? "Refund — give customer"
+                : "Payment"}
+        </span>
+        <span style={{ fontSize: sq ? 18 : 22, fontWeight: 800 }}>
+          {booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : pickup ? "NO PAYMENT" : "PREPAID"}
+        </span>
       </div>
 
       {/* Customer */}
@@ -268,10 +291,10 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       )}
 
-      {parsed.parts.length > 0 && (
+      {noteParts.length > 0 && (
         <div className="mt-1 border border-black px-1.5 py-0.5" style={{ fontSize: 10.5, lineHeight: 1.25, ...(sq ? clamp(1) : clamp(2)) }}>
           <b style={{ fontWeight: 800 }}>NOTES: </b>
-          <NotesText notes={booking.notes} hideBill hideAgent />
+          <NotesText notes={booking.notes} hideBill hideAgent hidePickup={pickup} />
         </div>
       )}
 

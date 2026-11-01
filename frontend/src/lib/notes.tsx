@@ -3,6 +3,12 @@ import React from "react";
 /** EW's agents / salesmen — must match AGENTS in backend photoReader.service.ts. */
 export const EW_AGENTS = ["N", "T", "THAHSI", "SULU", "F", "M", "KD", "HAIRA", "RAHIMA", "K"] as const;
 
+/** "Pickup delivery": we collect a parcel from the customer. Payment is usually the delivery charge, or nothing. */
+export const PICKUP_RE = /\b(pick\s*-?\s*up|p\/u|collect(ion)?\s+from\s+customer|reverse\s+pick)/i;
+export function isPickup(b: { notes?: string | null; items?: string | null } | null | undefined): boolean {
+  return Boolean(b && (PICKUP_RE.test(b.notes ?? "") || /^\s*pick\s*-?\s*up\b/i.test(b.items ?? "")));
+}
+
 export interface NotePart {
   label: string | null;
   text: string;
@@ -49,10 +55,15 @@ export function parseNotes(notes: string | null | undefined): ParsedNotes {
       continue;
     }
     // ALL-CAPS words like "TOP URGENT", "REFUND" are flags — print them strong.
-    const flag = /[A-Z]/.test(s) && s === s.toUpperCase();
+    const flag = (/[A-Z]/.test(s) && s === s.toUpperCase()) || PICKUP_RE.test(s);
     out.parts.push({ label: null, text: s, strong: flag });
   }
   return out;
+}
+
+/** Parts left after dropping a bare "PICKUP" / "PICKUP DELIVERY" word (shown as a banner instead). */
+export function visibleParts(parts: NotePart[], hidePickup: boolean): NotePart[] {
+  return hidePickup ? parts.filter((x) => x.label || !/^\s*pick\s*-?\s*up(\s+delivery)?\s*$/i.test(x.text)) : parts;
 }
 
 /** Notes with bold labels, for screens and labels. Bill and agent are left out when shown elsewhere. */
@@ -60,18 +71,21 @@ export function NotesText({
   notes,
   hideBill = false,
   hideAgent = false,
+  hidePickup = false,
   sep = " | ",
 }: {
   notes: string | null | undefined;
   hideBill?: boolean;
   hideAgent?: boolean;
+  /** Leave out a bare "PICKUP" word when a pickup banner is already shown. */
+  hidePickup?: boolean;
   sep?: string;
 }) {
   const p = parseNotes(notes);
   const items: React.ReactNode[] = [];
   if (p.bill && !hideBill) items.push(<><b>BILL:</b> {p.bill}</>);
   if (p.agent && !hideAgent) items.push(<><b>AGENT:</b> <b>{p.agent}</b></>);
-  for (const part of p.parts) {
+  for (const part of visibleParts(p.parts, hidePickup)) {
     if (part.label) items.push(<><b>{part.label.toUpperCase()}:</b> {part.text}</>);
     else if (part.strong) items.push(<b style={{ fontWeight: 800 }}>{part.text}</b>);
     else items.push(<>{part.text}</>);

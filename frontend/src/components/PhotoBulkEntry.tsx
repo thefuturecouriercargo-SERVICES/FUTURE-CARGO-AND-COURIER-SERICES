@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
-import { EW_AGENTS } from "@/lib/notes";
+import { EW_AGENTS, PICKUP_RE } from "@/lib/notes";
 
 /**
  * Bulk entry from photos of handwritten order slips (e.g. a vendor that only
@@ -549,7 +549,20 @@ export default function PhotoBulkEntry({
                       </select>
                     </div>
                     <div>
-                      <label className={lbl}>Notes</label>
+                      <label className={`${lbl} flex items-center justify-between`}>
+                        <span>Notes</span>
+                        <span className={`flex cursor-pointer items-center gap-1 ${PICKUP_RE.test(c.fields.notes) ? "font-extrabold text-navy" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={PICKUP_RE.test(c.fields.notes)}
+                            onChange={(e) => {
+                              const rest = c.fields.notes.split(/\s*·\s*/).filter((x) => x && !PICKUP_RE.test(x));
+                              setField(c.key, "notes", (e.target.checked ? ["PICKUP", ...rest] : rest).join(" · "));
+                            }}
+                          />
+                          Pickup
+                        </span>
+                      </label>
                       <input value={c.fields.notes} onChange={(e) => setField(c.key, "notes", e.target.value)} className={cls(c, "notes")} placeholder="e.g. TOP URGENT" />
                     </div>
                   </div>

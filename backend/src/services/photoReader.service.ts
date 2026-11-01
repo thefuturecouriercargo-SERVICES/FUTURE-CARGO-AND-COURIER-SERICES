@@ -66,6 +66,7 @@ How these slips usually look:
 - "Refund" / "Rfd" / "return money" next to an amount means the courier PAYS the customer → codAmount is MINUS (e.g. "Refund 120" → -120), and put "REFUND" in notes.
 - "Whoop" (a fitness band) is a common product — the handwritten "W" often looks like "L". Read it as "Whoop", never "Loop" (e.g. "1 × Whoop").
 - Words like "Top Urgent", "Urgent", "Call before", "Evening" → notes (e.g. "TOP URGENT").
+- PICKUP DELIVERY is common: "Pickup", "Pick up", "PU", "P/U", "collect from customer", "take from customer" means the courier COLLECTS a parcel from the customer. Put "PICKUP" in notes (first). codAmount is the amount written (usually just the delivery charge, e.g. "Pickup 20" → 20), or 0 if no amount / "no payment" / "free".
 - Customer names are often NOT written — then customerName is null. Do not invent one.
 - The AGENT (salesman) is written on its own, usually in a top corner next to the bill number. It is NOT the customer → put it in "agent" and leave customerName null unless the slip clearly labels a customer name.
 - The ONLY agents are: ${AGENTS.join(", ")}. The agent must be exactly one of these — never anything else.
@@ -189,7 +190,7 @@ Rules:
 - emirate: from the area (Deira, Port Saeed, Al Quoz, Business Bay… → DUBAI; Al Nahda/Muwaileh/Al Majaz/Rolla → SHARJAH unless it says Dubai; Mussafah/Khalifa City → ABUDHABI; Al Ain → AL AIN). Use OTHER only if outside the list.
 - items: only the products ordered, written like "2 × Akoya (AED 80), 1 × Prestige ruby (AED 40)". "2pc", "x2", "2 nos", "qty 2" are quantities; the AED after an item is that line's amount. Sizes (100ml) stay in the name. Never list names, addresses, totals or delivery words as items.
 - codAmount: the "Total" line if there is one, otherwise the sum of the item amounts (+ delivery charge if written). "Paid"/"prepaid" → 0. Whole number.
-- notes: delivery instructions only (time, "urgent", "call before", alt phone, location link).
+- notes: delivery instructions only (time, "urgent", "call before", alt phone, location link). If the message is a PICKUP (pick up / collect from the customer), start notes with "PICKUP"; codAmount is then the delivery charge written, or 0 if none.
 - vendorRef: the vendor's order / bill number if labelled.
 Never invent data; use null when a field isn't in the message. List fields you were unsure about in "unclear".`;
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { isPickup } from "@/lib/notes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
@@ -646,10 +647,15 @@ export default function DriverPortalPage() {
           </div>
           <div className="shrink-0 text-right">
             <div className={`text-xl font-extrabold leading-none ${o.total < 0 ? "text-transferred" : "text-navy"}`}>{fmtNumber(o.total)}</div>
-            <div className="mt-1 font-mono text-[9.5px] font-semibold uppercase text-ink-soft">AED · {isPrepaid(o) ? "PREPAID" : o.payment}</div>
+            <div className="mt-1 font-mono text-[9.5px] font-semibold uppercase text-ink-soft">AED · {isPickup(o.booking) && o.total === 0 ? "NO PAYMENT" : isPickup(o.booking) && o.total > 0 ? "DELIVERY CHARGE" : isPrepaid(o) ? "PREPAID" : o.payment}</div>
           </div>
         </div>
         {address && <AddressTicker text={address} />}
+        {isPickup(o.booking) && (
+          <div className="mt-1.5 rounded border-2 border-navy px-2 py-1 text-center font-mono text-[13px] font-extrabold uppercase tracking-wider text-navy">
+            ⇄ Pickup delivery — collect from customer{o.total > 0 ? ` · charge AED ${fmtNumber(o.total)}` : " · no payment"}
+          </div>
+        )}
         {isUrgent(o) && <div className="mt-1.5 text-[13px] font-bold text-cancelled">🚨 {o.booking?.notes}</div>}
         {o.total < 0 && (
           <div className="mt-1.5 rounded bg-transferred-bg px-2 py-1 text-center font-mono text-[12px] font-bold uppercase text-transferred">
