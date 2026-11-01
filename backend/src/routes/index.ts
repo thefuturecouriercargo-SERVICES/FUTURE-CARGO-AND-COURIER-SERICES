@@ -22,6 +22,8 @@ import integrationRoutes from "./integration.routes";
 import publicRoutes from "./public.routes";
 import searchRoutes from "./search.routes";
 import agentReportRoutes from "./agentReport.routes";
+import cashInHandRoutes from "./cashInHand.routes";
+import vendorCreditTrialRoutes from "./vendorCreditTrial.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -49,4 +51,6 @@ router.use("/integrations", integrationRoutes);
 router.use("/public", publicRoutes);
 router.use("/search", searchRoutes);
 router.use("/agent-report", agentReportRoutes);
+router.use("/cash-in-hand", cashInHandRoutes);
+router.use("/vendor-credit-trial", vendorCreditTrialRoutes);
 export default router;

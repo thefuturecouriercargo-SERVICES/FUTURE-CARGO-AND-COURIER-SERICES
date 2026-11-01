@@ -316,10 +316,109 @@ export default function AgentReportPage() {
               </tbody>
             </table>
           </div>
+          <AmountDiffTable items={items} fileName={fileName} />
         </>
       )}
 
       <AgentReportHistory refreshKey={historyKey} />
     </div>
+  );
+}
+
+/**
+ * Every CN where the agent's COD amount is not the same as ours — kept in its own
+ * table (not only as a note on each row) so the money gaps can be checked in one go.
+ * Difference = agent − ours: positive = agent shows more, negative = agent shows less.
+ */
+function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string }) {
+  const rows = items
+    .filter((i) => i.order && i.cod != null && i.cod !== i.order.total)
+    .map((i) => ({ i, diff: (i.cod as number) - i.order!.total }))
+    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const sumAgent = rows.reduce((s, r) => s + (r.i.cod as number), 0);
+  const sumOurs = rows.reduce((s, r) => s + r.i.order!.total, 0);
+  const sumDiff = sumAgent - sumOurs;
+
+  function downloadCsv() {
+    const head = ["CN", "Date", "Vendor", "Customer", "With", "Report status", "Our status", "Agent amount", "Our amount", "Difference"];
+    const lines = rows.map(({ i, diff }) =>
+      [i.order!.cnNo, new Date(i.order!.date).toLocaleDateString("en-GB"), i.order!.vendor, i.order!.customer ?? "", i.order!.holder ?? "", i.reportStatus, i.order!.status, i.cod, i.order!.total, diff]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    lines.push(["", "", "", "", "", "", "TOTAL", sumAgent, sumOurs, sumDiff].map((v) => `"${v}"`).join(","));
+    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `amount-differences-${(fileName || "agent-report").replace(/\.[^.]+$/, "")}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  return (
+    <section className="mt-6">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-navy">Amount differences — agent vs ours ({rows.length})</h2>
+          <p className="text-xs text-ink-soft">CNs where the agent&apos;s COD is not the same as the amount in our Daily Entry. Difference = agent − ours.</p>
+        </div>
+        {rows.length > 0 && (
+          <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">
+            ⬇ Download CSV
+          </button>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <p className="border border-line bg-white p-3 text-sm text-delivered">✓ Every matched CN has the same amount as ours.</p>
+      ) : (
+        <div className="table-wrap border border-line bg-white">
+          <table className="data-table min-w-[720px]">
+            <thead>
+              <tr>
+                <th>CN</th>
+                <th>Date</th>
+                <th>Vendor / Customer</th>
+                <th>Report / Ours</th>
+                <th className="text-right">Agent amount</th>
+                <th className="text-right">Our amount</th>
+                <th className="text-right">Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ i, diff }) => (
+                <tr key={i.tracking}>
+                  <td className="font-mono font-bold text-navy">{i.order!.cnNo}</td>
+                  <td className="font-mono text-xs">{new Date(i.order!.date).toLocaleDateString("en-GB")}</td>
+                  <td>
+                    <span className="block">{i.order!.vendor}</span>
+                    {i.order!.customer && <span className="text-xs text-ink-soft">{i.order!.customer}</span>}
+                  </td>
+                  <td className="text-xs">
+                    {i.reportStatus} · <Pill s={i.order!.status} />
+                  </td>
+                  <td className="text-right font-mono">{fmtNumber(i.cod as number)}</td>
+                  <td className="text-right font-mono">{fmtNumber(i.order!.total)}</td>
+                  <td className={`text-right font-mono font-bold ${diff > 0 ? "text-delivered" : "text-cancelled"}`}>
+                    {diff > 0 ? "+" : ""}
+                    {fmtNumber(diff)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4}>Total ({rows.length} CNs)</td>
+                <td className="text-right font-mono">{fmtNumber(sumAgent)}</td>
+                <td className="text-right font-mono">{fmtNumber(sumOurs)}</td>
+                <td className={`text-right font-mono ${sumDiff >= 0 ? "text-delivered" : "text-cancelled"}`}>
+                  {sumDiff > 0 ? "+" : ""}
+                  {fmtNumber(sumDiff)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

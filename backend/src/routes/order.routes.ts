@@ -8,6 +8,7 @@ import { dayRange, monthRange, parseDateParam } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { lockOrderCreation } from "../services/booking.service";
+import { updateOrderContact, withContact } from "../lib/orderContact";
 
 const router = Router();
 router.use(authenticate);
@@ -135,7 +136,20 @@ router.get(
       prisma.order.count({ where }),
     ]);
 
-    res.json({ orders, total });
+    res.json({ orders: orders.map(withContact), total });
+  })
+);
+
+// Admin/manager fixes a CN's customer phone / address (⋯ → Edit address & phone).
+router.patch(
+  "/:id/contact",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const r = await updateOrderContact(req.params.id, req.body ?? {});
+    await writeAuditLog({ userId: req.user!.sub, action: "EDIT_CONTACT", entity: "Order", entityId: r.order.id, meta: { cnNo: r.cnNo, before: r.before, phone: req.body?.phone, address: req.body?.address } });
+    emitGlobal("order:changed", { type: "updated", order: r.order });
+    if (r.order.employeeId) emitToUser(r.order.employeeId, "order:changed", { order: r.order });
+    res.json(r.order);
   })
 );
 
@@ -533,7 +547,7 @@ router.get(
 
     orders.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    res.json({ orders });
+    res.json({ orders: orders.map(withContact) });
   })
 );
 
@@ -619,7 +633,7 @@ router.get(
       },
     });
     if (!order) throw new ApiError(404, "Order not found");
-    res.json(order);
+    res.json(withContact(order));
   })
 );
 

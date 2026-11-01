@@ -612,10 +612,18 @@ html {
   }
   /* Header cells: stuck to the top of their box, not offset under the top
      bar (that offset only works when the table scrolls with the page). */
-  .admin-shell .table-wrap > table.data-table th,
-  .admin-shell .table-scroll > table.data-table th,
-  .admin-shell .overflow-x-auto > table.data-table th {
-    top: 0;
+  /* !important: the page-scroll rule above has higher specificity and was
+     pushing the header 60px down INSIDE the box, on top of the first row. */
+  .admin-shell :is(.table-wrap, .table-scroll, .overflow-x-auto, .overflow-auto) > table.data-table th {
+    top: 0 !important;
+  }
+  /* Header row: solid background + a clear bottom edge so rows never show
+     through it, and the frozen first header cell stays above everything. */
+  table.data-table thead th {
+    background: rgb(var(--c-surface));
+    box-shadow: inset 0 -1px 0 rgb(var(--c-line));
+    font-size: 10px;
+    letter-spacing: 0.06em;
   }
 
   /* One line per row, scrolled sideways, instead of tall squashed rows. */

@@ -7,6 +7,7 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import OrderDetails from "@/components/OrderDetails";
+import ContactEditModal from "@/components/ContactEditModal";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
@@ -597,6 +598,7 @@ export default function DriverPortalPage() {
     });
   }
   const [areaEdit, setAreaEdit] = useState<Order | null>(null);
+  const [contactEdit, setContactEdit] = useState<Order | null>(null);
 
   /** Move an area up/down in the driver's route order (saved on this phone). */
   function moveArea(key: string, dir: -1 | 1) {
@@ -697,6 +699,12 @@ export default function DriverPortalPage() {
         </div>
         {detailsId === o.id && (
           <div className="mt-3 border-t border-line pt-3">
+            <button
+              onClick={() => setContactEdit(o)}
+              className="mb-2.5 w-full rounded-full border border-brass/60 px-3 py-2 text-[13px] font-semibold text-navy active:scale-[0.98]"
+            >
+              ✎ Edit address &amp; phone
+            </button>
             <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
           </div>
         )}
@@ -1390,6 +1398,18 @@ export default function DriverPortalPage() {
         />
       )}
 
+      {contactEdit && (
+        <ContactEditModal
+          order={contactEdit}
+          asDriver
+          onClose={() => setContactEdit(null)}
+          onSaved={(u) => {
+            setOrders((list) => list.map((x) => (x.id === u.id ? { ...x, booking: u.booking } : x)));
+            setContactEdit(null);
+            showToast(`CN ${u.cnNo} address & phone saved`, "info");
+          }}
+        />
+      )}
       {areaEdit && (
         <AreaPickerModal
           order={areaEdit}

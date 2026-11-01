@@ -5,6 +5,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import ScanHistory from "@/components/ScanHistory";
+import ScanProgressPanel from "@/components/ScanProgressPanel";
 import { Employee } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
@@ -108,7 +109,8 @@ export default function AssignPage() {
   const kindLabel: Record<ScanLog["kind"], string> = { ACCEPTED: "Added", REASSIGNED: "Moved", ALREADY: "Already", ERROR: "Error" };
 
   return (
-    <div className="max-w-2xl">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
+    <div className="min-w-0 max-w-2xl">
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Dispatch</p>
       <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Scan &amp; Assign</h1>
       <p className="mb-5 text-sm text-ink-soft">
@@ -178,6 +180,10 @@ export default function AssignPage() {
       )}
 
       <ScanHistory />
+    </div>
+    <aside className="lg:sticky lg:top-20 lg:self-start">
+      <ScanProgressPanel refreshKey={log.length} />
+    </aside>
     </div>
   );
 }

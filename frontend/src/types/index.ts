@@ -73,6 +73,8 @@ export interface OrderBookingDetails {
   /** Exact pin the customer shared on the order link. */
   lat?: number | null;
   lng?: number | null;
+  /** True when phone/address were typed in by admin/driver on an order with no booking. */
+  manual?: boolean;
 }
 
 export interface Summary {

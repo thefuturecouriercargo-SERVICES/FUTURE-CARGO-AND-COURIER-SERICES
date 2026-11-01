@@ -25,10 +25,12 @@ export default function OrderDrawer({
   onEdit,
   onStatus,
   onDelete,
+  onEditContact,
 }: {
   order: Order;
   onClose: () => void;
   onEdit: (o: Order) => void;
+  onEditContact?: (o: Order) => void;
   onStatus: (id: string, status: OrderStatus) => void;
   onDelete: (id: string) => void;
 }) {
@@ -155,6 +157,11 @@ export default function OrderDrawer({
           <button onClick={() => onEdit(order)} className="touch-target rounded-xl border border-line px-3.5 text-sm text-navy hover:border-brass">
             Edit
           </button>
+          {onEditContact && (
+            <button onClick={() => onEditContact(order)} className="touch-target rounded-xl border border-line px-3.5 text-sm text-navy hover:border-brass">
+              Address &amp; phone
+            </button>
+          )}
           <button onClick={() => onDelete(order.id)} aria-label="Delete consignment" title="Delete" className="touch-target rounded-xl border border-line px-3 text-ink-soft hover:border-cancelled/50 hover:text-cancelled">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="mx-auto">
               <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />

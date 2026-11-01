@@ -2,8 +2,8 @@
  * Prepaid orders (paid online on the vendor's website): nothing to collect.
  * Shown loudly wherever a driver or the office handles the order.
  */
-export function isPrepaid(order: { total: number; booking?: { codAmount: number } | null }) {
-  return Boolean(order.booking) && order.total === 0;
+export function isPrepaid(order: { total: number; booking?: { codAmount: number; manual?: boolean } | null }) {
+  return Boolean(order.booking) && !order.booking?.manual && order.total === 0;
 }
 
 export default function PrepaidBadge({ large }: { large?: boolean }) {

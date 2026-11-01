@@ -18,7 +18,8 @@ router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
-    const { start } = dayRange(req.query.date as string | undefined);
+    // Dubai calendar day (00:00–24:00 Dubai), not UTC midnight.
+    const start = new Date(dayRange(req.query.date as string | undefined).start.getTime() - 4 * 60 * 60 * 1000);
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const agents = await prisma.user.findMany({ where: { isAgent: true }, select: { id: true, name: true } });
     const agentIds = agents.map((a) => a.id);

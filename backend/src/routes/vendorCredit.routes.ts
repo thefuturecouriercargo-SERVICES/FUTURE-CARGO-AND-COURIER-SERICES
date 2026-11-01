@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { scanInfoFor } from "../services/entryScan.service";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange } from "../utils/dates";
+import { dayRange, monthRange } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -188,8 +188,22 @@ router.get(
 router.get(
   "/new-entries",
   asyncHandler(async (req, res) => {
-    const { start } = dayRange(req.query.date as string | undefined);
-    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    // A "day" is a Dubai calendar day (00:00–24:00 Dubai), not UTC — otherwise
+    // anything entered between 12 AM and 4 AM landed on the previous day.
+    // ?month=YYYY-MM (Dashboard) covers that whole month the same way.
+    const DUBAI = 4 * 60 * 60 * 1000;
+    let start: Date;
+    let end: Date;
+    const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
+    if (month && !req.query.date) {
+      const { start: ms, end: me } = monthRange(month);
+      start = new Date(ms.getTime() - DUBAI);
+      end = new Date(me.getTime() + 24 * 60 * 60 * 1000 - DUBAI);
+    } else {
+      const { start: d } = dayRange(req.query.date as string | undefined);
+      start = new Date(d.getTime() - DUBAI);
+      end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    }
 
     // Everything each vendor gave us that day:
     //  - vendor-portal / website / photo bookings entered that day (picked up or still waiting), and

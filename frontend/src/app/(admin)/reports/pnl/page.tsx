@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiFetch, pnlExportUrl } from "@/lib/api";
 
 import { Skeleton } from "@/components/ui/Skeleton";
+import CashInHandPanel from "@/components/CashInHandPanel";
 interface PnlData {
   revenue: number;
   totalExpenses: number;
@@ -151,6 +152,8 @@ export default function PnlPage() {
           Last month
         </button>
       </div>
+
+      <CashInHandPanel />
 
       {data && (
         <>

@@ -10,6 +10,7 @@ import { withScanLog } from "../services/scanLog.service";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { salariesForMonth } from "../lib/salary";
+import { updateOrderContact, withContact } from "../lib/orderContact";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -22,6 +23,17 @@ router.patch(
     if (!order) throw new ApiError(404, "Order not found in your list");
     const updated = await prisma.order.update({ where: { id: order.id }, data: { area: area || null }, select: { id: true, area: true } });
     res.json(updated);
+  })
+);
+
+// Driver fixes the customer's phone / address on one of his own parcels (⋯ → Edit).
+router.patch(
+  "/orders/:id/contact",
+  asyncHandler(async (req, res) => {
+    const r = await updateOrderContact(req.params.id, req.body ?? {}, req.user!.sub);
+    await writeAuditLog({ userId: req.user!.sub, action: "DRIVER_EDIT_CONTACT", entity: "Order", entityId: r.order.id, meta: { cnNo: r.cnNo, before: r.before, phone: req.body?.phone, address: req.body?.address } });
+    emitGlobal("order:changed", { type: "updated", order: r.order });
+    res.json(r.order);
   })
 );
 
@@ -73,7 +85,7 @@ router.get(
     });
 
     const ordersWithTransferInfo = orders.map((o) => ({
-      ...o,
+      ...withContact(o),
       transferredBy: o.transfers[0]?.fromEmployee.name ?? null,
     }));
 

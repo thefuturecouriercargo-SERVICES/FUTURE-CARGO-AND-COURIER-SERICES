@@ -59,11 +59,12 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 import DriverSheet from "@/components/DriverSheet";
 import { Employee, Order, OrderStatus, PAYMENTS, EMIRATES, STATUSES, Vendor } from "@/types";
 
-import { confirmDialog } from "@/components/ui/Feedback";
+import { confirmDialog, toast } from "@/components/ui/Feedback";
 import { TableRowsSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
 import OrderDrawer from "@/components/OrderDrawer";
+import ContactEditModal from "@/components/ContactEditModal";
 const emptyForm = {
   cnNo: "",
   vendorId: "",
@@ -114,6 +115,7 @@ const [maxAmount, setMaxAmount] = useState("");
 const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
 const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 const [drawerId, setDrawerId] = useState<string | null>(null);
+const [contactEdit, setContactEdit] = useState<Order | null>(null);
 const [bulkEmirate, setBulkEmirate] = useState("");
 const [bulkEmployeeId, setBulkEmployeeId] = useState("");
 const [bulkStatus, setBulkStatus] = useState<OrderStatus | "">("");
@@ -695,6 +697,7 @@ required
                         label={`Actions for CN ${o.cnNo}`}
                         actions={[
                           { label: "Edit", onClick: () => startEdit(o) },
+                          { label: "Edit address & phone", onClick: () => setContactEdit(o) },
                           { label: "Open details", onClick: () => setDrawerId(o.id) },
                           { label: "Delete", onClick: () => deleteOrder(o.id), danger: true },
                         ]}
@@ -709,6 +712,19 @@ required
         </div>
     </div>
     </div>
+      {contactEdit && (
+        <ContactEditModal
+          order={contactEdit}
+          onClose={() => setContactEdit(null)}
+          onSaved={(u) => {
+            const patch = (list: Order[]) => list.map((x) => (x.id === u.id ? { ...x, booking: u.booking } : x));
+            setOrders(patch);
+            setPendingCarryover(patch);
+            setContactEdit(null);
+            toast(`CN ${u.cnNo} address & phone saved`, "success");
+          }}
+        />
+      )}
       {(() => {
         const o = drawerId ? [...orders, ...pendingCarryover].find((x) => x.id === drawerId) : undefined;
         return o ? (
@@ -722,6 +738,10 @@ required
             }}
             onStatus={(id, st) => quickStatus(id, st)}
             onDelete={(id) => deleteOrder(id)}
+            onEditContact={(ord) => {
+              setDrawerId(null);
+              setContactEdit(ord);
+            }}
           />
         ) : null;
       })()}

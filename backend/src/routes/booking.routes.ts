@@ -28,6 +28,118 @@ function dubaiDay(day: string) {
   return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+/**
+ * Scan & Assign → "Left to scan" per vendor.
+ * Vendors add their orders through the day and print the labels at night; the
+ * parcels are scanned the NEXT day (after 12 midnight). So the batch checked on
+ * a given day = bookings the vendors added the day BEFORE (Dubai time), plus any
+ * older booking still waiting. Each one is either scanned by a driver, scanned
+ * by the office, accepted by hand (no scan), rejected, or still left to scan.
+ */
+router.get(
+  "/scan-progress",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const todayStr = new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+    const scanDay = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : todayStr;
+    const today = dubaiDay(scanDay);
+    const batch = { start: new Date(today.start.getTime() - 86400000), end: today.start }; // the day before
+    const batchDay = new Date(batch.start.getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+
+    const [batchBookings, olderWaiting, addedToday] = await Promise.all([
+      prisma.booking.findMany({
+        where: { createdAt: { gte: batch.start, lt: batch.end } },
+        select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, vendor: { select: { name: true } } },
+        orderBy: { cnNo: "asc" },
+      }),
+      prisma.booking.findMany({
+        where: { createdAt: { lt: batch.start }, status: "AWAITING_PICKUP" },
+        select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, createdAt: true, vendor: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.booking.groupBy({
+        by: ["vendorId"],
+        where: { createdAt: { gte: today.start, lt: today.end }, status: { not: "REJECTED" } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Who scanned each accepted order (first successful scan wins).
+    const orderIds = batchBookings.map((b) => b.orderId).filter(Boolean) as string[];
+    const logs = orderIds.length
+      ? await prisma.scanLog.findMany({
+          where: { orderId: { in: orderIds }, result: { in: ["ACCEPTED", "REASSIGNED"] } },
+          select: { orderId: true, byRole: true, byName: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    const scannedBy = new Map<string, { byRole: string; byName: string; at: Date }>();
+    for (const l of logs) if (l.orderId && !scannedBy.has(l.orderId)) scannedBy.set(l.orderId, { byRole: l.byRole, byName: l.byName, at: l.createdAt });
+
+    type Left = { id: string; cnNo: number; customerName: string; codAmount: number; emirate: string; printed: boolean; addedOn?: string };
+    type Row = { vendorId: string; vendor: string; total: number; byDriver: number; byOffice: number; byHand: number; rejected: number; left: number; leftList: Left[]; older: Left[]; addedToday: number };
+    const rows = new Map<string, Row>();
+    const row = (vendorId: string, vendor: string) => {
+      let r = rows.get(vendorId);
+      if (!r) {
+        r = { vendorId, vendor, total: 0, byDriver: 0, byOffice: 0, byHand: 0, rejected: 0, left: 0, leftList: [], older: [], addedToday: 0 };
+        rows.set(vendorId, r);
+      }
+      return r;
+    };
+
+    for (const b of batchBookings) {
+      const r = row(b.vendorId, b.vendor.name);
+      if (b.status === "REJECTED") {
+        r.rejected++;
+        continue;
+      }
+      r.total++;
+      if (b.status === "AWAITING_PICKUP") {
+        r.left++;
+        r.leftList.push({ id: b.id, cnNo: b.cnNo, customerName: b.customerName, codAmount: b.codAmount, emirate: b.emirate, printed: !!b.labelPrintedAt });
+        continue;
+      }
+      const s = b.orderId ? scannedBy.get(b.orderId) : undefined;
+      if (!s) r.byHand++;
+      else if (s.byRole === "DRIVER") r.byDriver++;
+      else r.byOffice++;
+    }
+    for (const b of olderWaiting) {
+      row(b.vendorId, b.vendor.name).older.push({
+        id: b.id,
+        cnNo: b.cnNo,
+        customerName: b.customerName,
+        codAmount: b.codAmount,
+        emirate: b.emirate,
+        printed: !!b.labelPrintedAt,
+        addedOn: new Date(b.createdAt.getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10),
+      });
+    }
+    if (addedToday.length) {
+      const names = await prisma.vendor.findMany({ where: { id: { in: addedToday.map((a) => a.vendorId) } }, select: { id: true, name: true } });
+      for (const a of addedToday) row(a.vendorId, names.find((n) => n.id === a.vendorId)?.name ?? "?").addedToday = a._count._all;
+    }
+
+    const vendors = [...rows.values()].sort((a, b) => b.left + b.older.length - (a.left + a.older.length) || a.vendor.localeCompare(b.vendor));
+    const sum = (k: "total" | "byDriver" | "byOffice" | "byHand" | "left" | "addedToday") => vendors.reduce((t, v) => t + v[k], 0);
+    res.json({
+      scanDay,
+      batchDay,
+      vendors,
+      totals: {
+        total: sum("total"),
+        byDriver: sum("byDriver"),
+        byOffice: sum("byOffice"),
+        byHand: sum("byHand"),
+        left: sum("left"),
+        older: vendors.reduce((t, v) => t + v.older.length, 0),
+        addedToday: sum("addedToday"),
+      },
+    });
+  })
+);
+
 router.get(
   "/",
   requireRole("SUPER_ADMIN", "MANAGER"),
