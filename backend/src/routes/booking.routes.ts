@@ -52,11 +52,9 @@ router.get(
         select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, vendor: { select: { name: true } } },
         orderBy: { cnNo: "asc" },
       }),
-      prisma.booking.findMany({
-        where: { createdAt: { lt: batch.start }, status: "AWAITING_PICKUP" },
-        select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, createdAt: true, vendor: { select: { name: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
+      // No carry-forward: unscanned orders from earlier days stay on their own day
+      // (step back with ←). They still scan like any normal CN.
+      Promise.resolve([] as { id: string; cnNo: number; customerName: string; codAmount: number; emirate: string; vendorId: string; labelPrintedAt: Date | null; createdAt: Date; vendor: { name: string } }[]),
       prisma.booking.groupBy({
         by: ["vendorId"],
         where: { createdAt: { gte: today.start, lt: today.end }, status: { not: "REJECTED" } },
@@ -175,16 +173,18 @@ router.get(
       orderBy: { createdAt: status === "AWAITING_PICKUP" ? "asc" : "desc" },
       take: ids ? undefined : range && !q ? 3000 : 500,
     });
-    const awaitingCount = await prisma.booking.count({ where: { status: "AWAITING_PICKUP", NOT: { createdBy: "WEBSITE", webStatus: { not: "completed" } } } });
-    // Still-waiting orders per Dubai day, so older unpicked ones are never forgotten.
-    const awaitingDays = await prisma.$queryRaw<{ day: string; count: bigint }[]>`
-      SELECT to_char("createdAt" + interval '4 hours', 'YYYY-MM-DD') AS day, count(*) AS count
-      FROM bookings WHERE status = 'AWAITING_PICKUP'
-        AND NOT ("createdBy" = 'WEBSITE' AND "webStatus" IS NOT NULL AND "webStatus" <> 'completed') GROUP BY 1 ORDER BY 1`.catch((err) => {
-      console.error("[bookings] awaitingDays query failed:", err);
-      return [] as { day: string; count: bigint }[];
+    // No carry-forward: count only the current batch (yesterday's orders, scanned
+    // after 12 midnight) and today's. Older unscanned ones stay on their own day
+    // and still scan like any normal CN.
+    const todayStart = dubaiDay(new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10)).start;
+    const awaitingCount = await prisma.booking.count({
+      where: {
+        status: "AWAITING_PICKUP",
+        createdAt: { gte: new Date(todayStart.getTime() - 86400000) },
+        NOT: { createdBy: "WEBSITE", webStatus: { not: "completed" } },
+      },
     });
-    res.json({ bookings, awaitingCount, awaitingDays: awaitingDays.map((r) => ({ day: r.day, count: Number(r.count) })) });
+    res.json({ bookings, awaitingCount, awaitingDays: [] });
   })
 );
 
