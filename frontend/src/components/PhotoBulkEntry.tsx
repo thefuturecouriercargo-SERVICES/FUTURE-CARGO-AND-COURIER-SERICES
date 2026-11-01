@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
+import { EW_AGENTS } from "@/lib/notes";
 
 /**
  * Bulk entry from photos of handwritten order slips (e.g. a vendor that only
@@ -20,6 +21,7 @@ interface Fields {
   emirate: string;
   items: string;
   codAmount: string;
+  agent: string;
   notes: string;
 }
 
@@ -48,7 +50,7 @@ interface ReadOrder {
   unclear: string[];
 }
 
-const EMPTY: Fields = { vendorRef: "", customerName: "", customerPhone: "", address: "", emirate: "", items: "", codAmount: "", notes: "" };
+const EMPTY: Fields = { vendorRef: "", customerName: "", customerPhone: "", address: "", emirate: "", items: "", codAmount: "", agent: "", notes: "" };
 const CONCURRENCY = 3;
 
 /** Shrink a photo in the browser (keeps upload small and fast on phones). */
@@ -80,6 +82,8 @@ async function shrink(file: Blob, maxSide: number, quality: number): Promise<str
 function problems(f: Fields, needBill = false): string[] {
   const p: string[] = [];
   if (needBill && !f.vendorRef.trim()) p.push("vendorRef");
+  // EW: every bill must carry its agent.
+  if (needBill && !(EW_AGENTS as readonly string[]).includes(f.agent.trim().toUpperCase())) p.push("agent");
   if (f.customerPhone.replace(/\D/g, "").length < 7) p.push("customerPhone");
   if (!f.address.trim()) p.push("address");
   if (!f.emirate) p.push("emirate");
@@ -148,7 +152,7 @@ export default function PhotoBulkEntry({
       // EW never writes the customer's name: a name on their slip is the agent (K, KD, Haira…).
       const noCustomerNames = /^EW$/i.test((vName || "").trim());
       const toFields = (o: ReadOrder): Fields => {
-        const agent = o.agent || (noCustomerNames ? o.customerName : null);
+        const agent = (o.agent || (noCustomerNames ? o.customerName : null) || "").trim().toUpperCase();
         const name = noCustomerNames ? null : o.customerName;
         return {
           vendorRef: o.vendorRef ?? "",
@@ -158,7 +162,8 @@ export default function PhotoBulkEntry({
           emirate: o.emirate ?? "",
           items: o.items ?? "",
           codAmount: o.codAmount === null || o.codAmount === undefined ? "" : String(o.codAmount),
-          notes: [agent ? `Agent ${agent}` : "", o.notes ?? ""].filter(Boolean).join(" · "),
+          agent,
+          notes: o.notes ?? "",
         };
       };
       if (!res.orders.length) {
@@ -251,7 +256,10 @@ export default function PhotoBulkEntry({
       emirate: f.emirate,
       items: f.items.trim() || undefined,
       codAmount: Math.round(Number(f.codAmount)),
-      notes: [f.vendorRef.trim() ? `Bill ${f.vendorRef.trim()}` : "", f.notes.trim()].filter(Boolean).join(" · ") || undefined,
+      notes:
+        [f.vendorRef.trim() ? `Bill ${f.vendorRef.trim()}` : "", f.agent.trim() ? `Agent ${f.agent.trim().toUpperCase()}` : "", f.notes.trim()]
+          .filter(Boolean)
+          .join(" · ") || undefined,
       ...(confirmDuplicate ? { confirmDuplicate: true } : {}),
       ...(card.photoId ? { photoId: card.photoId } : {}),
       ...(mode === "admin" ? { vendorId } : {}),
@@ -528,9 +536,21 @@ export default function PhotoBulkEntry({
                       <label className={lbl}>Items</label>
                       <input value={c.fields.items} onChange={(e) => setField(c.key, "items", e.target.value)} className={cls(c, "items")} />
                     </div>
-                    <div className="col-span-2">
+                    <div>
+                      <label className={lbl}>Agent{needBill ? " *" : ""}</label>
+                      <select value={c.fields.agent} onChange={(e) => setField(c.key, "agent", e.target.value)} className={`${cls(c, "agent")} font-bold`}>
+                        <option value="">—</option>
+                        {c.fields.agent && !(EW_AGENTS as readonly string[]).includes(c.fields.agent) && <option value={c.fields.agent}>{c.fields.agent} (?)</option>}
+                        {EW_AGENTS.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
                       <label className={lbl}>Notes</label>
-                      <input value={c.fields.notes} onChange={(e) => setField(c.key, "notes", e.target.value)} className={cls(c, "notes")} />
+                      <input value={c.fields.notes} onChange={(e) => setField(c.key, "notes", e.target.value)} className={cls(c, "notes")} placeholder="e.g. TOP URGENT" />
                     </div>
                   </div>
                   {c.message && <p className={`mt-2 text-sm ${c.status === "duplicate" ? "text-cancelled" : "text-pending"}`}>{c.message}</p>}

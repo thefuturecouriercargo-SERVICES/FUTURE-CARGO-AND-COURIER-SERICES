@@ -27,21 +27,27 @@ export function photoReaderConfigured() {
 
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
-/** The vendors' agents / salesmen. Every slip agent is snapped to one of these. */
-export const AGENTS = ["F", "N", "T", "KD", "SULU", "RAHIMA"] as const;
+/** EW's agents / salesmen. Every slip agent is snapped to one of these.
+ *  Keep in sync with EW_AGENTS in frontend/src/lib/notes.tsx. */
+export const AGENTS = ["N", "T", "THAHSI", "SULU", "F", "M", "KD", "HAIRA", "RAHIMA", "K"] as const;
 
 /** Match what was read to a real agent. Returns the agent and whether it was a guess. */
 function matchAgent(raw: string | null | undefined): { agent: string | null; sure: boolean } {
   const t = String(raw ?? "").toUpperCase().replace(/^AGENT\s*/, "").replace(/[^A-Z]/g, "");
   if (!t) return { agent: null, sure: true };
   if ((AGENTS as readonly string[]).includes(t)) return { agent: t, sure: true };
-  // Fast-written T is read as K / L / 7 / I.
-  if (["K", "L", "I", "J", "Y", "X"].includes(t)) return { agent: "T", sure: false };
-  if (t === "D" || t === "KO" || t === "XD" || t === "HD") return { agent: "KD", sure: false };
-  if (t === "M" || t === "H" || t === "W") return { agent: "N", sure: false };
-  if (t === "E" || t === "P") return { agent: "F", sure: false };
+  // Names written roughly.
+  if (t.startsWith("TH") || t.startsWith("TA") || t.startsWith("TAH")) return { agent: "THAHSI", sure: false };
+  if (t.startsWith("HA") || t.startsWith("HI") || t.startsWith("HE") || t.startsWith("HY")) return { agent: "HAIRA", sure: false };
   if (t.startsWith("SU") || t.startsWith("SO") || t.startsWith("SL")) return { agent: "SULU", sure: false };
   if (t.startsWith("RA") || t.startsWith("RH") || t.startsWith("RE")) return { agent: "RAHIMA", sure: false };
+  // Single letters / two-letter look-alikes.
+  if (t === "D" || t === "KO" || t === "XD" || t === "HD" || t === "KP") return { agent: "KD", sure: false };
+  if (["L", "I", "J", "Y", "7"].includes(t)) return { agent: "T", sure: false };
+  if (t === "X" || t === "R") return { agent: "K", sure: false };
+  if (t === "W") return { agent: "M", sure: false };
+  if (t === "H") return { agent: "N", sure: false };
+  if (t === "E" || t === "P") return { agent: "F", sure: false };
   // Unknown: keep what was read so nothing is lost, but flag it.
   return { agent: t, sure: false };
 }
@@ -62,11 +68,13 @@ How these slips usually look:
 - Words like "Top Urgent", "Urgent", "Call before", "Evening" → notes (e.g. "TOP URGENT").
 - Customer names are often NOT written — then customerName is null. Do not invent one.
 - The AGENT (salesman) is written on its own, usually in a top corner next to the bill number. It is NOT the customer → put it in "agent" and leave customerName null unless the slip clearly labels a customer name.
-- The ONLY agents are: ${AGENTS.join(", ")}. The agent must be exactly one of these — never anything else (there is NO agent "K").
-  · "T" is often written fast with a hooked or slanted top bar that runs into the stem, so it can look like "K", "L" or "7" → it is "T".
-  · "KD" is two letters together; a single letter on its own is "T", "F" or "N", never "KD".
-  · "N" and "F" are real agents — a lone "N" or "F" in a corner IS the agent, not a stray mark.
-  · SULU and RAHIMA are written as names; read them even if the spelling is rough (e.g. "Sulu", "Rahima", "Rahema").
+- The ONLY agents are: ${AGENTS.join(", ")}. The agent must be exactly one of these — never anything else.
+  · Single-letter agents: N, T, F, M, K. Two-letter: KD. Names: THAHSI, SULU, HAIRA, RAHIMA.
+  · "K" and "KD" are DIFFERENT agents — a lone K is "K"; K with a D beside it is "KD".
+  · "M" and "N" are DIFFERENT agents — count the humps/strokes carefully (M has two peaks, N has one diagonal).
+  · "T" is often written fast with a hooked or slanted top bar, so it can look like "L" or "7" → it is "T". Only call it "K" when the letter clearly has the two arms of a K.
+  · A lone single letter in a corner IS the agent, not a stray mark.
+  · THAHSI, SULU, HAIRA and RAHIMA are written as names; read them even if the spelling is rough (e.g. "Thasi", "Tahsi", "Haira", "Hayra", "Sulu", "Rahima", "Rahema").
   · If you are not fully sure which agent it is, give your best match from the list and add "agent" to unclear.
 - The bill number (vendorRef) is important — always look for it and read every digit.
 - Ignore ticks and check marks — they are internal marks, not data.
@@ -153,9 +161,9 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", v
   }
   return orders.map((o) => {
     const { agent, sure } = matchAgent(o.agent);
-    // The agent ends up in the notes box, so highlight notes when the agent was guessed or unsure.
-    const unclear = (Array.isArray(o.unclear) ? o.unclear : []).map((u) => (u === "agent" ? "notes" : u));
-    if (agent && !sure && !unclear.includes("notes")) unclear.push("notes");
+    // The agent has its own box on the entry screen — highlight it when guessed or unsure.
+    const unclear = Array.isArray(o.unclear) ? [...o.unclear] : [];
+    if (agent && !sure && !unclear.includes("agent")) unclear.push("agent");
     return {
     vendorRef: o.vendorRef ? String(o.vendorRef).trim() : null,
     customerName: o.customerName?.trim() || null,

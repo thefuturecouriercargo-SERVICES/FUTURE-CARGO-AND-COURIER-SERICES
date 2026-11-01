@@ -3,6 +3,7 @@
 import { OrderBookingDetails } from "@/types";
 import { useState } from "react";
 import { fmtNumber } from "@/lib/format";
+import { NotesText } from "@/lib/notes";
 
 /** Small "📋 Copy" — copies all the parcel details as plain text (to paste in WhatsApp etc.). */
 function CopyButton({ text }: { text: string }) {
@@ -122,7 +123,7 @@ export default function OrderDetails({
       {booking.notes && (
         <div className={row}>
           <span className={label}>Note</span>
-          <span className="font-medium text-pending">{booking.notes}</span>
+          <span className="font-medium text-pending"><NotesText notes={booking.notes} /></span>
         </div>
       )}
       <div className={row}>

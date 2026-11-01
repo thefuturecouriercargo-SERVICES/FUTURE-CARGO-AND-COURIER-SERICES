@@ -1,5 +1,6 @@
 "use client";
 
+import { NotesText, parseNotes } from "@/lib/notes";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
@@ -149,6 +150,9 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
     if (over) setFitState({ key: fitKey, level: level + 1 });
   });
   const fit = levels[Math.min(level, levels.length - 1)];
+  const parsed = parseNotes(booking.notes);
+  const hasOrderNo = Boolean(booking.vendorRef && booking.vendorRef !== String(booking.cnNo));
+  const billNo = (booking as { billNo?: string | null }).billNo || parsed.bill;
 
   return (
     <div ref={rootRef} className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
@@ -160,9 +164,14 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           <div className="mt-0.5" style={{ fontSize: 9 }}>
             From: <b style={{ textTransform: "none" }}>{labelVendorName(booking.vendor.name)}</b>
           </div>
-          {((booking.vendorRef && booking.vendorRef !== String(booking.cnNo)) || (booking as { billNo?: string | null }).billNo) && (
-            <div style={{ fontSize: 10, fontWeight: 700 }}>
-              {booking.vendorRef && booking.vendorRef !== String(booking.cnNo) ? `Order #${booking.vendorRef}` : `Bill ${(booking as { billNo?: string | null }).billNo}`}
+          {(hasOrderNo || billNo || parsed.agent) && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-1" style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1 }}>
+              {hasOrderNo ? <span>ORDER #{booking.vendorRef}</span> : billNo ? <span>BILL: {billNo}</span> : null}
+              {parsed.agent && (
+                <span style={{ border: "1.5px solid #000", padding: "0 3px", fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>
+                  AGENT: {parsed.agent}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -259,10 +268,10 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       )}
 
-      {booking.notes && (
-        <div className="mt-1" style={{ fontSize: 10, lineHeight: 1.25, ...(sq ? clamp(1) : clamp(2)) }}>
-          <b>Note: </b>
-          {booking.notes}
+      {parsed.parts.length > 0 && (
+        <div className="mt-1 border border-black px-1.5 py-0.5" style={{ fontSize: 10.5, lineHeight: 1.25, ...(sq ? clamp(1) : clamp(2)) }}>
+          <b style={{ fontWeight: 800 }}>NOTES: </b>
+          <NotesText notes={booking.notes} hideBill hideAgent />
         </div>
       )}
 
