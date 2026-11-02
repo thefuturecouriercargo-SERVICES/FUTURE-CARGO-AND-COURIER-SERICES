@@ -502,6 +502,8 @@ model CashInHandMonth {
   month       String   @id // "YYYY-MM"
   workingDays Int?
   dailyRate   Int      @default(200)
+  // Daily cost typed in by hand for this month; null = working days × per day.
+  costOverride Int?
   updatedAt   DateTime @updatedAt
 
   @@map("cash_in_hand_months")
@@ -512,8 +514,6 @@ model CashInHandManual {
   id        Int      @id @default(1)
   amount    Int      @default(0)
   note      String?
-  // Total daily cost typed in by hand; null = add up the months automatically.
-  dailyCostOverride Int?
   updatedAt DateTime @updatedAt
 
   @@map("cash_in_hand_manual")

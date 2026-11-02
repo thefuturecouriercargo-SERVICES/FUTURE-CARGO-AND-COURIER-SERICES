@@ -83,6 +83,8 @@ router.get(
       const autoDays = nonSundays(y, m, isCurrent ? today : end);
       const workingDays = s?.workingDays ?? autoDays;
       const dailyRate = s?.dailyRate ?? DEFAULT_RATE;
+      const calcCost = workingDays * dailyRate;
+      const costOverride = s?.costOverride ?? null;
       rows.push({
         month,
         revenue,
@@ -92,15 +94,15 @@ router.get(
         workingDays,
         daysEdited: s?.workingDays != null,
         dailyRate,
-        dailyCost: workingDays * dailyRate,
+        calcCost,
+        costEdited: costOverride != null,
+        dailyCost: costOverride ?? calcCost,
         isCurrent,
       });
     }
 
     const totalProfit = rows.reduce((t, r) => t + r.profit, 0);
-    const autoDailyCost = rows.reduce((t, r) => t + r.dailyCost, 0);
-    const override = manual?.dailyCostOverride ?? null;
-    const totalDailyCost = override ?? autoDailyCost;
+    const totalDailyCost = rows.reduce((t, r) => t + r.dailyCost, 0);
     const manualAmount = manual?.amount ?? 0;
     res.json({
       startMonth: START_MONTH,
@@ -108,8 +110,6 @@ router.get(
       totalProfit,
       manual: { amount: manualAmount, note: manual?.note ?? "", updatedAt: manual?.updatedAt ?? null },
       totalDailyCost,
-      autoDailyCost,
-      dailyCostEdited: override != null,
       cashInHand: totalProfit + manualAmount - totalDailyCost,
     });
   })
@@ -119,6 +119,8 @@ const monthSchema = z.object({
   // null = back to automatic (days that are not Sunday)
   workingDays: z.number().int().min(0).max(31).nullable().optional(),
   dailyRate: z.number().int().min(0).max(100000).optional(),
+  // null = back to working days × per day
+  costOverride: z.number().int().min(0).max(10000000).nullable().optional(),
 });
 
 router.put(
@@ -129,10 +131,11 @@ router.put(
     const data = monthSchema.parse(req.body);
     const row = await prisma.cashInHandMonth.upsert({
       where: { month },
-      create: { month, workingDays: data.workingDays ?? null, dailyRate: data.dailyRate ?? DEFAULT_RATE },
+      create: { month, workingDays: data.workingDays ?? null, dailyRate: data.dailyRate ?? DEFAULT_RATE, costOverride: data.costOverride ?? null },
       update: {
         ...(data.workingDays !== undefined ? { workingDays: data.workingDays } : {}),
         ...(data.dailyRate !== undefined ? { dailyRate: data.dailyRate } : {}),
+        ...(data.costOverride !== undefined ? { costOverride: data.costOverride } : {}),
       },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "CashInHandMonth", entityId: month, meta: data });
@@ -152,23 +155,6 @@ router.put(
       update: { amount, note: note || null },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "CashInHandManual", entityId: "1", meta: { amount, note } });
-    res.json(row);
-  })
-);
-
-// Total daily cost typed in by hand (null = back to the automatic month total).
-const totalCostSchema = z.object({ amount: z.number().int().min(0).max(100000000).nullable() });
-
-router.put(
-  "/daily-cost-total",
-  asyncHandler(async (req, res) => {
-    const { amount } = totalCostSchema.parse(req.body);
-    const row = await prisma.cashInHandManual.upsert({
-      where: { id: 1 },
-      create: { id: 1, amount: 0, dailyCostOverride: amount },
-      update: { dailyCostOverride: amount },
-    });
-    await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "CashInHandManual", entityId: "dailyCostTotal", meta: { amount } });
     res.json(row);
   })
 );

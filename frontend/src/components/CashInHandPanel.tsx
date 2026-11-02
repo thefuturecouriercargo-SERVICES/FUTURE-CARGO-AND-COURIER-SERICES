@@ -14,6 +14,8 @@ interface MonthRow {
   workingDays: number;
   daysEdited: boolean;
   dailyRate: number;
+  calcCost: number;
+  costEdited: boolean;
   dailyCost: number;
   isCurrent: boolean;
 }
@@ -23,8 +25,6 @@ interface CashData {
   totalProfit: number;
   manual: { amount: number; note: string; updatedAt: string | null };
   totalDailyCost: number;
-  autoDailyCost: number;
-  dailyCostEdited: boolean;
   cashInHand: number;
 }
 
@@ -43,8 +43,7 @@ export default function CashInHandPanel() {
   const [manualNote, setManualNote] = useState("");
   const [savingManual, setSavingManual] = useState(false);
   const [showMonths, setShowMonths] = useState(false);
-  const [totalEdit, setTotalEdit] = useState<string | null>(null);
-  const [edit, setEdit] = useState<{ month: string; days: string; rate: string } | null>(null);
+  const [edit, setEdit] = useState<{ month: string; days: string; rate: string; cost: string; costTyped: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const d = await apiFetch<CashData>("/cash-in-hand");
@@ -78,24 +77,15 @@ export default function CashInHandPanel() {
     const rate = Math.round(Number(edit.rate));
     if (!auto && (!Number.isFinite(days) || (days as number) < 0 || (days as number) > 31)) return toast("Working days must be 0–31", "error");
     if (!Number.isFinite(rate) || rate < 0) return toast("Enter a valid daily amount", "error");
+    const cost = Math.round(Number(edit.cost));
+    if (edit.costTyped && (edit.cost.trim() === "" || !Number.isFinite(cost) || cost < 0)) return toast("Enter a valid daily cost", "error");
+    // Only keep a typed cost if it differs from days × per day.
+    const costOverride = auto || !edit.costTyped || cost === (days as number) * rate ? null : cost;
     try {
-      await apiFetch(`/cash-in-hand/month/${edit.month}`, { method: "PUT", body: { workingDays: days, dailyRate: rate } });
+      await apiFetch(`/cash-in-hand/month/${edit.month}`, { method: "PUT", body: { workingDays: days, dailyRate: rate, costOverride } });
       setEdit(null);
       await load();
       toast(`${monthName(edit.month)} updated`, "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Could not save", "error");
-    }
-  }
-
-  async function saveTotal(auto = false) {
-    const amount = auto ? null : Math.round(Number(totalEdit));
-    if (!auto && (totalEdit === null || totalEdit.trim() === "" || !Number.isFinite(amount) || (amount as number) < 0)) return toast("Enter a valid total", "error");
-    try {
-      await apiFetch("/cash-in-hand/daily-cost-total", { method: "PUT", body: { amount } });
-      setTotalEdit(null);
-      await load();
-      toast(auto ? "Daily cost back to automatic" : "Total daily cost updated", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save", "error");
     }
@@ -145,10 +135,7 @@ export default function CashInHandPanel() {
 
         <div className="bg-white p-4">
           <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">③ Daily cost (minus)</div>
-          <div className="font-display text-xl font-semibold text-cancelled">
-            − {fmtNumber(data.totalDailyCost)} AED
-            {data.dailyCostEdited && <span className="ml-1.5 align-middle font-sans text-[10px] font-normal text-brass" title={`Auto would be ${fmtNumber(data.autoDailyCost)}`}>edited</span>}
-          </div>
+          <div className="font-display text-xl font-semibold text-cancelled">− {fmtNumber(data.totalDailyCost)} AED</div>
           <button onClick={() => setShowMonths((s) => !s)} className="mt-1 text-[11px] text-navy underline">
             {data.months.reduce((t, m) => t + m.workingDays, 0)} working days · {showMonths ? "hide" : "edit"} months
           </button>
@@ -188,7 +175,7 @@ export default function CashInHandPanel() {
                         <input
                           type="number"
                           value={edit.days}
-                          onChange={(e) => setEdit({ ...edit, days: e.target.value })}
+                          onChange={(e) => setEdit({ ...edit, days: e.target.value, cost: edit.costTyped ? edit.cost : String((Number(e.target.value) || 0) * (Number(edit.rate) || 0)) })}
                           className="w-16 rounded border border-line px-1.5 py-1 text-right font-mono"
                           aria-label="Working days"
                         />
@@ -197,16 +184,26 @@ export default function CashInHandPanel() {
                         <input
                           type="number"
                           value={edit.rate}
-                          onChange={(e) => setEdit({ ...edit, rate: e.target.value })}
+                          onChange={(e) => setEdit({ ...edit, rate: e.target.value, cost: edit.costTyped ? edit.cost : String((Number(edit.days) || 0) * (Number(e.target.value) || 0)) })}
                           className="w-20 rounded border border-line px-1.5 py-1 text-right font-mono"
                           aria-label="Amount per day"
                         />
                       </td>
-                      <td className="text-right font-mono">{fmtNumber((Number(edit.days) || 0) * (Number(edit.rate) || 0))}</td>
+                      <td className="text-right">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={edit.cost}
+                          onChange={(e) => setEdit({ ...edit, cost: e.target.value, costTyped: true })}
+                          onKeyDown={(e) => e.key === "Enter" && saveMonth()}
+                          className="w-24 rounded border border-brass/60 px-1.5 py-1 text-right font-mono"
+                          aria-label="Daily cost"
+                        />
+                      </td>
                       <td className="whitespace-nowrap text-right">
                         <button onClick={() => saveMonth()} className="mr-2 text-xs font-semibold text-navy underline">Save</button>
-                        {m.daysEdited && (
-                          <button onClick={() => saveMonth(true)} className="mr-2 text-xs text-ink-soft underline" title={`Back to ${m.autoDays} (no Sundays)`}>
+                        {(m.daysEdited || m.costEdited) && (
+                          <button onClick={() => saveMonth(true)} className="mr-2 text-xs text-ink-soft underline" title={`Back to ${m.autoDays} days (no Sundays) × per day`}>
                             Auto
                           </button>
                         )}
@@ -220,10 +217,13 @@ export default function CashInHandPanel() {
                         {m.daysEdited && <span className="ml-1 text-[10px] text-brass" title={`Auto would be ${m.autoDays}`}>edited</span>}
                       </td>
                       <td className="text-right font-mono">{fmtNumber(m.dailyRate)}</td>
-                      <td className="text-right font-mono text-cancelled">− {fmtNumber(m.dailyCost)}</td>
+                      <td className="text-right font-mono text-cancelled">
+                        − {fmtNumber(m.dailyCost)}
+                        {m.costEdited && <span className="ml-1 text-[10px] text-brass" title={`Days × per day would be ${fmtNumber(m.calcCost)}`}>edited</span>}
+                      </td>
                       <td className="text-right">
                         <button
-                          onClick={() => setEdit({ month: m.month, days: String(m.workingDays), rate: String(m.dailyRate) })}
+                          onClick={() => setEdit({ month: m.month, days: String(m.workingDays), rate: String(m.dailyRate), cost: String(m.dailyCost), costTyped: m.costEdited })}
                           className="text-xs text-navy underline"
                         >
                           Edit
@@ -240,48 +240,13 @@ export default function CashInHandPanel() {
                 <td className="text-right font-mono">{fmtNumber(data.totalProfit)}</td>
                 <td className="text-right font-mono">{data.months.reduce((t, m) => t + m.workingDays, 0)}</td>
                 <td></td>
-                {totalEdit !== null ? (
-                  <>
-                    <td className="text-right">
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={totalEdit}
-                        onChange={(e) => setTotalEdit(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && saveTotal()}
-                        className="w-24 rounded border border-line px-1.5 py-1 text-right font-mono"
-                        aria-label="Total daily cost"
-                        autoFocus
-                      />
-                    </td>
-                    <td className="whitespace-nowrap text-right">
-                      <button onClick={() => saveTotal()} className="mr-2 text-xs font-semibold text-navy underline">Save</button>
-                      {data.dailyCostEdited && (
-                        <button onClick={() => saveTotal(true)} className="mr-2 text-xs text-ink-soft underline" title={`Back to ${fmtNumber(data.autoDailyCost)} (months added up)`}>
-                          Auto
-                        </button>
-                      )}
-                      <button onClick={() => setTotalEdit(null)} className="text-xs text-ink-soft">✕</button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="text-right font-mono">
-                      − {fmtNumber(data.totalDailyCost)}
-                      {data.dailyCostEdited && <span className="ml-1 text-[10px] text-brass" title={`Auto would be ${fmtNumber(data.autoDailyCost)}`}>edited</span>}
-                    </td>
-                    <td className="text-right">
-                      <button onClick={() => setTotalEdit(String(data.totalDailyCost))} className="text-xs text-navy underline">
-                        Edit
-                      </button>
-                    </td>
-                  </>
-                )}
+                <td className="text-right font-mono">− {fmtNumber(data.totalDailyCost)}</td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
           <p className="mt-2 text-[11px] text-ink-soft">
-            Working days = days that are not Sunday (whole month; the running month counts up to today). Tap Edit to change a month&apos;s days or the per-day amount, or Edit on the Total row to type the whole daily cost yourself (Auto puts it back).
+            Working days = days that are not Sunday (whole month; the running month counts up to today). Tap Edit to change a month&apos;s days, the per-day amount, or type the month&apos;s daily cost directly (e.g. what was actually taken). Auto puts it back.
           </p>
         </div>
       )}
