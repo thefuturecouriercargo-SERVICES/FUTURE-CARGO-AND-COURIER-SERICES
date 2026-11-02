@@ -2,13 +2,14 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { monthRange } from "../utils/dates";
+import { monthRange, formatDate } from "../utils/dates";
 
 /**
- * Month-end report: the month vs. the month before, with RTO %, vendors,
- * drivers and profit. Same counting rules as the Monthly dashboard (orders by
- * entry date, one row per CN, agents kept out of company figures) and the same
- * profit formula as the P&L page (delivery charges − expenses).
+ * Month-end TEAM report: consignment movement only — no money figures at all
+ * (it is shared with the whole team). The month vs. the month before, RTO,
+ * daily movement, vendors, drivers (with last month's numbers for "most
+ * improved") and emirates. Same counting rules as the Monthly dashboard
+ * (orders by entry date, one row per CN, agent parcels kept apart).
  *
  * Areas are worked out on the page (the area list lives in the frontend), so the
  * response carries a compact [area, address, emirate, status] row per order.
@@ -19,9 +20,7 @@ router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 type Row = {
   cnNo: number;
   status: string;
-  total: number;
-  deliveryCharge: number;
-  payment: string;
+  date: Date;
   createdAt: Date;
   area: string | null;
   custAddress: string | null;
@@ -38,9 +37,7 @@ async function monthOrders(monthStr: string) {
     select: {
       cnNo: true,
       status: true,
-      total: true,
-      deliveryCharge: true,
-      payment: true,
+      date: true,
       createdAt: true,
       area: true,
       custAddress: true,
@@ -57,30 +54,52 @@ async function monthOrders(monthStr: string) {
 }
 
 function stats(orders: Row[]) {
-  const delivered = orders.filter((o) => o.status === "DELIVERED");
+  const delivered = orders.filter((o) => o.status === "DELIVERED").length;
   const cancelled = orders.filter((o) => o.status === "CANCELLED").length;
-  const finished = delivered.length + cancelled;
+  const finished = delivered + cancelled;
   return {
     orders: orders.length,
-    delivered: delivered.length,
+    delivered,
     cancelled,
     pending: orders.length - finished,
     // RTO % of finished parcels (pending ones haven't had their chance yet).
     rtoPct: finished ? Math.round((cancelled / finished) * 1000) / 10 : 0,
-    sales: delivered.reduce((s, o) => s + o.total, 0),
-    dlCharge: delivered.reduce((s, o) => s + o.deliveryCharge, 0),
   };
 }
 
+function groupBy(orders: Row[], key: (o: Row) => string) {
+  const m = new Map<string, Row[]>();
+  for (const o of orders) {
+    const k = key(o);
+    const list = m.get(k);
+    if (list) list.push(o);
+    else m.set(k, [o]);
+  }
+  return m;
+}
+
+function driverStats(own: Row[]) {
+  return [...groupBy(own, (o) => o.employee.name).entries()]
+    .map(([name, list]) => ({ name, days: new Set(list.map((o) => formatDate(o.date))).size, ...stats(list) }))
+    .sort((a, b) => b.delivered - a.delivered);
+}
+
 async function summary(monthStr: string) {
-  const { start, end } = monthRange(monthStr);
   const all = await monthOrders(monthStr);
   const own = all.filter((o) => !o.employee.isAgent);
   const agent = all.filter((o) => o.employee.isAgent);
-  const expenses = await prisma.expenseEntry.aggregate({ where: { date: { gte: start, lte: end } }, _sum: { amount: true } });
-  const s = stats(own);
-  const exp = expenses._sum.amount ?? 0;
-  return { all, own, agent, summary: { ...s, agentOrders: agent.length, agentDelivered: agent.filter((o) => o.status === "DELIVERED").length, expenses: exp, profit: s.dlCharge - exp } };
+  return {
+    all,
+    own,
+    summary: {
+      ...stats(own),
+      agentOrders: agent.length,
+      agentDelivered: agent.filter((o) => o.status === "DELIVERED").length,
+      agentCancelled: agent.filter((o) => o.status === "CANCELLED").length,
+      vendorCount: new Set(all.map((o) => o.vendor.name)).size,
+      activeDays: new Set(all.map((o) => formatDate(o.date))).size,
+    },
+  };
 }
 
 function prevMonth(monthStr: string) {
@@ -96,23 +115,16 @@ router.get(
     const [cur, prev] = await Promise.all([summary(label), summary(prevMonth(label))]);
 
     // Vendors: every order they gave us (incl. ones sent with the agent), since RTO is about their customers.
-    const byVendor = new Map<string, Row[]>();
-    for (const o of cur.all) byVendor.set(o.vendor.name, [...(byVendor.get(o.vendor.name) ?? []), o]);
-    const vendors = [...byVendor.entries()]
+    const vendors = [...groupBy(cur.all, (o) => o.vendor.name).entries()]
       .map(([name, list]) => ({ name, ...stats(list) }))
       .sort((a, b) => b.orders - a.orders);
 
-    const byDriver = new Map<string, Row[]>();
-    for (const o of cur.own) byDriver.set(o.employee.name, [...(byDriver.get(o.employee.name) ?? []), o]);
-    const drivers = [...byDriver.entries()]
-      .map(([name, list]) => ({ name, ...stats(list) }))
-      .sort((a, b) => b.delivered - a.delivered);
+    // Day by day, all parcels (company + agent).
+    const days = [...groupBy(cur.all, (o) => formatDate(o.date)).entries()]
+      .map(([date, list]) => ({ date, ...stats(list) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-    const emirates = new Map<string, Row[]>();
-    for (const o of cur.all) {
-      const em = (o.booking?.emirate || o.emirate || "OTHER").toUpperCase();
-      emirates.set(em, [...(emirates.get(em) ?? []), o]);
-    }
+    const emirates = groupBy(cur.all, (o) => (o.booking?.emirate || o.emirate || "OTHER").toUpperCase());
 
     res.json({
       month: label,
@@ -120,7 +132,9 @@ router.get(
       current: cur.summary,
       previous: prev.summary,
       vendors,
-      drivers,
+      drivers: driverStats(cur.own),
+      prevDrivers: driverStats(prev.own).map(({ name, delivered, rtoPct }) => ({ name, delivered, rtoPct })),
+      days,
       emirates: [...emirates.entries()].map(([name, list]) => ({ name, ...stats(list) })).sort((a, b) => b.orders - a.orders),
       // [chosen area, address, emirate, status initial]
       areaRows: cur.all.map((o) => [o.area ?? "", o.booking?.address ?? o.custAddress ?? "", o.booking?.emirate ?? o.emirate, o.status[0]]),
