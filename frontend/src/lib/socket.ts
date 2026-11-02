@@ -18,6 +18,12 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (!socket) {
     socket = io({
+      // The default "/socket.io/" URL ends in a slash, which Next.js redirects
+      // to "/socket.io" — and the backend 404s that, so live updates silently
+      // never connected. "/socket.io/fc" (no trailing slash) passes through the
+      // /socket.io/:path* rewrite untouched and the backend still accepts it.
+      path: "/socket.io/fc",
+      addTrailingSlash: false,
       withCredentials: true,
       transports: ["websocket", "polling"],
       autoConnect: true,
