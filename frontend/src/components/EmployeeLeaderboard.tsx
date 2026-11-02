@@ -20,8 +20,8 @@ interface Props {
 const MEDALS = ["rgb(var(--c-brass))", "#c0c6d4", "#c9875a"];
 
 /** Employee-wise Performance as a live leaderboard: one card per driver,
- * ranked by Delivered. When a live refresh changes the order, cards slide to
- * their new place (FLIP) and anyone who moved up gets a "moved up" tag. */
+ * ranked by Delivered, one compact line each. When a live refresh changes the
+ * order, rows slide to their new place (FLIP) and anyone who moved up gets a ▲. */
 export default function EmployeeLeaderboard({ rows, totals }: Props) {
   const sorted = [...rows].sort((a, b) => b.delivered - a.delivered || b.total - a.total || a.name.localeCompare(b.name));
   const order = sorted.map((r) => String(r.id)).join(",");
@@ -102,22 +102,34 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
 
   if (!rows.length) return null;
 
+  const COLS =
+    "grid grid-cols-[24px_minmax(0,1fr)_repeat(5,34px)] items-center gap-x-1.5 sm:grid-cols-[28px_minmax(0,1fr)_repeat(5,60px)] sm:gap-x-2";
+
   return (
     <div className="elb">
       <style>{`
         @keyframes elb-flash { 0% { box-shadow: 0 0 0 2px rgb(var(--c-delivered) / .7); } 100% { box-shadow: 0 0 0 0 rgb(var(--c-delivered) / 0); } }
-        @keyframes elb-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-        @keyframes elb-crown { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-2px) rotate(6deg); } }
+        @keyframes elb-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
         .elb .flash { animation: elb-flash 1.2s ease-out; }
         .elb .tag { animation: elb-in .3s ease-out both; }
-        .elb .crown { animation: elb-crown 2.4s ease-in-out infinite; display: inline-block; }
-        @media (prefers-reduced-motion: reduce) { .elb .flash, .elb .tag, .elb .crown { animation: none !important; } }
+        @media (prefers-reduced-motion: reduce) { .elb .flash, .elb .tag { animation: none !important; } }
       `}</style>
 
-      <ul className="space-y-2.5">
+      {/* Column labels, shown once */}
+      <div className={`${COLS} px-2.5 pb-1.5 text-[10px] uppercase tracking-wide text-ink-soft`}>
+        <span>#</span>
+        <span>Employee</span>
+        <span className="text-right"><span className="hidden sm:inline">Delivered</span><span className="sm:hidden">Del</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Pending</span><span className="sm:hidden">Pend</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Transfer</span><span className="sm:hidden">Trf</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Cancel</span><span className="sm:hidden">Can</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Total</span><span className="sm:hidden">Tot</span></span>
+      </div>
+
+      <ul className="space-y-1.5">
         {sorted.map((r, i) => {
           const id = String(r.id);
-          const pct = r.total > 0 ? Math.round((r.delivered / r.total) * 100) : 0;
+          const pct = r.total > 0 ? (r.delivered / r.total) * 100 : 0;
           const leader = i === 0 && r.delivered > 0;
           const medal = i < 3 && r.delivered > 0 ? MEDALS[i] : null;
           return (
@@ -127,97 +139,51 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
                 if (el) refs.current.set(id, el);
                 else refs.current.delete(id);
               }}
-              className="relative rounded-lg border bg-paper-2/40 p-3.5"
+              className="relative overflow-hidden rounded-md border bg-paper-2/40 px-2.5 py-2"
               style={{ borderColor: leader ? "rgb(var(--c-brass))" : "rgb(var(--c-line))", willChange: "transform" }}
             >
-              <div key={flash[id] || 0} className={`pointer-events-none absolute inset-0 rounded-lg ${flash[id] ? "flash" : ""}`} aria-hidden />
+              <div key={flash[id] || 0} className={`pointer-events-none absolute inset-0 rounded-md ${flash[id] ? "flash" : ""}`} aria-hidden />
 
-              <div className="flex items-center gap-3">
+              <div className={`${COLS} font-mono text-[12px] tabular-nums sm:text-[13px]`}>
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-mono text-sm font-semibold"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-semibold"
                   style={medal ? { background: medal, color: "#1a1405" } : { background: "rgb(var(--c-paper-2))", color: "rgb(var(--c-ink-soft))" }}
                   aria-label={`Rank ${i + 1}`}
                 >
-                  {leader ? <span className="crown">👑</span> : i + 1}
+                  {i + 1}
                 </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-display text-[15px] font-semibold text-navy">{r.name}</span>
-                    {movedUp.has(id) && (
-                      <span className="tag rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide" style={{ color: "rgb(var(--c-delivered))", background: "rgb(var(--c-delivered) / .12)" }}>
-                        ▲ Moved up
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-mono text-[11px] text-ink-soft">{r.total} total</span>
-                </div>
-
-                <svg width="42" height="42" viewBox="0 0 42 42" className="shrink-0" aria-label={`${pct}% delivered`}>
-                  <circle cx="21" cy="21" r="17" fill="none" stroke="rgb(var(--c-paper-2))" strokeWidth="4" />
-                  <circle
-                    cx="21"
-                    cy="21"
-                    r="17"
-                    fill="none"
-                    stroke="rgb(var(--c-delivered))"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(pct / 100) * 106.8} 107`}
-                    transform="rotate(-90 21 21)"
-                    style={{ transition: "stroke-dasharray 600ms ease" }}
-                  />
-                  <text x="21" y="25" textAnchor="middle" fontSize="10" fill="currentColor" className="text-navy font-mono">
-                    {pct}%
-                  </text>
-                </svg>
-
-                <div className="w-14 shrink-0 text-right">
-                  <div className="font-mono text-[22px] font-semibold leading-none tabular-nums" style={{ color: "rgb(var(--c-delivered))" }}>
-                    {r.delivered}
-                  </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-ink-soft">Delivered</div>
-                </div>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate font-display text-[14px] font-semibold text-navy">{r.name}</span>
+                  {movedUp.has(id) && (
+                    <span className="tag shrink-0 text-[11px]" style={{ color: "rgb(var(--c-delivered))" }} aria-label="Moved up">
+                      ▲
+                    </span>
+                  )}
+                </span>
+                <span className="text-right text-[15px] font-semibold" style={{ color: "rgb(var(--c-delivered))" }}>{r.delivered}</span>
+                <span className="text-right" style={{ color: "rgb(var(--c-pending))" }}>{r.pending}</span>
+                <span className="text-right" style={{ color: "rgb(var(--c-transferred))" }}>{r.transferred}</span>
+                <span className="text-right" style={{ color: "rgb(var(--c-cancelled))" }}>{r.cancelled}</span>
+                <span className="text-right font-semibold text-navy">{r.total}</span>
               </div>
 
-              <div className="mt-3 grid grid-cols-4 gap-1.5">
-                <Stat label="Total" value={r.total} />
-                <Stat label="Pending" value={r.pending} color="var(--c-pending)" />
-                <Stat label="Transfer" value={r.transferred} color="var(--c-transferred)" />
-                <Stat label="Cancelled" value={r.cancelled} color="var(--c-cancelled)" />
+              {/* Thin delivered-share bar along the bottom edge */}
+              <div className="absolute inset-x-0 bottom-0 h-[2px] bg-paper-2" aria-hidden>
+                <div className="h-full transition-[width] duration-700" style={{ width: `${pct}%`, background: "rgb(var(--c-delivered))" }} />
               </div>
             </li>
           );
         })}
       </ul>
 
-      <div className="mt-3 rounded-lg border-2 border-navy p-3.5">
-        <div className="flex items-center justify-between">
-          <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
-          <div className="text-right">
-            <span className="font-mono text-[22px] font-semibold tabular-nums" style={{ color: "rgb(var(--c-delivered))" }}>
-              {totals.delivered}
-            </span>
-            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-soft">Delivered</span>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-4 gap-1.5">
-          <Stat label="Total" value={totals.total} />
-          <Stat label="Pending" value={totals.pending} color="var(--c-pending)" />
-          <Stat label="Transfer" value={totals.transferred} color="var(--c-transferred)" />
-          <Stat label="Cancelled" value={totals.cancelled} color="var(--c-cancelled)" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <div className="rounded-md bg-paper-2/70 px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-ink-soft">{label}</div>
-      <div className="font-mono text-[13px] font-semibold tabular-nums" style={{ color: color ? `rgb(${color})` : "rgb(var(--c-navy))" }}>
-        {value}
+      <div className={`${COLS} mt-2 rounded-md border-2 border-navy px-2.5 py-2 font-mono text-[13px] font-semibold tabular-nums`}>
+        <span />
+        <span className="font-display text-[14px] text-navy">TOTAL</span>
+        <span className="text-right text-[15px]" style={{ color: "rgb(var(--c-delivered))" }}>{totals.delivered}</span>
+        <span className="text-right" style={{ color: "rgb(var(--c-pending))" }}>{totals.pending}</span>
+        <span className="text-right" style={{ color: "rgb(var(--c-transferred))" }}>{totals.transferred}</span>
+        <span className="text-right" style={{ color: "rgb(var(--c-cancelled))" }}>{totals.cancelled}</span>
+        <span className="text-right text-navy">{totals.total}</span>
       </div>
     </div>
   );
