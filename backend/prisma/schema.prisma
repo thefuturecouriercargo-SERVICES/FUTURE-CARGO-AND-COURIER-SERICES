@@ -512,6 +512,8 @@ model CashInHandManual {
   id        Int      @id @default(1)
   amount    Int      @default(0)
   note      String?
+  // Total daily cost typed in by hand; null = add up the months automatically.
+  dailyCostOverride Int?
   updatedAt DateTime @updatedAt
 
   @@map("cash_in_hand_manual")

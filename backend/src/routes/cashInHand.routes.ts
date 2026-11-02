@@ -98,7 +98,9 @@ router.get(
     }
 
     const totalProfit = rows.reduce((t, r) => t + r.profit, 0);
-    const totalDailyCost = rows.reduce((t, r) => t + r.dailyCost, 0);
+    const autoDailyCost = rows.reduce((t, r) => t + r.dailyCost, 0);
+    const override = manual?.dailyCostOverride ?? null;
+    const totalDailyCost = override ?? autoDailyCost;
     const manualAmount = manual?.amount ?? 0;
     res.json({
       startMonth: START_MONTH,
@@ -106,6 +108,8 @@ router.get(
       totalProfit,
       manual: { amount: manualAmount, note: manual?.note ?? "", updatedAt: manual?.updatedAt ?? null },
       totalDailyCost,
+      autoDailyCost,
+      dailyCostEdited: override != null,
       cashInHand: totalProfit + manualAmount - totalDailyCost,
     });
   })
@@ -148,6 +152,23 @@ router.put(
       update: { amount, note: note || null },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "CashInHandManual", entityId: "1", meta: { amount, note } });
+    res.json(row);
+  })
+);
+
+// Total daily cost typed in by hand (null = back to the automatic month total).
+const totalCostSchema = z.object({ amount: z.number().int().min(0).max(100000000).nullable() });
+
+router.put(
+  "/daily-cost-total",
+  asyncHandler(async (req, res) => {
+    const { amount } = totalCostSchema.parse(req.body);
+    const row = await prisma.cashInHandManual.upsert({
+      where: { id: 1 },
+      create: { id: 1, amount: 0, dailyCostOverride: amount },
+      update: { dailyCostOverride: amount },
+    });
+    await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "CashInHandManual", entityId: "dailyCostTotal", meta: { amount } });
     res.json(row);
   })
 );
