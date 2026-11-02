@@ -119,17 +119,16 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
       <div className={`${COLS} px-2.5 pb-1.5 text-[10px] uppercase tracking-wide text-ink-soft`}>
         <span>#</span>
         <span>Employee</span>
-        <span className="text-right"><span className="hidden sm:inline">Delivered</span><span className="sm:hidden">Del</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Total</span><span className="sm:hidden">Tot</span></span>
         <span className="text-right"><span className="hidden sm:inline">Pending</span><span className="sm:hidden">Pend</span></span>
         <span className="text-right"><span className="hidden sm:inline">Transfer</span><span className="sm:hidden">Trf</span></span>
         <span className="text-right"><span className="hidden sm:inline">Cancel</span><span className="sm:hidden">Can</span></span>
-        <span className="text-right"><span className="hidden sm:inline">Total</span><span className="sm:hidden">Tot</span></span>
+        <span className="text-right"><span className="hidden sm:inline">Delivered</span><span className="sm:hidden">Del</span></span>
       </div>
 
       <ul className="space-y-1.5">
         {sorted.map((r, i) => {
           const id = String(r.id);
-          const pct = r.total > 0 ? (r.delivered / r.total) * 100 : 0;
           const leader = i === 0 && r.delivered > 0;
           const medal = i < 3 && r.delivered > 0 ? MEDALS[i] : null;
           return (
@@ -139,7 +138,7 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
                 if (el) refs.current.set(id, el);
                 else refs.current.delete(id);
               }}
-              className="relative overflow-hidden rounded-md border bg-paper-2/40 px-2.5 py-2"
+              className="relative rounded-md border bg-paper-2/40 px-2.5 py-2"
               style={{ borderColor: leader ? "rgb(var(--c-brass))" : "rgb(var(--c-line))", willChange: "transform" }}
             >
               <div key={flash[id] || 0} className={`pointer-events-none absolute inset-0 rounded-md ${flash[id] ? "flash" : ""}`} aria-hidden />
@@ -160,16 +159,11 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
                     </span>
                   )}
                 </span>
-                <span className="text-right text-[15px] font-semibold" style={{ color: "rgb(var(--c-delivered))" }}>{r.delivered}</span>
+                <span className="text-right font-semibold text-navy">{r.total}</span>
                 <span className="text-right" style={{ color: "rgb(var(--c-pending))" }}>{r.pending}</span>
                 <span className="text-right" style={{ color: "rgb(var(--c-transferred))" }}>{r.transferred}</span>
                 <span className="text-right" style={{ color: "rgb(var(--c-cancelled))" }}>{r.cancelled}</span>
-                <span className="text-right font-semibold text-navy">{r.total}</span>
-              </div>
-
-              {/* Thin delivered-share bar along the bottom edge */}
-              <div className="absolute inset-x-0 bottom-0 h-[2px] bg-paper-2" aria-hidden>
-                <div className="h-full transition-[width] duration-700" style={{ width: `${pct}%`, background: "rgb(var(--c-delivered))" }} />
+                <span className="text-right text-[15px] font-semibold" style={{ color: "rgb(var(--c-delivered))" }}>{r.delivered}</span>
               </div>
             </li>
           );
@@ -179,11 +173,11 @@ export default function EmployeeLeaderboard({ rows, totals }: Props) {
       <div className={`${COLS} mt-2 rounded-md border-2 border-navy px-2.5 py-2 font-mono text-[13px] font-semibold tabular-nums`}>
         <span />
         <span className="font-display text-[14px] text-navy">TOTAL</span>
-        <span className="text-right text-[15px]" style={{ color: "rgb(var(--c-delivered))" }}>{totals.delivered}</span>
+        <span className="text-right text-navy">{totals.total}</span>
         <span className="text-right" style={{ color: "rgb(var(--c-pending))" }}>{totals.pending}</span>
         <span className="text-right" style={{ color: "rgb(var(--c-transferred))" }}>{totals.transferred}</span>
         <span className="text-right" style={{ color: "rgb(var(--c-cancelled))" }}>{totals.cancelled}</span>
-        <span className="text-right text-navy">{totals.total}</span>
+        <span className="text-right text-[15px]" style={{ color: "rgb(var(--c-delivered))" }}>{totals.delivered}</span>
       </div>
     </div>
   );
