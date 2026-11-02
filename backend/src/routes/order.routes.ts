@@ -637,4 +637,19 @@ router.get(
   })
 );
 
+// One order by id — used by the header search's "Open in Daily Entry" jump so it
+// lands on the order's real day and CN even if the booking's details differ.
+router.get(
+  "/one/:id",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { vendor: true, employee: { select: { id: true, name: true } }, booking: { select: { customerName: true, customerPhone: true, address: true, emirate: true, items: true, notes: true, vendorRef: true, codAmount: true, lat: true, lng: true } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found — it may have been deleted" });
+    res.json(withContact(order));
+  })
+);
+
 export default router;

@@ -134,9 +134,18 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
   // Header search → "Open in Daily Entry": jump to that order's day, filter to
   // its CN and open its panel (Edit / Delete live there).
   const loadedDateRef = useRef<string | null>(null);
-  const [jump, setJump] = useState<{ date: string; cn: number; id: string } | null>(null);
+  const [jump, setJump] = useState<{ date: string; cn: number; id: string; order?: Order } | null>(null);
 
-  const startJump = useCallback((j: { date: string; cn: number; id: string }) => {
+  const startJump = useCallback(async (j: { date: string; cn: number; id: string }) => {
+    // Load the exact order so we land on its real day and CN.
+    let order: Order | undefined;
+    try {
+      order = await apiFetch<Order>(`/orders/one/${j.id}`);
+      j = { ...j, date: String(order.date).slice(0, 10), cn: order.cnNo };
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not open that order", "error");
+      return;
+    }
     setSearch(String(j.cn));
     setStatusFilter("");
     setPaymentFilter("");
@@ -147,7 +156,7 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
     setMaxAmount("");
     setDrawerId(null);
     setDate(j.date);
-    setJump(j);
+    setJump({ ...j, order });
   }, []);
 
   useEffect(() => {
@@ -165,8 +174,9 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
   useEffect(() => {
     if (!jump || loading || loadedDateRef.current !== jump.date) return;
     const found = [...orders, ...pendingCarryover].some((o) => o.id === jump.id);
-    if (found) setDrawerId(jump.id);
-    else toast(`CN ${jump.cn} not found on ${jump.date} — it may have been deleted`, "error");
+    // Not in this day's list for some reason — add it in so it can still be edited / deleted.
+    if (!found && jump.order) setOrders((prev) => [jump.order!, ...prev]);
+    setDrawerId(jump.id);
     setJump(null);
   }, [jump, loading, orders, pendingCarryover]);
 
