@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/context/AuthContext";
+import RegisterSW from "@/components/RegisterSW";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Future Courier — Operations",
   description: "Delivery management system for The Future Courier Service L.L.C",
-  manifest: "/manifest.json?v=3",
+  manifest: "/manifest.json?v=4",
   icons: {
     icon: "/fc-favicon.png",
     apple: [{ url: "/fc-apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="font-sans antialiased">
+        <RegisterSW />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
