@@ -80,7 +80,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const collapsed = prefs.collapsed;
 
   return (
-    <div className={`admin-shell ${prefs.dark ? "theme-midnight" : ""} ${prefs.compact ? "density-compact" : ""} min-h-screen bg-paper text-ink`}>
+    <div className={`admin-shell ${prefs.dark ? "theme-midnight" : ""} min-h-screen bg-paper text-ink`}>
       <FeedbackHost />
       <LiveBridge />
       <CommandPalette links={visibleNav.map((n) => ({ href: n.href, label: n.label, group: n.group }))} />
@@ -206,7 +206,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <span aria-hidden>/</span>
                 <span className="font-medium text-navy">{current.label}</span>
               </nav>
-              <DensitySwitch compact={prefs.compact} onChange={prefs.setCompact} />
+              <div id="shell-actions" className="hidden items-center gap-2 md:flex" />
             </div>
           )}
           <div key={pathname} className="page-enter">
@@ -249,7 +249,6 @@ function useShellPrefs() {
   const [mode, setModeState] = useState<ThemeMode>("dark");
   const [systemDark, setSystemDark] = useState(true);
   const [collapsed, setCollapsedState] = useState(false);
-  const [compact, setCompactState] = useState(false);
 
   useEffect(() => {
     const read = (k: string) => {
@@ -262,7 +261,6 @@ function useShellPrefs() {
     const m = read("fc-theme");
     if (m === "light" || m === "auto" || m === "dark") setModeState(m);
     setCollapsedState(read("fc-sidebar") === "collapsed");
-    setCompactState(read("fc-density") === "compact");
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     setSystemDark(mq.matches);
     const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
@@ -282,7 +280,6 @@ function useShellPrefs() {
     mode,
     dark: mode === "dark" || (mode === "auto" && systemDark),
     collapsed,
-    compact,
     setMode: (m: ThemeMode) => {
       setModeState(m);
       save("fc-theme", m);
@@ -290,10 +287,6 @@ function useShellPrefs() {
     setCollapsed: (c: boolean) => {
       setCollapsedState(c);
       save("fc-sidebar", c ? "collapsed" : "open");
-    },
-    setCompact: (c: boolean) => {
-      setCompactState(c);
-      save("fc-density", c ? "compact" : "comfortable");
     },
   };
 }
@@ -321,27 +314,6 @@ function ThemeSwitch({ mode, onChange }: { mode: ThemeMode; onChange: (m: ThemeM
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
             <path d={o.icon} />
           </svg>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function DensitySwitch({ compact, onChange }: { compact: boolean; onChange: (c: boolean) => void }) {
-  return (
-    <div role="radiogroup" aria-label="Table density" className="hidden rounded-xl border border-line bg-white p-1 sm:flex">
-      {[
-        { v: false, label: "Comfortable" },
-        { v: true, label: "Compact" },
-      ].map((o) => (
-        <button
-          key={o.label}
-          role="radio"
-          aria-checked={compact === o.v}
-          onClick={() => onChange(o.v)}
-          className={`h-8 rounded-lg px-3 text-xs transition ${compact === o.v ? "bg-paper-2 font-semibold text-brass" : "text-ink-soft hover:text-navy"}`}
-        >
-          {o.label}
         </button>
       ))}
     </div>

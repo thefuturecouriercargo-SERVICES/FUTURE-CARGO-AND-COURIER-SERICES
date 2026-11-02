@@ -11,6 +11,8 @@ interface Props {
   pending: number;
   transferred: number;
   cancelled: number;
+  /** Small square icon-only button (desktop header). */
+  iconOnly?: boolean;
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
@@ -86,12 +88,18 @@ export default function ShareReportButton(p: Props) {
       <button
         onClick={share}
         disabled={busy}
-        className="touch-target inline-flex items-center gap-2 rounded-xl border border-delivered/50 bg-delivered/10 px-4 text-sm font-semibold text-delivered hover:bg-delivered/20 disabled:opacity-60"
+        aria-label="Share report"
+        title={busy ? "Preparing…" : "Share report"}
+        className={
+          p.iconOnly
+            ? "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-delivered/50 bg-delivered/10 text-delivered hover:bg-delivered/20 disabled:opacity-60"
+            : "touch-target inline-flex items-center gap-2 rounded-xl border border-delivered/50 bg-delivered/10 px-4 text-sm font-semibold text-delivered hover:bg-delivered/20 disabled:opacity-60"
+        }
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13" />
         </svg>
-        {busy ? "Preparing…" : "Share report"}
+        {!p.iconOnly && (busy ? "Preparing…" : "Share report")}
       </button>
 
       {/* Off-screen card that becomes the shared image. */}

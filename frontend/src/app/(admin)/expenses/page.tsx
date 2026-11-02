@@ -64,9 +64,38 @@ export default function ExpensesPage() {
     load();
   }, [load]);
 
+  /** Same day + same amount with the same driver, or the same expense type — likely entered twice. */
+  async function findDuplicate(): Promise<ExpenseEntry | null> {
+    const amount = Number(form.amount);
+    let sameDay: ExpenseEntry[] = [];
+    try {
+      sameDay = await apiFetch<ExpenseEntry[]>("/expenses", { query: { date: form.date } });
+    } catch {
+      return null;
+    }
+    return (
+      sameDay.find(
+        (x) =>
+          x.id !== editingId &&
+          x.date.slice(0, 10) === form.date &&
+          Number(x.amount) === amount &&
+          ((form.employeeId && x.employee?.id === form.employeeId) || x.category === form.category)
+      ) ?? null
+    );
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const dup = await findDuplicate();
+    if (dup) {
+      const who = dup.employee?.name ? ` for ${dup.employee.name}` : "";
+      const ok = await confirmDialog(
+        `A ${dup.category} expense of ${dup.amount} AED${who} is already entered on ${form.date}${dup.remarks ? ` ("${dup.remarks}")` : ""}. Save this one as well?`,
+        { title: "Possible duplicate expense", confirmText: "Save anyway", cancelText: "Cancel", danger: true }
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       if (editingId) {
