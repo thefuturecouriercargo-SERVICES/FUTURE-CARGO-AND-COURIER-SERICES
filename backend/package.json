@@ -6,8 +6,8 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-   "build": "tsc -p tsconfig.json && mkdir -p dist/assets && cp src/assets/*.jpeg dist/assets/",
-  "start": "prisma db push --accept-data-loss && node dist/server.js",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/assets && cp src/assets/*.jpeg dist/assets/",
+    "start": "prisma db push --accept-data-loss && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
@@ -15,6 +15,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

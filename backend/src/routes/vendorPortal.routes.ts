@@ -11,9 +11,21 @@ import { writeAuditLog } from "../services/audit.service";
 import { readOrderPhoto, readOrderMessage, storeSlipPhoto, attachSlipPhoto, getBookingPhoto, photoReaderConfigured } from "../services/photoReader.service";
 import { emitGlobal } from "../lib/socket";
 import { isCustomerLinkVendor } from "./public.routes";
+import { phoneHistory } from "../lib/customerRisk";
 
 const router = Router();
 router.use(authenticateVendor);
+
+// Before saving a booking: has this customer phone refused (RTO) parcels before?
+// Counts only — vendors never see other vendors' names or CNs.
+router.get(
+  "/customer-risk",
+  asyncHandler(async (req, res) => {
+    const h = await phoneHistory(String(req.query.phone ?? ""));
+    if (!h) return res.json({ cancelled: 0, delivered: 0, level: "none" });
+    res.json({ cancelled: h.cancelled, delivered: h.delivered, level: h.level });
+  })
+);
 
 // Converts a timestamp to its Dubai calendar date (midnight UTC of that day).
 function toDubaiDateOnly(d: Date): number {

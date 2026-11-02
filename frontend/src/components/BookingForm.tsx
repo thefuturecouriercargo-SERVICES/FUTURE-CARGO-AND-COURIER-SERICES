@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import CustomerRiskBadge from "@/components/CustomerRiskBadge";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
 import { apiFetch, ApiClientError } from "@/lib/api";
@@ -232,6 +233,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
           <label className={labelCls}>Customer phone *</label>
           <input value={form.customerPhone} onChange={set("customerPhone")} className={input} required inputMode="tel" placeholder="05x xxx xxxx" maxLength={30} />
         </div>
+        <CustomerRiskBadge phone={form.customerPhone} mode={vendors ? "staff" : "vendor"} excludeCn={editing?.cnNo} className="sm:col-span-2" />
         <div className="sm:col-span-2">
           <label className={labelCls}>Address *</label>
           <textarea value={form.address} onChange={set("address")} className={input} required rows={2} maxLength={500} placeholder="Building, street, area, landmark" />

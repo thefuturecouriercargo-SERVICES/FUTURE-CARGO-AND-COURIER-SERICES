@@ -5,6 +5,7 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { writeAuditLog } from "../services/audit.service";
 import { buildBackup, backupFilename, backupEmailConfig, lastBackupEmail, sendBackupEmail } from "../services/backup.service";
+import { nightlyConfigured, listNightlyBackups, runNightlyBackup, readNightlyBackup } from "../services/nightlyBackup.service";
 
 const router = Router();
 router.use(authenticate);
@@ -85,6 +86,60 @@ router.post(
     } catch (err) {
       throw new ApiError(400, err instanceof Error ? err.message : "Backup email failed");
     }
+  })
+);
+
+// ---- Nightly backups (Railway storage bucket) -------------------------------
+
+router.get(
+  "/backup/nightly",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (_req, res) => {
+    if (!nightlyConfigured()) return res.json({ configured: false, files: [], lastFailure: null });
+    const [files, lastFailure] = await Promise.all([
+      listNightlyBackups(),
+      prisma.auditLog.findFirst({ where: { action: "BACKUP_NIGHTLY_FAILED" }, orderBy: { createdAt: "desc" } }),
+    ]);
+    const lastOk = files[0]?.savedAt ? new Date(files[0].savedAt).getTime() : 0;
+    res.json({
+      configured: true,
+      keepDays: 60,
+      files,
+      // Only shown when the latest failure is newer than the latest saved file.
+      lastFailure: lastFailure && lastFailure.createdAt.getTime() > lastOk ? { at: lastFailure.createdAt, meta: lastFailure.meta } : null,
+    });
+  })
+);
+
+router.post(
+  "/backup/nightly/run",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    try {
+      res.json(await runNightlyBackup(req.user!.sub));
+    } catch (err) {
+      throw new ApiError(400, err instanceof Error ? err.message : "Backup failed");
+    }
+  })
+);
+
+router.get(
+  "/backup/nightly/download",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const key = String(req.query.key ?? "");
+    let file;
+    try {
+      file = await readNightlyBackup(key);
+    } catch {
+      throw new ApiError(404, "Backup file not found");
+    }
+    await writeAuditLog({ userId: req.user!.sub, action: "BACKUP_DOWNLOAD", entity: "Backup", meta: { key } });
+    res.setHeader("Content-Type", "application/gzip");
+    res.setHeader("Content-Disposition", `attachment; filename="${key.split("/").pop()}"`);
+    res.setHeader("Cache-Control", "no-store");
+    if (file.size) res.setHeader("Content-Length", String(file.size));
+    file.body.pipe(res);
   })
 );
 

@@ -120,7 +120,7 @@ export default function OrderDrawer({
           {order.booking && (
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-soft">Customer</p>
-              <OrderDetails booking={order.booking} cnNo={order.cnNo} vendorName={order.brandName} total={order.total} />
+              <OrderDetails riskCheck booking={order.booking} cnNo={order.cnNo} vendorName={order.brandName} total={order.total} />
             </div>
           )}
 

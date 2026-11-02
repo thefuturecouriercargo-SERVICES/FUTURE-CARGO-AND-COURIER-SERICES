@@ -88,6 +88,7 @@ expenseEntries ExpenseEntry[]
   payrolls       Payroll[]
   payrollEntries PayrollEntry[]
   agentPayments  AgentPayment[] @relation("AgentPayments")
+  cashHandovers  CashHandover[]
   @@map("users")
 }
 // A deduction from a driver's collected cash. Optionally tagged with the vendor
@@ -546,4 +547,29 @@ model VendorCreditEntry {
   @@index([vendorId])
   @@index([date])
   @@map("vendor_credit_entries")
+}
+
+// Driver's evening cash handover: what the office actually received vs. what the
+// driver should hand over that day (cash COD delivered that Dubai day, minus the
+// driver's purchases and admin-entered expenses). collected/spent/expected are a
+// snapshot taken when the handover is saved; any difference (short or excess)
+// carries forward to the driver's next day.
+model CashHandover {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   User     @relation(fields: [employeeId], references: [id])
+  date       DateTime @db.Date
+  collected  Int
+  spent      Int      @default(0)
+  expected   Int
+  received   Int
+  note       String?
+  byUserId   String?
+  byName     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("cash_handovers")
 }

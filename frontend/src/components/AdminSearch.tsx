@@ -223,7 +223,7 @@ export default function AdminSearch() {
                     <div className="border-t border-line bg-paper p-3">
                       {h.note && <p className="mb-2 text-sm text-cancelled">{h.note}</p>}
                       {h.booking ? (
-                        <OrderDetails booking={h.booking} cnNo={h.cnNo} vendorName={h.vendorName} total={h.amount} />
+                        <OrderDetails riskCheck booking={h.booking} cnNo={h.cnNo} vendorName={h.vendorName} total={h.amount} />
                       ) : (
                         <p className="text-sm text-ink-soft">
                           Daily Entry order — no customer details on file. Vendor {h.vendorName}, AED {fmtNumber(h.amount)}

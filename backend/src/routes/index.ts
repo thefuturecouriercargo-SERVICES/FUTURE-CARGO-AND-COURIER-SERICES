@@ -26,6 +26,9 @@ import cashInHandRoutes from "./cashInHand.routes";
 import vendorCreditTrialRoutes from "./vendorCreditTrial.routes";
 import pnlInsightsRoutes from "./pnlInsights.routes";
 import driverProfitRoutes from "./driverProfit.routes";
+import cashHandoverRoutes from "./cashHandover.routes";
+import customerRiskRoutes from "./customerRisk.routes";
+import monthEndRoutes from "./monthEnd.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -57,4 +60,7 @@ router.use("/cash-in-hand", cashInHandRoutes);
 router.use("/vendor-credit-trial", vendorCreditTrialRoutes);
 router.use("/pnl-insights", pnlInsightsRoutes);
 router.use("/driver-profit", driverProfitRoutes);
+router.use("/cash-handover", cashHandoverRoutes);
+router.use("/customer-risk", customerRiskRoutes);
+router.use("/month-end", monthEndRoutes);
 export default router;

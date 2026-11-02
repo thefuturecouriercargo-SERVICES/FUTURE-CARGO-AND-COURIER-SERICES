@@ -4,6 +4,7 @@ import { OrderBookingDetails } from "@/types";
 import { useState } from "react";
 import { fmtNumber } from "@/lib/format";
 import { NotesText, isPickup } from "@/lib/notes";
+import CustomerRiskBadge from "@/components/CustomerRiskBadge";
 
 /** Small "📋 Copy" — copies all the parcel details as plain text (to paste in WhatsApp etc.). */
 function CopyButton({ text }: { text: string }) {
@@ -60,6 +61,7 @@ export default function OrderDetails({
   total,
   compact,
   waHref,
+  riskCheck,
 }: {
   booking?: OrderBookingDetails | null;
   cnNo: number;
@@ -68,6 +70,8 @@ export default function OrderDetails({
   compact?: boolean;
   /** Ready WhatsApp link with a pre-filled message (driver page); default is a short greeting. */
   waHref?: string;
+  /** Show the "refused parcels before" warning (staff screens only). */
+  riskCheck?: boolean;
 }) {
   if (!booking) {
     return (
@@ -107,6 +111,7 @@ export default function OrderDetails({
         <span className={label}>Phone</span>
         <span className="font-mono">{booking.customerPhone}</span>
       </div>
+      {riskCheck && <CustomerRiskBadge phone={booking.customerPhone} excludeCn={cnNo} />}
       <div className={row}>
         <span className={label}>Address</span>
         <span className="whitespace-pre-wrap">

@@ -10,6 +10,7 @@ import { fmtNumber, todayStr } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
+import CustomerRiskBadge from "@/components/CustomerRiskBadge";
 import PhotoBulkEntry from "@/components/PhotoBulkEntry";
 import BookingStatusBadge from "@/components/BookingStatusBadge";
 import { WebsiteSyncPanels } from "@/components/InspiredSyncPanel";
@@ -44,6 +45,8 @@ export default function AwaitingPickupPage() {
   const router = useRouter();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
+  // Phones (last 9 digits) that refused parcels before → { cancelled, delivered, level }.
+  const [risky, setRisky] = useState<Record<string, { cancelled: number; delivered: number; level: string }>>({});
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [drivers, setDrivers] = useState<Employee[]>([]);
   const [filter, setFilter] = useState<Filter>("AWAITING_PICKUP");
@@ -60,6 +63,17 @@ export default function AwaitingPickupPage() {
   const [showPhotos, setShowPhotos] = useState(false);
   const [justSaved, setJustSaved] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
+
+  const phoneList = useMemo(() => bookings.filter((b) => b.status === "AWAITING_PICKUP").map((b) => b.customerPhone).sort().join("|"), [bookings]);
+  useEffect(() => {
+    if (!phoneList) return setRisky({});
+    apiFetch<Record<string, { cancelled: number; delivered: number; level: string }>>("/customer-risk/batch", {
+      method: "POST",
+      body: { phones: phoneList.split("|") },
+    })
+      .then(setRisky)
+      .catch(() => {});
+  }, [phoneList]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Accept bar
@@ -596,6 +610,19 @@ export default function AwaitingPickupPage() {
                         <button onClick={() => setExpanded(expanded === b.id ? null : b.id)} className="text-left hover:underline">
                           <div className="font-medium">{b.customerName}</div>
                           <div className="text-xs text-ink-soft">{b.customerPhone}</div>
+                          {(() => {
+                            const d = b.customerPhone.replace(/[^0-9]/g, "");
+                            const r = d.length >= 9 ? risky[d.slice(-9)] : undefined;
+                            if (!r || b.status !== "AWAITING_PICKUP") return null;
+                            return (
+                              <div
+                                className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.level === "high" ? "bg-cancelled-bg text-cancelled" : "bg-pending-bg text-pending"}`}
+                                title="This customer refused parcels before (any vendor). Call to confirm before dispatch."
+                              >
+                                ⚠ Refused {r.cancelled}× before{r.delivered ? ` · ${r.delivered} delivered` : ""}
+                              </div>
+                            );
+                          })()}
                         </button>
                       </td>
                       <td>{b.emirate}</td>
@@ -664,6 +691,7 @@ export default function AwaitingPickupPage() {
                                 {b.rejectReason}
                               </div>
                             )}
+                            <CustomerRiskBadge phone={b.customerPhone} excludeCn={b.cnNo} />
                             <div className="flex gap-3">
                               <a href={`tel:${b.customerPhone.replace(/[^0-9+]/g, "")}`} className="text-brass hover:underline">
                                 📞 Call

@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { currentMonthStr, fmtNumber } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import KpiCard from "@/components/KpiCard";
+import MonthEndReport from "@/components/MonthEndReport";
 import BarChart from "@/components/charts/BarChart";
 import { Summary } from "@/types";
 
@@ -84,6 +85,8 @@ export default function MonthlyDashboardPage() {
               <KpiCard label="Total DL Charge" value={fmtNumber(data.summary.totalDeliveryCharge)} unit="AED" />
             </div>
           </div>
+
+          <MonthEndReport month={month} />
 
           <div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">

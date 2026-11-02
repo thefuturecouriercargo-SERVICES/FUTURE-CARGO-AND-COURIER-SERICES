@@ -711,7 +711,7 @@ export default function DriverPortalPage() {
             >
               ✎ Edit address &amp; phone
             </button>
-            <OrderDetails booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
+            <OrderDetails riskCheck booking={o.booking} cnNo={o.cnNo} vendorName={o.brandName} total={o.total} compact waHref={o.booking ? customerWaLink(o) : undefined} />
           </div>
         )}
       </div>

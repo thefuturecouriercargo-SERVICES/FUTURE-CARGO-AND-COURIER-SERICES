@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, settingsBackupUrl } from "@/lib/api";
 
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import NightlyBackups from "@/components/NightlyBackups";
 interface BackupStatus {
   configured: boolean;
   hasApiKey: boolean;
@@ -107,7 +108,7 @@ export default function SettingsPage() {
       <div className="mt-8 max-w-xl border border-line bg-white p-6">
         <h2 className="mb-3 font-display text-[18px] font-semibold text-navy">Backup</h2>
         <p className="mb-4 text-sm text-ink-soft">
-          Downloads every record (orders, vendors, staff, payroll, expenses, credits, audit log) as one JSON file. Keep a copy somewhere safe.
+          Downloads every record (orders, vendor bookings with customer details, vendors, staff, payroll, expenses, credits, cash handovers, audit log) as one JSON file. Keep a copy somewhere safe.
         </p>
         <a
           href={settingsBackupUrl()}
@@ -115,6 +116,8 @@ export default function SettingsPage() {
         >
           ⬇ Download Backup
         </a>
+
+        <NightlyBackups />
 
         <div className="mt-6 border-t border-line pt-4">
           <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-brass">Weekly email backup</h3>

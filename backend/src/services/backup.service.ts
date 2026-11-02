@@ -23,6 +23,16 @@ export async function buildBackup() {
     companySettings,
     notifications,
     auditLogs,
+    bookings,
+    salaryChanges,
+    scanLogs,
+    customerRequests,
+    cnCounters,
+    cashInHandMonths,
+    cashInHandManual,
+    vendorCreditTrials,
+    vendorCreditEntries,
+    cashHandovers,
   ] = await Promise.all([
     prisma.user.findMany(),
     prisma.vendor.findMany(),
@@ -39,6 +49,16 @@ export async function buildBackup() {
     prisma.companySettings.findMany(),
     prisma.notification.findMany(),
     prisma.auditLog.findMany(),
+    prisma.booking.findMany(),
+    prisma.salaryChange.findMany(),
+    prisma.scanLog.findMany(),
+    prisma.customerRequest.findMany(),
+    prisma.cnCounter.findMany(),
+    prisma.cashInHandMonth.findMany(),
+    prisma.cashInHandManual.findMany(),
+    prisma.vendorCreditTrial.findMany(),
+    prisma.vendorCreditEntry.findMany(),
+    prisma.cashHandover.findMany(),
   ]);
 
   const tables = {
@@ -57,13 +77,26 @@ export async function buildBackup() {
     companySettings,
     notifications,
     auditLogs,
+    // Vendor-portal bookings (customer name/phone/address for every CN) and the
+    // rest of the newer tables. Slip photos (BookingPhoto) are left out on purpose:
+    // they're large and are pruned after 60 days anyway.
+    bookings,
+    salaryChanges,
+    scanLogs,
+    customerRequests,
+    cnCounters,
+    cashInHandMonths,
+    cashInHandManual,
+    vendorCreditTrials,
+    vendorCreditEntries,
+    cashHandovers,
   };
 
   const counts = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, v.length]));
 
   return {
     app: "Future Courier Operations",
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     counts,
     tables,

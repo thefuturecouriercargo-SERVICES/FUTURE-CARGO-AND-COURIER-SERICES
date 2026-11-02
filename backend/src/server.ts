@@ -5,6 +5,7 @@ import { initSocket } from "./lib/socket";
 import { prisma } from "./lib/prisma";
 import { backfillResolvedAt } from "./services/resolvedAt.backfill";
 import { startWeeklyBackupScheduler } from "./services/backup.service";
+import { startNightlyBackupScheduler } from "./services/nightlyBackup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
@@ -26,6 +27,8 @@ async function main() {
 
   // Weekly backup email (no-op until RESEND_API_KEY + BACKUP_EMAIL_TO are set).
   startWeeklyBackupScheduler();
+  // Nightly backup to the storage bucket (after 3 AM Dubai, last 60 kept).
+  startNightlyBackupScheduler();
 
   // Inspired website orders → Awaiting Pickup every 5 min (no-op until configured).
   startWooSyncScheduler();
