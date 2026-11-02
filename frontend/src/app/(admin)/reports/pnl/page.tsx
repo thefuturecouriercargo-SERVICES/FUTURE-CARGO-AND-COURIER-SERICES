@@ -5,6 +5,7 @@ import { apiFetch, pnlExportUrl } from "@/lib/api";
 
 import { Skeleton } from "@/components/ui/Skeleton";
 import CashInHandPanel from "@/components/CashInHandPanel";
+import PnlInsightsPanel from "@/components/PnlInsightsPanel";
 interface PnlData {
   revenue: number;
   totalExpenses: number;
@@ -154,6 +155,8 @@ export default function PnlPage() {
       </div>
 
       <CashInHandPanel />
+
+      <PnlInsightsPanel />
 
       {data && (
         <>
