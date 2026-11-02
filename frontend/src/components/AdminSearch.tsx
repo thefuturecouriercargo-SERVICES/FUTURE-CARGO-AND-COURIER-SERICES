@@ -153,8 +153,8 @@ export default function AdminSearch() {
   return (
     <div ref={boxRef} className="relative w-full">
       <div className="relative">
-        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink-soft" aria-hidden>
-          🔍
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" aria-hidden>
+          <RadarIcon scanning={loading || (open && q.trim().length > 0)} />
         </span>
         <input
           ref={inputRef}
@@ -295,5 +295,24 @@ export default function AdminSearch() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/** Gold radar rings; while searching, a red sweep rotates round like a live radar scan. */
+function RadarIcon({ scanning }: { scanning: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="block">
+      <circle cx="12" cy="12" r="10" stroke="#D4AF5A" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="6.2" stroke="#D4AF5A" strokeWidth="1.3" opacity="0.75" />
+      <circle cx="12" cy="12" r="2.4" stroke="#D4AF5A" strokeWidth="1.2" opacity="0.6" />
+      <path d="M12 2v20M2 12h20" stroke="#D4AF5A" strokeWidth="0.8" opacity="0.3" />
+      <g className={scanning ? "radar-sweep radar-sweep--on" : "radar-sweep"}>
+        <path d="M12 12L12 2A10 10 0 0 1 19.07 4.93Z" fill="#EF4444" opacity={scanning ? 0.45 : 0} />
+        <path d="M12 12L19.07 4.93" stroke="#EF4444" strokeWidth="1.6" strokeLinecap="round" opacity={scanning ? 1 : 0} />
+      </g>
+      {scanning && <circle className="radar-blip" cx="16.4" cy="8.6" r="1.3" fill="#EF4444" />}
+      <circle cx="12" cy="12" r="1" fill={scanning ? "#EF4444" : "#D4AF5A"} />
+    </svg>
   );
 }

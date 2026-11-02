@@ -657,3 +657,13 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .lf-fx { animation: none !important; opacity: 0 !important; }
 }
+
+/* Search bar radar: red sweep spins while searching. */
+.radar-sweep { transform-origin: 12px 12px; transform-box: view-box; }
+.radar-sweep--on { animation: radar-spin 1.4s linear infinite; }
+.radar-blip { animation: radar-blip 1.4s ease-out infinite; }
+@keyframes radar-spin { to { transform: rotate(360deg); } }
+@keyframes radar-blip { 0%, 30% { opacity: 0; } 45% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep--on { animation-duration: 4s; }
+}
