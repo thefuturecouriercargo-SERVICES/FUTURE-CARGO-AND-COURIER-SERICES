@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { Order, OrderStatus } from "@/types";
 import { agingDays, fmtNumber } from "@/lib/format";
 import OrderDetails from "@/components/OrderDetails";
@@ -9,8 +10,28 @@ function fmtWhen(v?: string | null) {
   if (!v) return null;
   const d = new Date(v);
   if (isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" });
+  return d.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" });
 }
+
+interface HistoryEvent {
+  at: string;
+  what: string;
+  by?: string | null;
+  detail?: string | null;
+  kind: string;
+}
+
+const KIND_TONE: Record<string, string> = {
+  booking: "bg-brass",
+  entry: "bg-ink-soft",
+  delivered: "bg-[rgb(var(--c-delivered))]",
+  cancelled: "bg-[rgb(var(--c-cancelled))]",
+  transfer: "bg-[rgb(var(--c-transferred))]",
+  pending: "bg-[rgb(var(--c-pending))]",
+  note: "bg-[rgb(var(--c-pending))]",
+  edit: "bg-navy",
+  info: "bg-line",
+};
 
 const STATUS_CLASS: Record<string, string> = { PENDING: "pending", DELIVERED: "delivered", TRANSFER: "transfer", CANCELLED: "cancelled" };
 
@@ -45,8 +66,25 @@ export default function OrderDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Full dated history (every action, who did it, transfers) from the server.
+  const [history, setHistory] = useState<HistoryEvent[] | null>(null);
+  useEffect(() => {
+    let off = false;
+    setHistory(null);
+    apiFetch<{ events: HistoryEvent[] }>(`/orders/${order.id}/history`)
+      .then((r) => !off && setHistory(r.events))
+      .catch(() => !off && setHistory(null));
+    return () => {
+      off = true;
+    };
+  }, [order.id, order.status, order.employee?.name, order.updatedAt]);
+
   const days = agingDays(order.status, order.date);
-  const timeline: { what: string; when: string | null; tone: string }[] = [
+  const openTail =
+    order.status === "PENDING" || order.status === "TRANSFER"
+      ? [{ what: days !== null ? `Still pending — ${days} day${days === 1 ? "" : "s"} out` : `Out for delivery with ${order.employee?.name ?? "driver"}`, when: "Now", tone: "bg-[rgb(var(--c-pending))]" }]
+      : [];
+  const fallback: { what: string; when: string | null; tone: string }[] = [
     { what: "Entered by office", when: fmtWhen(order.createdAt), tone: "bg-ink-soft" },
     ...(order.driverNote ? [{ what: `Driver note: ${order.driverNote}`, when: fmtWhen(order.driverNoteAt), tone: "bg-[rgb(var(--c-pending))]" }] : []),
     ...(order.status === "DELIVERED" || order.status === "CANCELLED"
@@ -59,8 +97,15 @@ export default function OrderDrawer({
         ]
       : order.status === "TRANSFER"
         ? [{ what: `Transferred${order.transferredBy ? ` by ${order.transferredBy}` : ""}`, when: fmtWhen(order.updatedAt), tone: "bg-[rgb(var(--c-transferred))]" }]
-        : [{ what: days !== null ? `Still pending — ${days} day${days === 1 ? "" : "s"} out` : "Out for delivery", when: "Now", tone: "bg-[rgb(var(--c-pending))]" }]),
+        : openTail),
   ];
+  const timeline: { what: string; when: string | null; tone: string; by?: string | null; detail?: string | null }[] =
+    history && history.length
+      ? [
+          ...history.map((e) => ({ what: e.what, when: fmtWhen(e.at), tone: KIND_TONE[e.kind] ?? "bg-line", by: e.by, detail: e.detail })),
+          ...openTail,
+        ]
+      : fallback;
 
   const cells: { label: string; value: React.ReactNode }[] = [
     { label: "Vendor", value: order.brandName },
@@ -135,7 +180,13 @@ export default function OrderDrawer({
                   </div>
                   <div className="pb-4">
                     <p className="text-[13.5px] font-semibold text-navy">{t.what}</p>
-                    {t.when && <p className="text-xs text-ink-soft">{t.when}</p>}
+                    {t.detail && <p className="text-xs text-ink">{t.detail}</p>}
+                    {(t.when || t.by) && (
+                      <p className="text-xs text-ink-soft">
+                        {t.when}
+                        {t.by ? `${t.when ? " · " : ""}by ${t.by}` : ""}
+                      </p>
+                    )}
                   </div>
                 </li>
               ))}

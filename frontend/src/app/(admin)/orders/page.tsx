@@ -336,8 +336,19 @@ await load();
   }
 
   async function deleteOrder(id: string) {
-    if (!(await confirmDialog("Delete this consignment? This cannot be undone."))) return;
-    await apiFetch(`/orders/${id}`, { method: "DELETE" });
+    const o = [...orders, ...pendingCarryover].find((x) => x.id === id);
+    if (!(await confirmDialog(`Delete CN ${o?.cnNo ?? ""}? This cannot be undone.`, { danger: true, confirmText: "Delete" }))) return;
+    // Booked by a vendor: also remove it from the vendor's pages, or send it back to Awaiting Pickup.
+    let withBooking = false;
+    if (o?.booking) {
+      withBooking = await confirmDialog(
+        `CN ${o.cnNo} came from a ${o.brandName} booking. Remove it from the vendor's page too?`,
+        { title: "Vendor booking", confirmText: "Yes — delete everywhere", cancelText: "No — back to Awaiting Pickup", danger: true }
+      );
+    }
+    await apiFetch(`/orders/${id}${withBooking ? "?withBooking=1" : ""}`, { method: "DELETE" });
+    setDrawerId(null);
+    toast(withBooking ? `CN ${o?.cnNo} deleted everywhere` : `CN ${o?.cnNo ?? ""} deleted`, "success");
     await load();
   }
 

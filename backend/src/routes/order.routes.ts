@@ -368,9 +368,19 @@ router.delete(
   "/:id",
   requireRole("SUPER_ADMIN"),
   asyncHandler(async (req, res) => {
-    // If this consignment came from a vendor booking, put the booking back in
-    // Awaiting Pickup rather than leaving it marked accepted with no order.
-    await prisma.booking.updateMany({ where: { orderId: req.params.id }, data: { status: "AWAITING_PICKUP", orderId: null } });
+    // ?withBooking=1 removes the vendor's booking too, so the CN disappears from
+    // the vendor's pages as well. Otherwise the booking goes back to Awaiting
+    // Pickup rather than staying marked accepted with no order.
+    if (req.query.withBooking === "1") {
+      const linked = await prisma.booking.findMany({ where: { orderId: req.params.id }, select: { id: true, cnNo: true } });
+      await prisma.booking.deleteMany({ where: { orderId: req.params.id } });
+      for (const b of linked) {
+        await writeAuditLog({ userId: req.user!.sub, action: "BOOKING_DELETE", entity: "Booking", entityId: b.id, meta: { cnNo: b.cnNo, withOrder: req.params.id } });
+      }
+      if (linked.length) emitGlobal("booking:changed", { type: "deleted" });
+    } else {
+      await prisma.booking.updateMany({ where: { orderId: req.params.id }, data: { status: "AWAITING_PICKUP", orderId: null } });
+    }
     await prisma.order.delete({ where: { id: req.params.id } });
     // A deleted consignment disappears from the Scan & Assign history too.
     await prisma.scanLog.deleteMany({ where: { orderId: req.params.id } });
@@ -649,6 +659,140 @@ router.get(
     });
     if (!order) return res.status(404).json({ message: "Order not found — it may have been deleted" });
     res.json(withContact(order));
+  })
+);
+
+// Full dated history of one consignment for the order panel's timeline:
+// vendor booking, entry, scans, edits, status changes, transfers, notes.
+router.get(
+  "/:id/history",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        vendor: { select: { name: true } },
+        employee: { select: { name: true } },
+        booking: { select: { createdAt: true, labelPrintedAt: true } },
+        transfers: {
+          orderBy: { transferredAt: "asc" },
+          include: { fromEmployee: { select: { name: true } }, toEmployee: { select: { name: true } } },
+        },
+      },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const logs = await prisma.auditLog.findMany({
+      where: { entity: "Order", entityId: id },
+      include: { user: { select: { name: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    // Bulk updates list their orders inside meta.ids.
+    const bulk = await prisma.$queryRaw<{ userId: string | null; meta: unknown; createdAt: Date }[]>`
+      SELECT "userId", meta, "createdAt" FROM audit_logs
+      WHERE action = 'BULK_UPDATE' AND entity = 'Order' AND jsonb_exists(meta::jsonb -> 'ids', ${id})`;
+
+    // Names for any user ids mentioned inside log details.
+    type M = Record<string, unknown>;
+    const ids = new Set<string>();
+    const pick = (m: M, k: string) => (typeof m[k] === "string" ? (m[k] as string) : null);
+    for (const l of logs) {
+      const m = (l.meta ?? {}) as M;
+      ["to", "from", "employeeId"].forEach((k) => { const v = pick(m, k); if (v) ids.add(v); });
+    }
+    for (const b of bulk) {
+      const m = (b.meta ?? {}) as M;
+      const v = pick(m, "employeeId"); if (v) ids.add(v);
+      if (b.userId) ids.add(b.userId);
+    }
+    const users = ids.size ? await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, name: true } }) : [];
+    const nameOf = (uid: string | null | undefined) => (uid ? users.find((u) => u.id === uid)?.name ?? null : null);
+
+    type Ev = { at: string; what: string; by?: string | null; detail?: string | null; kind: string };
+    const ev: Ev[] = [];
+    const push = (at: Date | null | undefined, e: Omit<Ev, "at">) => { if (at) ev.push({ at: at.toISOString(), ...e }); };
+    const NICE: Record<string, string> = { PENDING: "Pending", DELIVERED: "Delivered", CANCELLED: "Cancelled", TRANSFER: "Transfer" };
+
+    if (order.booking) {
+      push(order.booking.createdAt, { kind: "booking", what: `Booked by vendor ${order.vendor.name}` });
+      push(order.booking.labelPrintedAt, { kind: "info", what: "Label printed" });
+    }
+
+    let entered = false;
+    for (const l of logs) {
+      const m = (l.meta ?? {}) as M;
+      const by = l.user?.name ?? null;
+      switch (l.action) {
+        case "CREATE":
+          entered = true;
+          push(l.createdAt, { kind: "entry", what: "Entered in Daily Entry", by, detail: nameOf(pick(m, "employeeId")) ? `With ${nameOf(pick(m, "employeeId"))}` : null });
+          break;
+        case "SCAN_ACCEPT":
+          entered = true;
+          push(l.createdAt, { kind: "entry", what: `Scanned & assigned to ${nameOf(pick(m, "to")) ?? "driver"}`, by });
+          break;
+        case "SCAN_REASSIGN":
+          push(l.createdAt, { kind: "transfer", what: `Re-scanned: ${nameOf(pick(m, "from")) ?? "?"} → ${nameOf(pick(m, "to")) ?? "?"}`, by });
+          break;
+        case "DRIVER_SCAN_CLAIM":
+          entered = true;
+          push(l.createdAt, { kind: "entry", what: `Scanned by driver ${by ?? ""}`.trim() });
+          break;
+        case "STATUS_UPDATE": {
+          const from = NICE[pick(m, "from") ?? ""] ?? pick(m, "from");
+          const to = NICE[pick(m, "to") ?? ""] ?? pick(m, "to");
+          const viaAgent = pick(m, "source") === "AGENT_REPORT";
+          push(l.createdAt, {
+            kind: (pick(m, "to") ?? "").toLowerCase(),
+            what: `${from ?? "?"} → ${to ?? "?"}${viaAgent ? " (agent report)" : ""}`,
+            by,
+            detail: pick(m, "reason"),
+          });
+          break;
+        }
+        case "PAYMENT_UPDATE":
+          push(l.createdAt, { kind: "info", what: `Payment ${pick(m, "from") ?? "?"} → ${pick(m, "to") ?? "?"}`, by });
+          break;
+        case "UPDATE": {
+          const bits: string[] = [];
+          if (pick(m, "employeeId")) bits.push(`driver ${nameOf(pick(m, "employeeId")) ?? "?"}`);
+          if (pick(m, "status")) bits.push(`status ${NICE[pick(m, "status")!] ?? pick(m, "status")}`);
+          if (typeof m.total === "number") bits.push(`total AED ${m.total}`);
+          if (pick(m, "emirate")) bits.push(pick(m, "emirate")!);
+          push(l.createdAt, { kind: "edit", what: "Edited", by, detail: bits.length ? bits.join(" · ") : null });
+          break;
+        }
+        case "EDIT_CONTACT":
+        case "DRIVER_EDIT_CONTACT":
+          push(l.createdAt, { kind: "edit", what: "Address / phone changed", by });
+          break;
+        case "TRANSFER":
+          break; // shown from the transfer records below (they carry from/to + note)
+        default:
+          push(l.createdAt, { kind: "info", what: l.action.replace(/_/g, " ").toLowerCase(), by });
+      }
+    }
+    for (const b of bulk) {
+      const m = (b.meta ?? {}) as M;
+      const bits: string[] = [];
+      if (pick(m, "employeeId")) bits.push(`driver ${nameOf(pick(m, "employeeId")) ?? "?"}`);
+      if (pick(m, "status")) bits.push(`status ${NICE[pick(m, "status")!] ?? pick(m, "status")}`);
+      if (pick(m, "emirate")) bits.push(pick(m, "emirate")!);
+      push(new Date(b.createdAt), { kind: "edit", what: "Bulk update", by: nameOf(b.userId), detail: bits.join(" · ") || null });
+    }
+    for (const t of order.transfers) {
+      push(t.transferredAt, { kind: "transfer", what: `Transferred ${t.fromEmployee.name} → ${t.toEmployee.name}`, detail: t.note });
+    }
+    if (!entered) push(order.createdAt, { kind: "entry", what: "Entered in Daily Entry" });
+    if (order.driverNote) push(order.driverNoteAt, { kind: "note", what: `Driver note: ${order.driverNote}` });
+    // Closed before status changes were logged — still show when.
+    if ((order.status === "DELIVERED" || order.status === "CANCELLED") && !ev.some((e) => e.kind === order.status.toLowerCase())) {
+      push(order.resolvedAt, { kind: order.status.toLowerCase(), what: NICE[order.status], detail: order.status === "CANCELLED" ? order.remarks : null });
+    }
+
+    ev.sort((a, b) => a.at.localeCompare(b.at));
+    res.json({ events: ev });
   })
 );
 
