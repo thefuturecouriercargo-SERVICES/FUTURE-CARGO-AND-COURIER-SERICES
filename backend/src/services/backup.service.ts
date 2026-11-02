@@ -134,16 +134,21 @@ export async function lastBackupEmail() {
 }
 
 /** Builds a backup and emails it as a gzipped JSON attachment. */
-export async function sendBackupEmail(triggeredBy: string | null = null) {
+export async function sendBackupEmail(
+  triggeredBy: string | null = null,
+  prebuilt?: { backup: Awaited<ReturnType<typeof buildBackup>>; gz: Buffer }
+) {
   const cfg = backupEmailConfig();
   if (!cfg.configured) {
     throw new Error("Backup email not configured — set RESEND_API_KEY and BACKUP_EMAIL_TO in Railway.");
   }
 
-  const backup = await buildBackup();
-  const gz = gzipSync(Buffer.from(JSON.stringify(backup)));
+  const backup = prebuilt?.backup ?? (await buildBackup());
+  const gz = prebuilt?.gz ?? gzipSync(Buffer.from(JSON.stringify(backup)));
   const filename = backupFilename("json.gz");
   const sizeKb = Math.round(gz.length / 1024);
+  // Gmail refuses attachments over 25 MB; above ~20 MB send the note without the file.
+  const tooBig = gz.length > 20 * 1024 * 1024;
 
   const rows = Object.entries(backup.counts)
     .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0">${k}</td><td style="text-align:right">${v}</td></tr>`)
@@ -157,10 +162,12 @@ export async function sendBackupEmail(triggeredBy: string | null = null) {
       to: cfg.to,
       subject: `Future Courier backup — ${filename.slice(22, 32)}`,
       html:
-        `<p>Weekly database backup attached (<b>${filename}</b>, ${sizeKb} KB).</p>` +
+        (tooBig
+          ? `<p>Today's backup (<b>${filename}</b>, ${sizeKb} KB) is too large to attach. Download it from Settings → Backup in Future Courier Operations.</p>`
+          : `<p>Database backup attached (<b>${filename}</b>, ${sizeKb} KB).</p>`) +
         `<p>Keep this email. To open the file, unzip it (it's a .gz) — inside is a plain JSON file.</p>` +
         `<table style="font-family:monospace;font-size:13px">${rows}</table>`,
-      attachments: [{ filename, content: gz.toString("base64") }],
+      ...(tooBig ? {} : { attachments: [{ filename, content: gz.toString("base64") }] }),
     }),
   });
 

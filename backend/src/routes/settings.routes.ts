@@ -69,7 +69,7 @@ router.get(
       configured: cfg.configured,
       hasApiKey: Boolean(cfg.apiKey),
       to: cfg.to,
-      schedule: `Every ${cfg.day} after ${String(cfg.hour).padStart(2, "0")}:00 (Dubai)`,
+      schedule: nightlyConfigured() ? "Every night after 03:00 (Dubai), with the nightly backup" : `Every ${cfg.day} after ${String(cfg.hour).padStart(2, "0")}:00 (Dubai)`,
       lastSentAt: last?.createdAt ?? null,
     });
   })

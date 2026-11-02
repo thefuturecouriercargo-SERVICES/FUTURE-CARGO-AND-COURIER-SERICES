@@ -1,7 +1,7 @@
 import { gzipSync } from "zlib";
 import { Readable } from "stream";
 import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
-import { buildBackup } from "./backup.service";
+import { buildBackup, backupEmailConfig, sendBackupEmail } from "./backup.service";
 import { writeAuditLog } from "./audit.service";
 
 /**
@@ -10,7 +10,8 @@ import { writeAuditLog } from "./audit.service";
  *
  * Every night after 3 AM Dubai time a full backup (same JSON as Settings →
  * Download Backup) is gzipped and saved as nightly/future-courier-backup-YYYY-MM-DD.json.gz.
- * The last KEEP_DAYS files are kept; older ones are removed.
+ * The last KEEP_DAYS files are kept; older ones are removed. The same file is
+ * also emailed to BACKUP_EMAIL_TO when Resend is set up.
  */
 const PREFIX = "nightly/";
 const KEEP_DAYS = 60;
@@ -87,13 +88,26 @@ export async function runNightlyBackup(triggeredBy: string | null = null) {
   }
 
   const sizeKb = Math.round(gz.length / 1024);
+
+  // Also email the same file to the company inbox (when the email is set up).
+  // A failed email never fails the backup itself — the file is already saved.
+  let emailed: string[] | null = null;
+  if (backupEmailConfig().configured) {
+    try {
+      emailed = (await sendBackupEmail(triggeredBy, { backup, gz })).to;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[backup] nightly email failed", err);
+    }
+  }
+
   await writeAuditLog({
     userId: triggeredBy,
     action: "BACKUP_NIGHTLY",
     entity: "Backup",
-    meta: { key, date, sizeKb, counts: backup.counts, manual: Boolean(triggeredBy), removedOld: old.length },
+    meta: { key, date, sizeKb, counts: backup.counts, manual: Boolean(triggeredBy), removedOld: old.length, emailed },
   });
-  return { key, date, sizeKb };
+  return { key, date, sizeKb, emailed };
 }
 
 /** Streams one saved backup file (only keys inside the nightly folder). */

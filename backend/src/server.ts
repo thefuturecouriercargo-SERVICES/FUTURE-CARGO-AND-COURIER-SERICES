@@ -5,7 +5,7 @@ import { initSocket } from "./lib/socket";
 import { prisma } from "./lib/prisma";
 import { backfillResolvedAt } from "./services/resolvedAt.backfill";
 import { startWeeklyBackupScheduler } from "./services/backup.service";
-import { startNightlyBackupScheduler } from "./services/nightlyBackup.service";
+import { startNightlyBackupScheduler, nightlyConfigured } from "./services/nightlyBackup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
@@ -25,8 +25,9 @@ async function main() {
     console.log(`Future Courier API listening on port ${env.port} [${env.nodeEnv}]`);
   });
 
-  // Weekly backup email (no-op until RESEND_API_KEY + BACKUP_EMAIL_TO are set).
-  startWeeklyBackupScheduler();
+  // Weekly backup email — only when the nightly backup isn't running, since the
+  // nightly one already emails the file every night.
+  if (!nightlyConfigured()) startWeeklyBackupScheduler();
   // Nightly backup to the storage bucket (after 3 AM Dubai, last 60 kept).
   startNightlyBackupScheduler();
 

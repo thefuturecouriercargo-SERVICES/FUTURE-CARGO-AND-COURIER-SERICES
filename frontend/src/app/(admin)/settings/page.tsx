@@ -120,7 +120,7 @@ export default function SettingsPage() {
         <NightlyBackups />
 
         <div className="mt-6 border-t border-line pt-4">
-          <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-brass">Weekly email backup</h3>
+          <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-brass">Email backup</h3>
           {!backup ? (
             <PageSkeleton rows={6} />
           ) : backup.configured ? (
