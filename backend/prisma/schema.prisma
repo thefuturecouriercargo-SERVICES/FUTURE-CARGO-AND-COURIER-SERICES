@@ -563,6 +563,9 @@ model CashHandover {
   spent      Int      @default(0)
   expected   Int
   received   Int
+  // Amount taken off the driver's total for the day (salary advance, short, …)
+  lessAmount Int      @default(0)
+  lessReason String?
   note       String?
   byUserId   String?
   byName     String?

@@ -14,11 +14,13 @@ import { writeAuditLog } from "../services/audit.service";
  *   Spent     = that day's purchases paid from the driver's cash + admin-entered
  *               expenses for the driver (same deductions as the driver's day closing)
  *   Expected  = Collected − Spent
+ *   Less      = amount the admin takes off that day (salary, short, …) with a reason
+ *   To hand over = Expected − Less
  *   Received  = what the office actually got (typed in by admin)
  *
- * Any difference carries forward: "Previous balance" is the sum of
- * (expected − received) over every earlier saved handover. A shortage shows as a
- * positive balance (driver owes), extra cash as negative.
+ * Cash is collected from every driver each day, so nothing carries forward —
+ * each day stands on its own. The page starts fresh from START_DATE; older
+ * saved handovers stay in the database but are ignored here.
  */
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
@@ -26,6 +28,12 @@ router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
 const DUBAI_OFFSET_MS = 4 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MISSING_LOOKBACK_DAYS = 14;
+
+/** Fresh start — handovers before this Dubai day are ignored. */
+const START_DATE = new Date("2026-11-02T00:00:00Z");
+/** Drivers we don't collect cash from (Savad is the manager). */
+const EXCLUDED_NAMES = ["savad"];
+const LESS_REASONS = ["SALARY", "SHORT", "OTHER"] as const;
 
 /** UTC instants for 00:00 → 24:00 Dubai time on the given calendar date. */
 function dubaiDayBounds(date: Date) {
@@ -69,12 +77,17 @@ async function figuresFor(driverIds: string[], date: Date): Promise<Map<string, 
   return out;
 }
 
+function isExcluded(name: string) {
+  return EXCLUDED_NAMES.includes(name.trim().toLowerCase());
+}
+
 async function activeDrivers() {
-  return prisma.user.findMany({
+  const list = await prisma.user.findMany({
     where: { role: "DRIVER", isAgent: false, active: true },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+  return list.filter((d) => !isExcluded(d.name));
 }
 
 router.get(
@@ -84,25 +97,25 @@ router.get(
     const drivers = await activeDrivers();
     const ids = drivers.map((d) => d.id);
 
-    const lookFrom = new Date(date.getTime() - MISSING_LOOKBACK_DAYS * DAY_MS);
-    const [live, saved, earlier, recentCash] = await Promise.all([
+    const lookFromRaw = new Date(date.getTime() - MISSING_LOOKBACK_DAYS * DAY_MS);
+    const lookFrom = lookFromRaw < START_DATE ? START_DATE : lookFromRaw;
+    const beforeStart = date < START_DATE;
+
+    const [live, saved, recentCash] = await Promise.all([
       figuresFor(ids, date),
-      prisma.cashHandover.findMany({ where: { employeeId: { in: ids }, date } }),
-      prisma.cashHandover.groupBy({
-        by: ["employeeId"],
-        where: { employeeId: { in: ids }, date: { lt: date } },
-        _sum: { expected: true, received: true },
-      }),
-      // Days in the last two weeks where a driver delivered cash parcels…
-      prisma.order.findMany({
-        where: {
-          employeeId: { in: ids },
-          status: "DELIVERED",
-          payment: "CASH",
-          resolvedAt: { gte: dubaiDayBounds(lookFrom).from, lt: dubaiDayBounds(date).from },
-        },
-        select: { employeeId: true, resolvedAt: true },
-      }),
+      beforeStart ? Promise.resolve([]) : prisma.cashHandover.findMany({ where: { employeeId: { in: ids }, date } }),
+      // Days in the last two weeks (from the fresh start) where a driver delivered cash parcels…
+      lookFrom < date
+        ? prisma.order.findMany({
+            where: {
+              employeeId: { in: ids },
+              status: "DELIVERED",
+              payment: "CASH",
+              resolvedAt: { gte: dubaiDayBounds(lookFrom).from, lt: dubaiDayBounds(date).from },
+            },
+            select: { employeeId: true, resolvedAt: true },
+          })
+        : Promise.resolve([]),
     ]);
     // …but no handover was saved for that day.
     const savedDays = await prisma.cashHandover.findMany({
@@ -119,22 +132,23 @@ router.get(
     }
 
     const savedBy = new Map(saved.map((s) => [s.employeeId, s]));
-    const prevBy = new Map(earlier.map((e) => [e.employeeId, (e._sum.expected ?? 0) - (e._sum.received ?? 0)]));
 
     const rows = drivers.map((d) => {
       const f = live.get(d.id)!;
       const h = savedBy.get(d.id);
-      const prevBalance = prevBy.get(d.id) ?? 0;
+      const less = h?.lessAmount ?? 0;
       return {
         driver: d,
         ...f,
-        prevBalance,
-        totalDue: prevBalance + f.expected,
         handover: h
           ? {
               id: h.id,
               received: h.received,
               expected: h.expected,
+              lessAmount: h.lessAmount,
+              lessReason: h.lessReason,
+              toHandOver: h.expected - h.lessAmount,
+              diff: h.expected - h.lessAmount - h.received,
               note: h.note,
               byName: h.byName,
               updatedAt: h.updatedAt,
@@ -142,7 +156,7 @@ router.get(
               stale: h.expected !== f.expected,
             }
           : null,
-        balanceAfter: h ? prevBalance + h.expected - h.received : null,
+        toHandOver: f.expected - less,
         missingDays: [...(missing.get(d.id) ?? [])].sort().reverse(),
       };
     });
@@ -150,13 +164,17 @@ router.get(
     const sum = (fn: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + fn(r), 0);
     res.json({
       date: formatDate(date),
+      startDate: formatDate(START_DATE),
+      beforeStart,
       rows,
       totals: {
         collected: sum((r) => r.collected),
         spent: sum((r) => r.spent),
         expected: sum((r) => r.expected),
+        less: sum((r) => r.handover?.lessAmount ?? 0),
+        toHandOver: sum((r) => r.toHandOver),
         received: sum((r) => r.handover?.received ?? 0),
-        outstanding: sum((r) => r.balanceAfter ?? r.totalDue),
+        short: sum((r) => (r.handover ? r.handover.diff : 0)),
       },
     });
   })
@@ -166,6 +184,8 @@ const saveSchema = z.object({
   employeeId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   received: z.number().int().min(0).max(10_000_000),
+  lessAmount: z.number().int().min(0).max(10_000_000).optional().default(0),
+  lessReason: z.enum(LESS_REASONS).optional().nullable(),
   note: z.string().max(300).optional().nullable(),
 });
 
@@ -176,6 +196,11 @@ router.put(
     const date = parseDateParam(data.date);
     const driver = await prisma.user.findUnique({ where: { id: data.employeeId }, select: { id: true, name: true, role: true, isAgent: true } });
     if (!driver || driver.role !== "DRIVER" || driver.isAgent) throw new ApiError(400, "Not one of our drivers");
+    if (isExcluded(driver.name)) throw new ApiError(400, `${driver.name} is not on cash handover`);
+    if (date < START_DATE) throw new ApiError(400, `Cash handover starts from ${formatDate(START_DATE)}`);
+    if (data.lessAmount > 0 && !data.lessReason) throw new ApiError(400, "Pick a reason for the less amount");
+    const lessAmount = data.lessAmount;
+    const lessReason = lessAmount > 0 ? data.lessReason ?? null : null;
 
     const f = (await figuresFor([driver.id], date)).get(driver.id)!;
     const note = data.note?.trim() || null;
@@ -188,6 +213,8 @@ router.put(
         spent: f.spent,
         expected: f.expected,
         received: data.received,
+        lessAmount,
+        lessReason,
         note,
         byUserId: req.user!.sub,
         byName: req.user!.name,
@@ -197,6 +224,8 @@ router.put(
         spent: f.spent,
         expected: f.expected,
         received: data.received,
+        lessAmount,
+        lessReason,
         note,
         byUserId: req.user!.sub,
         byName: req.user!.name,
@@ -208,7 +237,15 @@ router.put(
       action: "CASH_HANDOVER_SAVE",
       entity: "CashHandover",
       entityId: h.id,
-      meta: { driver: driver.name, date: data.date, expected: f.expected, received: data.received, diff: f.expected - data.received },
+      meta: {
+        driver: driver.name,
+        date: data.date,
+        expected: f.expected,
+        lessAmount,
+        lessReason,
+        received: data.received,
+        diff: f.expected - lessAmount - data.received,
+      },
     });
     res.json(h);
   })
@@ -232,31 +269,29 @@ router.delete(
   })
 );
 
-/** One driver's saved handovers, oldest → newest, with the running balance. */
+/** One driver's saved handovers since the fresh start, newest first. Each day stands alone. */
 router.get(
   "/history/:employeeId",
   asyncHandler(async (req, res) => {
     const list = await prisma.cashHandover.findMany({
-      where: { employeeId: req.params.employeeId },
-      orderBy: { date: "asc" },
+      where: { employeeId: req.params.employeeId, date: { gte: START_DATE } },
+      orderBy: { date: "desc" },
     });
-    let balance = 0;
-    const rows = list.map((h) => {
-      balance += h.expected - h.received;
-      return {
-        id: h.id,
-        date: formatDate(h.date),
-        collected: h.collected,
-        spent: h.spent,
-        expected: h.expected,
-        received: h.received,
-        diff: h.expected - h.received,
-        balance,
-        note: h.note,
-        byName: h.byName,
-      };
-    });
-    res.json({ rows: rows.reverse(), balance });
+    const rows = list.map((h) => ({
+      id: h.id,
+      date: formatDate(h.date),
+      collected: h.collected,
+      spent: h.spent,
+      expected: h.expected,
+      lessAmount: h.lessAmount,
+      lessReason: h.lessReason,
+      toHandOver: h.expected - h.lessAmount,
+      received: h.received,
+      diff: h.expected - h.lessAmount - h.received,
+      note: h.note,
+      byName: h.byName,
+    }));
+    res.json({ rows });
   })
 );
 
