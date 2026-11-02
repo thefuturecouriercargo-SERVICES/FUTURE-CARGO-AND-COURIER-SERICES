@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.futurecourier.ops",
+        "sha256_cert_fingerprints": ["27:07:52:E6:D2:5A:A7:23:56:C8:D1:F3:4B:0F:DF:F7:1F:20:F7:DD:42:2C:8C:03:8B:76:CB:CC:B4:21:59:D6"]
+      }
+    }]
