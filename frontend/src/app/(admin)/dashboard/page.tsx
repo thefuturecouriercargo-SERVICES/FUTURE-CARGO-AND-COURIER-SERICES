@@ -285,7 +285,7 @@ const shareButton = data ? (
 
 return (
           <div>
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4 md:grid md:grid-cols-[1fr_auto_1fr]">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
           <h1 className="inline-flex items-center gap-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
@@ -310,7 +310,7 @@ return (
           {!headerSlot && shareButton}
           {headerSlot && createPortal(<>{todayButton}{shareButton}</>, headerSlot)}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:justify-self-end">
   <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
     <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
     Use date range
