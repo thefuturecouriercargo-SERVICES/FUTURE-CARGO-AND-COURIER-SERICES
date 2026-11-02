@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -55,7 +54,8 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 
   return { listening, supported, start };
 }
-import KpiCard from "@/components/KpiCard";
+import KpiCard, { ACCENTS } from "@/components/KpiCard";
+import KpiFocusRow from "@/components/KpiFocusRow";
 import StatusStamp from "@/components/StatusStamp";
 import DeliveryStatusRing from "@/components/charts/DeliveryStatusRing";
 import EmployeeLeaderboard from "@/components/EmployeeLeaderboard";
@@ -80,15 +80,6 @@ employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { tot
 
 export default function DailyDashboardPage() {
   const [date, setDate] = useState(todayStr());
-  // On desktop, Today + Share sit as two small boxes in the top header bar.
-  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const pick = () => setHeaderSlot(mq.matches ? document.getElementById("shell-actions") : null);
-    pick();
-    mq.addEventListener("change", pick);
-    return () => mq.removeEventListener("change", pick);
-  }, []);
   const [data, setData] = useState<DailyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
@@ -261,27 +252,6 @@ const filteredOrders = sourceOrders.filter((o) => {
   return true;
 });
 
-const todayButton = (
-  <button
-    onClick={() => setDate(todayStr())}
-    className={headerSlot ? "h-9 rounded-xl bg-navy px-3 text-xs font-semibold text-paper hover:bg-navy-2" : "touch-target rounded-xl bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2"}
-  >
-    Today
-  </button>
-);
-const shareButton = data ? (
-  <ShareReportButton
-      iconOnly={!!headerSlot}
-              date={useRange ? `${fromDate} → ${toDate}` : date}
-              sales={Number(data.summary.totalSales) || 0}
-              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
-              delivered={data.summary.delivered}
-              pending={data.summary.pending + nonAgentPendingCarryover.length}
-              transferred={data.summary.transferred}
-              cancelled={data.summary.cancelled}
-            />
-) : null;
-
 return (
           <div>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -305,9 +275,20 @@ return (
           <button onClick={() => setDate(addDays(date, 1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             Next →
           </button>
-          {!headerSlot && todayButton}
-          {!headerSlot && shareButton}
-          {headerSlot && createPortal(<>{todayButton}{shareButton}</>, headerSlot)}
+          <button onClick={() => setDate(todayStr())} className="touch-target rounded-xl bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
+            Today
+          </button>
+          {data && (
+            <ShareReportButton
+              date={useRange ? `${fromDate} → ${toDate}` : date}
+              sales={Number(data.summary.totalSales) || 0}
+              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
+              delivered={data.summary.delivered}
+              pending={data.summary.pending + nonAgentPendingCarryover.length}
+              transferred={data.summary.transferred}
+              cancelled={data.summary.cancelled}
+            />
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
   <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
@@ -339,15 +320,18 @@ return (
             const series = (pick: (x: Summary) => number) => (hasHistory ? [...history.map((h) => Number(pick(h.summary)) || 0), Number(pick(data.summary)) || 0] : undefined);
             const diff = (pick: (x: Summary) => number) => (prev ? (Number(pick(data.summary)) || 0) - (Number(pick(prev)) || 0) : null);
             return (
-              <div className="stagger mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 md:gap-3.5">
-                <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" delta={diff((x) => x.totalSales)} spark={series((x) => x.totalSales)} />
-                <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} delta={diff((x) => x.totalDeliveryCharge)} spark={series((x) => x.totalDeliveryCharge)} />
-                <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} delta={diff((x) => x.delivered)} spark={series((x) => x.delivered)} />
-                <KpiCard label="Pending" value={pendingAll} accent="pending" sub={pct(pendingAll)} />
-                <KpiCard label="Transfer" value={data.summary.transferred} accent="transferred" sub={pct(data.summary.transferred)} delta={diff((x) => x.transferred)} upIsGood={false} spark={series((x) => x.transferred)} />
-                <KpiCard label="Cancelled" value={data.summary.cancelled} accent="cancelled" sub={pct(data.summary.cancelled)} delta={diff((x) => x.cancelled)} upIsGood={false} spark={series((x) => x.cancelled)} />
-                <KpiCard label="Total Consignments" value={total} accent="neutral" sub="All statuses" />
-              </div>
+              <KpiFocusRow
+                gridClassName="stagger mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-3.5"
+                items={[
+                  { key: "Total Sales", color: ACCENTS.gold, node: <KpiCard label="Total Sales" value={sales} unit="AED" accent="gold" sub="Delivered value" delta={diff((x) => x.totalSales)} spark={series((x) => x.totalSales)} /> },
+                  { key: "DL Charge", color: ACCENTS.violet, node: <KpiCard label="DL Charge" value={dl} unit="AED" accent="violet" sub={sales > 0 ? `${((dl / sales) * 100).toFixed(1)}% of sales` : "—"} delta={diff((x) => x.totalDeliveryCharge)} spark={series((x) => x.totalDeliveryCharge)} /> },
+                  { key: "Delivered", color: ACCENTS.delivered, node: <KpiCard label="Delivered" value={data.summary.delivered} accent="delivered" sub={pct(data.summary.delivered)} delta={diff((x) => x.delivered)} spark={series((x) => x.delivered)} /> },
+                  { key: "Pending", color: ACCENTS.pending, node: <KpiCard label="Pending" value={pendingAll} accent="pending" sub={pct(pendingAll)} /> },
+                  { key: "Transfer", color: ACCENTS.transferred, node: <KpiCard label="Transfer" value={data.summary.transferred} accent="transferred" sub={pct(data.summary.transferred)} delta={diff((x) => x.transferred)} upIsGood={false} spark={series((x) => x.transferred)} /> },
+                  { key: "Cancelled", color: ACCENTS.cancelled, node: <KpiCard label="Cancelled" value={data.summary.cancelled} accent="cancelled" sub={pct(data.summary.cancelled)} delta={diff((x) => x.cancelled)} upIsGood={false} spark={series((x) => x.cancelled)} /> },
+                  { key: "Total Consignments", color: ACCENTS.neutral, node: <KpiCard label="Total Consignments" value={total} accent="neutral" sub="All statuses" /> },
+                ]}
+              />
             );
           })()}
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const ACCENTS: Record<string, string> = {
+export const ACCENTS: Record<string, string> = {
   gold: "rgb(var(--c-brass))",
   violet: "#C9A0FF",
   delivered: "rgb(var(--c-delivered))",
