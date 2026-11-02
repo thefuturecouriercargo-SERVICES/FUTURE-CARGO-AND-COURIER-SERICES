@@ -83,6 +83,27 @@ export default function DailyDashboardPage() {
   const [date, setDate] = useState(todayStr());
   // On desktop, Today + Share sit as two small boxes in the top header bar.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  // Desktop: line the Prev / date / Next bar up exactly under the top search bar.
+  const titleRowRef = useRef<HTMLDivElement | null>(null);
+  const [navBox, setNavBox] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const measure = () => {
+      const search = document.getElementById("admin-search-box");
+      const row = titleRowRef.current;
+      if (!search || !row || window.innerWidth < 768) { setNavBox(null); return; }
+      const s = search.getBoundingClientRect();
+      const r = row.getBoundingClientRect();
+      if (s.width === 0) { setNavBox(null); return; }
+      setNavBox({ left: s.left - r.left, width: s.width });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const search = document.getElementById("admin-search-box");
+    if (search) ro.observe(search);
+    if (titleRowRef.current) ro.observe(titleRowRef.current);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const pick = () => setHeaderSlot(mq.matches ? document.getElementById("shell-actions") : null);
@@ -285,15 +306,18 @@ const shareButton = data ? (
 
 return (
           <div>
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div ref={titleRowRef} className="relative mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
           <h1 className="inline-flex items-center gap-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
-            Operations Dashboard
+            DASHBOARD
             <span id="assistant-anchor" className="inline-flex" />
           </h1>
        </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div
+            className={navBox ? "absolute bottom-0 flex items-center gap-2" : "flex flex-wrap items-center gap-2"}
+            style={navBox ? { left: navBox.left, width: navBox.width } : undefined}
+          >
             <button onClick={() => setDate(addDays(date, -1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             ← Prev
           </button>
@@ -301,7 +325,7 @@ return (
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded border border-line px-3 py-2 text-sm"
+            className={`rounded border border-line px-3 py-2 text-sm ${navBox ? "min-w-0 flex-1 text-center" : ""}`}
           />
           <button onClick={() => setDate(addDays(date, 1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             Next →

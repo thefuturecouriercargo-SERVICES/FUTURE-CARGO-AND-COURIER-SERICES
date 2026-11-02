@@ -95,18 +95,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Operations</span>
           </div>
         </div>
-        <div className="mx-4 hidden max-w-xl flex-1 items-center gap-2 md:flex">
+        <div id="admin-search-box" className="mx-4 hidden max-w-xl flex-1 items-center md:flex">
           <div className="flex-1">
             <AdminSearch />
           </div>
-          <button
-            onClick={() => window.dispatchEvent(new Event("fc-palette"))}
-            title="Quick search (Ctrl + K)"
-            className="hidden h-11 shrink-0 items-center gap-1.5 rounded-xl border border-[#1F2A40] bg-[#121A2B] px-3 text-xs text-[#8C97AD] hover:border-[#D4AF5A] hover:text-white lg:flex"
-          >
-            <kbd className="font-sans">Ctrl</kbd>
-            <kbd className="font-sans">K</kbd>
-          </button>
         </div>
         <div className="flex items-center gap-2.5 md:gap-3">
           <AlertsBell />
