@@ -2,7 +2,7 @@
 
 import LiveBridge from "@/components/LiveBridge";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -79,13 +79,44 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const initials = (user?.name ?? "A").trim().slice(0, 2).toUpperCase();
   const collapsed = prefs.collapsed;
 
+  // Desktop: when a page has a date bar (#date-nav), the top search bar sits
+  // straight above it at exactly the same left edge and width.
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [searchBox, setSearchBox] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    let watched: Element | null = null;
+    const ro = new ResizeObserver(() => schedule());
+    const measure = () => {
+      const nav = document.getElementById("date-nav");
+      const head = headerRef.current;
+      if (nav !== watched) {
+        if (watched) ro.unobserve(watched);
+        if (nav) ro.observe(nav);
+        watched = nav;
+      }
+      if (!nav || !head || window.innerWidth < 768) { setSearchBox(null); return; }
+      const n = nav.getBoundingClientRect();
+      const h = head.getBoundingClientRect();
+      if (n.width === 0) { setSearchBox(null); return; }
+      const next = { left: Math.round(n.left - h.left), width: Math.round(n.width) };
+      setSearchBox((prev) => (prev && prev.left === next.left && prev.width === next.width ? prev : next));
+    };
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
+    schedule();
+    const mo = new MutationObserver(schedule);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", schedule);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); window.removeEventListener("resize", schedule); };
+  }, [pathname, collapsed]);
+
   return (
     <div className={`admin-shell ${prefs.dark ? "theme-midnight" : ""} min-h-screen bg-paper text-ink`}>
       <FeedbackHost />
       <LiveBridge />
       <CommandPalette links={visibleNav.map((n) => ({ href: n.href, label: n.label, group: n.group }))} />
       <AdminVoiceAssistant />
-      <div className="z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">
+      <div ref={headerRef} className="relative z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF5A] font-display text-[15px] font-bold text-[#0A1020] shadow-[0_0_24px_rgba(212,175,90,0.25)]">
             FC
@@ -94,17 +125,24 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <span className="font-display text-base font-semibold text-white md:text-[17px]">Future Courier</span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Operations</span>
           </div>
+          <div className="ml-2 flex items-center gap-2.5">
+            <AlertsBell />
+            <div className="hidden sm:block">
+              <ThemeSwitch mode={prefs.mode} onChange={prefs.setMode} />
+            </div>
+          </div>
         </div>
-        <div id="admin-search-box" className="mx-4 hidden max-w-xl flex-1 items-center md:flex">
+        {searchBox && <div className="flex-1" aria-hidden />}
+        <div
+          id="admin-search-box"
+          className={searchBox ? "absolute top-1/2 hidden -translate-y-1/2 items-center md:flex" : "mx-4 hidden max-w-xl flex-1 items-center md:flex"}
+          style={searchBox ? { left: searchBox.left, width: searchBox.width } : undefined}
+        >
           <div className="flex-1">
             <AdminSearch />
           </div>
         </div>
         <div className="flex items-center gap-2.5 md:gap-3">
-          <AlertsBell />
-          <div className="hidden sm:block">
-            <ThemeSwitch mode={prefs.mode} onChange={prefs.setMode} />
-          </div>
           <div className="hidden items-center gap-3 lg:flex">
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF5A] bg-[#18213A] text-[13px] font-semibold text-[#D4AF5A]">
               {initials}
@@ -234,12 +272,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   );
 }
 
-type ThemeMode = "dark" | "light" | "auto";
+type ThemeMode = "dark" | "light";
 
 /** Per-device display preferences, remembered in this browser. */
 function useShellPrefs() {
   const [mode, setModeState] = useState<ThemeMode>("dark");
-  const [systemDark, setSystemDark] = useState(true);
   const [collapsed, setCollapsedState] = useState(false);
 
   useEffect(() => {
@@ -251,13 +288,8 @@ function useShellPrefs() {
       }
     };
     const m = read("fc-theme");
-    if (m === "light" || m === "auto" || m === "dark") setModeState(m);
+    if (m === "light" || m === "dark") setModeState(m);
     setCollapsedState(read("fc-sidebar") === "collapsed");
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setSystemDark(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   const save = (k: string, v: string) => {
@@ -270,7 +302,7 @@ function useShellPrefs() {
 
   return {
     mode,
-    dark: mode === "dark" || (mode === "auto" && systemDark),
+    dark: mode === "dark",
     collapsed,
     setMode: (m: ThemeMode) => {
       setModeState(m);
@@ -287,7 +319,6 @@ function ThemeSwitch({ mode, onChange }: { mode: ThemeMode; onChange: (m: ThemeM
   const opts: { value: ThemeMode; label: string; icon: string }[] = [
     { value: "light", label: "Light", icon: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" },
     { value: "dark", label: "Dark", icon: "M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z" },
-    { value: "auto", label: "Auto", icon: "M3 5h18v12H3zM8 21h8M12 17v4" },
   ];
   return (
     <div role="radiogroup" aria-label="Theme" className="flex rounded-full border border-[#1F2A40] bg-[#121A2B] p-1">
