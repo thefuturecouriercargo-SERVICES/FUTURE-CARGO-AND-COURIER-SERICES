@@ -11,6 +11,7 @@ import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { salariesForMonth } from "../lib/salary";
 import { updateOrderContact, withContact } from "../lib/orderContact";
+import { EMIRATE_LABEL, normalizeEmirate, prayerTimesFor } from "../lib/prayerTimes";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -90,6 +91,29 @@ router.get(
     }));
 
     res.json({ date: start.toISOString().slice(0, 10), orders: ordersWithTransferInfo });
+  })
+);
+
+// Azan reminder: prayer times for the emirate where this driver has the most
+// consignments today (today's orders + older still-pending ones, same as /orders).
+router.get(
+  "/prayer",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange();
+    const orders = await prisma.order.findMany({
+      where: {
+        employeeId: req.user!.sub,
+        OR: [{ date: start }, { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } }],
+      },
+      select: { emirate: true, booking: { select: { emirate: true } } },
+    });
+    const counts: Record<string, number> = {};
+    for (const o of orders) {
+      const em = normalizeEmirate(o.booking?.emirate) ?? normalizeEmirate(o.emirate);
+      if (em) counts[em] = (counts[em] ?? 0) + 1;
+    }
+    const emirate = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "DUBAI";
+    res.json({ emirate, emirateLabel: EMIRATE_LABEL[emirate] ?? emirate, counts, ...prayerTimesFor(emirate) });
   })
 );
 

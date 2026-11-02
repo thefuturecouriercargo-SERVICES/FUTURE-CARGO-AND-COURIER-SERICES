@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import AuthGate from "@/components/AuthGate";
+import PrayerReminder from "@/components/PrayerReminder";
 import { useAuth } from "@/context/AuthContext";
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,7 @@ function DriverTopbar() {
         <Link href="/driver/payroll" className="font-mono text-[11px] uppercase tracking-wide text-line hover:text-brass-light">
           My Payroll
         </Link>
+        <PrayerReminder />
         <span className="ml-auto font-mono text-xs text-brass-light">{user?.name}</span>
       </div>
     </div>
