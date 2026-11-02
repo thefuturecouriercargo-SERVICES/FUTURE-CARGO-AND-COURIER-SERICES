@@ -12,6 +12,46 @@ export interface ReportRow {
   emirate: string | null;
   sender: string | null;
   sheet: string | null;
+  /** Which kind of file the row came from. */
+  source: "excel" | "pdf";
+  /** Excel: the row's delivered/status date · PDF: the PDF's own date — "YYYY-MM-DD", or null if none found. */
+  reportDate: string | null;
+  file: string;
+}
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const ymd = (y: number, m: number, d: number) =>
+  y > 2000 && m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null;
+
+/** Every date written in a piece of text (dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, 02 Nov 2026, 02-Nov-26). */
+export function datesIn(text: string): string[] {
+  const out: string[] = [];
+  const t = text.toLowerCase();
+  for (const m of t.matchAll(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/g)) {
+    const v = ymd(+m[1], +m[2], +m[3]);
+    if (v) out.push(v);
+  }
+  for (const m of t.matchAll(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g)) {
+    const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+    const v = ymd(y, +m[2], +m[1]); // day first (UAE)
+    if (v) out.push(v);
+  }
+  for (const m of t.matchAll(/\b(\d{1,2})[\s-]*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s,-]*(\d{2,4})\b/g)) {
+    const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+    const v = ymd(y, MONTHS.indexOf(m[2]) + 1, +m[1]);
+    if (v) out.push(v);
+  }
+  return out;
+}
+
+function cellDate(v: unknown): string | null {
+  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+  if (typeof v === "number" && v > 40000 && v < 60000) {
+    // Excel serial date
+    return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);
+  }
+  if (typeof v === "object" && v && "result" in v) return cellDate((v as { result: unknown }).result);
+  return datesIn(cellText(v))[0] ?? null;
 }
 
 const EMIRATES = ["Abu Dhabi", "Dubai", "Sharjah", "Ajman", "Umm Al Quwain", "Ras Al Khaimah", "Fujairah", "Al Ain"];
@@ -39,16 +79,20 @@ export async function readExcelReport(file: File): Promise<ReportRow[]> {
   const out: ReportRow[] = [];
 
   wb.eachSheet((ws) => {
-    let cols: { tracking: number; status: number; cod: number; emirate: number; sender: number } | null = null;
+    let cols: { tracking: number; status: number; cod: number; emirate: number; sender: number; date: number } | null = null;
     ws.eachRow({ includeEmpty: false }, (row) => {
-      const vals = Array.from(row.values as unknown[], cellText); // 1-based; fills empty cells
+      const raw = Array.from(row.values as unknown[]); // 1-based; fills empty cells
+      const vals = raw.map(cellText);
       if (!cols) {
         const low = vals.map((v) => v.toLowerCase());
         const find = (...keys: string[]) => low.findIndex((h) => keys.some((k) => h.includes(k)));
         const tracking = find("awb", "tracking", "cn no", "consignment");
         const status = find("status");
         if (tracking > 0 && status > 0) {
-          cols = { tracking, status, cod: find("cod", "amount"), emirate: find("emirate", "destination"), sender: find("sender") };
+          // Delivered date: prefer a delivery/status date column, else any "date" column.
+          let date = find("deliver date", "delivered date", "delivery date", "delivered on", "status date", "last update", "updated");
+          if (date <= 0 || !low[date].includes("date") && !low[date].includes("updat")) date = low.findIndex((h) => h.includes("date"));
+          cols = { tracking, status, cod: find("cod", "amount"), emirate: find("emirate", "destination"), sender: find("sender"), date };
         }
         return;
       }
@@ -62,6 +106,9 @@ export async function readExcelReport(file: File): Promise<ReportRow[]> {
         emirate: cols.emirate > 0 ? vals[cols.emirate] || null : null,
         sender: cols.sender > 0 ? vals[cols.sender] || null : null,
         sheet: ws.name,
+        source: "excel",
+        reportDate: cols.date > 0 ? cellDate(raw[cols.date]) : null,
+        file: file.name,
       });
     });
   });
@@ -79,6 +126,7 @@ export async function readPdfReport(file: File): Promise<ReportRow[]> {
   const rowRe = new RegExp(`(\\d{3,12})\\s+(${emirateRe})\\s+(-?\\d+(?:\\.\\d+)?)\\s+(\\d+(?:\\.\\d+)?)`, "i");
   const out: ReportRow[] = [];
   let section = "";
+  const headerDates: string[] = [];
 
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
@@ -101,7 +149,10 @@ export async function readPdfReport(file: File): Promise<ReportRow[]> {
       const text = l.parts.sort((a, b) => a.x - b.x).map((q) => q.s).join(" ");
       if (/pending till/i.test(text)) section = text.trim();
       const m = text.match(rowRe);
-      if (!m) continue;
+      if (!m) {
+        headerDates.push(...datesIn(text));
+        continue;
+      }
       out.push({
         tracking: m[1],
         status: "Delivered",
@@ -109,9 +160,17 @@ export async function readPdfReport(file: File): Promise<ReportRow[]> {
         emirate: m[2].replace(/\s+/g, " "),
         sender: null,
         sheet: section ? `PDF · ${section}` : `PDF p${p}`,
+        source: "pdf",
+        reportDate: null,
+        file: file.name,
       });
     }
   }
+  // The PDF's date = the latest date printed on it outside the rows ("Pending till …", report date),
+  // else a date in the file name; none → the server uses the upload day.
+  const today = new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+  const pdfDate = [...headerDates, ...datesIn(file.name)].filter((d) => d <= today).sort().pop() ?? null;
+  for (const r of out) r.reportDate = pdfDate;
   return out;
 }
 

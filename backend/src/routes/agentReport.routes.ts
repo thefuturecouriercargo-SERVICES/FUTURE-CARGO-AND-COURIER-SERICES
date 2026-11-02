@@ -314,4 +314,151 @@ router.get(
   })
 );
 
+/**
+ * ── Payment check: Excel "Delivered" vs payment PDF ───────────────────────────
+ * Every upload is recorded: Excel rows marked Delivered (with their delivered date)
+ * and every CN on the agent's payment PDF (with the PDF's date).
+ * "Delivered but not paid" = delivered on or before the latest PDF's date, but on no PDF.
+ * Counting starts fresh from RECON_START — anything delivered before it is ignored.
+ */
+const RECON_START = "2026-11-02";
+
+const recordSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        tracking: z.string().max(40),
+        status: z.string().max(80),
+        cod: z.number().nullable().optional(),
+        source: z.enum(["excel", "pdf"]),
+        reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        file: z.string().max(200).nullable().optional(),
+      })
+    )
+    .max(5000),
+});
+
+router.post(
+  "/record",
+  asyncHandler(async (req, res) => {
+    const { rows } = recordSchema.parse(req.body);
+    const today = dubaiDateStr(new Date());
+    // A date in the future is a misread — fall back to the upload day.
+    const dayOf = (d?: string | null) => parseDateParam(d && d <= today ? d : today);
+    let excel = 0;
+    let pdf = 0;
+    let removed = 0;
+
+    // Same CN twice in one Excel: the last row wins (as in preview).
+    const last = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) {
+      const cn = r.tracking.replace(/\D/g, "");
+      if (cn) last.set(`${r.source}:${cn}`, r);
+    }
+
+    for (const [key, r] of last) {
+      const cn = key.split(":")[1];
+      if (r.source === "pdf") {
+        const data = { reportDate: dayOf(r.reportDate), cod: r.cod ?? null, file: r.file ?? null };
+        await prisma.agentRecon.upsert({ where: { cn_kind: { cn, kind: "PDF_PAID" } }, create: { cn, kind: "PDF_PAID", ...data }, update: data });
+        pdf++;
+        continue;
+      }
+      const target = targetOf(r.status);
+      if (target === "DELIVERED") {
+        const existing = await prisma.agentRecon.findUnique({ where: { cn_kind: { cn, kind: "EXCEL_DELIVERED" } } });
+        // Keep the first delivered date we saw unless the sheet now gives a real one.
+        const data = {
+          reportDate: r.reportDate ? dayOf(r.reportDate) : existing?.reportDate ?? dayOf(null),
+          cod: r.cod ?? existing?.cod ?? null,
+          file: r.file ?? null,
+        };
+        await prisma.agentRecon.upsert({ where: { cn_kind: { cn, kind: "EXCEL_DELIVERED" } }, create: { cn, kind: "EXCEL_DELIVERED", ...data }, update: data });
+        excel++;
+      } else if (target === "CANCELLED") {
+        // Later sheet says RTO — it was never delivered, so nothing is owed.
+        const d = await prisma.agentRecon.deleteMany({ where: { cn, kind: "EXCEL_DELIVERED" } });
+        removed += d.count;
+      }
+    }
+    res.json({ excel, pdf, removed });
+  })
+);
+
+/** GET /unpaid → delivered per Excel, on or before the latest PDF date, but on no payment PDF. */
+router.get(
+  "/unpaid",
+  asyncHandler(async (_req, res) => {
+    const start = parseDateParam(RECON_START);
+    const lastPdf = await prisma.agentRecon.findFirst({ where: { kind: "PDF_PAID" }, orderBy: { reportDate: "desc" } });
+    const lastExcel = await prisma.agentRecon.findFirst({ where: { kind: "EXCEL_DELIVERED" }, orderBy: { updatedAt: "desc" } });
+    if (!lastPdf) {
+      return res.json({ start: RECON_START, cutoff: null, lastPdfFile: null, lastExcelFile: lastExcel?.file ?? null, rows: [], total: 0 });
+    }
+    const cutoff = lastPdf.reportDate;
+
+    const delivered = await prisma.agentRecon.findMany({
+      where: { kind: "EXCEL_DELIVERED", reportDate: { gte: start, lte: cutoff } },
+      orderBy: { reportDate: "asc" },
+    });
+    const paid = await prisma.agentRecon.findMany({ where: { kind: "PDF_PAID", cn: { in: delivered.map((d) => d.cn) } }, select: { cn: true } });
+    const paidSet = new Set(paid.map((p) => p.cn));
+    const missing = delivered.filter((d) => !paidSet.has(d.cn));
+
+    const nums = missing.map((m) => (m.cn.length <= 9 ? Number(m.cn) : NaN)).filter((n) => Number.isSafeInteger(n));
+    const orders = await prisma.order.findMany({
+      where: { cnNo: { in: nums } },
+      select: {
+        cnNo: true,
+        date: true,
+        status: true,
+        total: true,
+        resolvedAt: true,
+        vendor: { select: { name: true } },
+        employee: { select: { name: true, isAgent: true } },
+        booking: { select: { customerName: true } },
+      },
+      orderBy: { date: "desc" },
+    });
+    const byCn = new Map<number, (typeof orders)[number]>();
+    for (const o of orders) {
+      const cur = byCn.get(o.cnNo);
+      if (!cur || (!cur.employee?.isAgent && o.employee?.isAgent)) byCn.set(o.cnNo, o);
+    }
+
+    const rows = missing
+      .map((m) => {
+        const o = byCn.get(Number(m.cn));
+        return {
+          cn: m.cn,
+          deliveredOn: m.reportDate.toISOString().slice(0, 10),
+          cod: m.cod ?? o?.total ?? null,
+          file: m.file,
+          order: o
+            ? {
+                date: o.date.toISOString(),
+                status: o.status,
+                total: o.total,
+                vendor: o.vendor.name,
+                customer: o.booking?.customerName ?? null,
+                holder: o.employee?.name ?? null,
+                resolvedAt: o.resolvedAt?.toISOString() ?? null,
+              }
+            : null,
+        };
+      })
+      // Fresh start: an order we had already closed as Delivered before the start day is old business — skip it.
+      .filter((r) => !(r.order?.status === "DELIVERED" && r.order.resolvedAt && r.order.resolvedAt < new Date(start.getTime() - 4 * 3600 * 1000)));
+
+    res.json({
+      start: RECON_START,
+      cutoff: cutoff.toISOString().slice(0, 10),
+      lastPdfFile: lastPdf.file,
+      lastExcelFile: lastExcel?.file ?? null,
+      rows,
+      total: rows.reduce((s, r) => s + (r.cod ?? 0), 0),
+    });
+  })
+);
+
 export default router;

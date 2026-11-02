@@ -576,3 +576,20 @@ model CashHandover {
   @@index([date])
   @@map("cash_handovers")
 }
+
+/// Agent payment check: CNs the agent's Excel shows Delivered vs CNs on the agent's
+/// payment (cash-return) PDF. One row per CN per kind; re-uploading the same file just updates it.
+model AgentRecon {
+  id          String   @id @default(cuid())
+  cn          String
+  kind        String   // "EXCEL_DELIVERED" | "PDF_PAID"
+  reportDate  DateTime @db.Date // Excel: delivered date (or upload day); PDF: the PDF's date
+  cod         Float?
+  file        String?
+  firstSeenAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([cn, kind])
+  @@index([kind, reportDate])
+  @@map("agent_recon")
+}
