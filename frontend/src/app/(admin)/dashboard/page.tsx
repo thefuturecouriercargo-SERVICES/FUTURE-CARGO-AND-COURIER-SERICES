@@ -57,6 +57,7 @@ function useVoiceSearch(onResult: (digits: string) => void) {
 import KpiCard from "@/components/KpiCard";
 import StatusStamp from "@/components/StatusStamp";
 import DeliveryStatusRing from "@/components/charts/DeliveryStatusRing";
+import EmployeeLeaderboard from "@/components/EmployeeLeaderboard";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
 import { Order, OrderStatus, Summary, Vendor } from "@/types";
@@ -355,134 +356,31 @@ return (
                   Download PDF
                 </a>
               </div>
-             {/* Mobile: stacked cards */}
-              <div className="space-y-3 md:hidden">
-                {employeeRows.map((r) => {
+              <EmployeeLeaderboard
+                rows={employeeRows.map((r) => {
                   const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
-                  const empTotal = r.delivered + empPending + r.transferred + r.cancelled;
-                  return (
-                    <div key={r.employee.id} className="rounded border border-line p-3.5">
-                      <div className="mb-2.5 flex items-center justify-between">
-                        <span className="font-display text-[15px] font-semibold text-navy">{r.employee.name}</span>
-                        <span className="font-mono text-sm font-semibold text-navy">{empTotal} total</span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">Delivered</span>
-                          <span>{r.delivered}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">Sales</span>
-                          <span>{fmtNumber(r.totalSales)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">DL Charge</span>
-                          <span>{fmtNumber(r.totalDeliveryCharge)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">Pending</span>
-                          <span>{empPending}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">Cancelled</span>
-                          <span>{r.cancelled}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-ink-soft">Transfer</span>
-                          <span>{r.transferred}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
+                  return {
+                    id: r.employee.id,
+                    name: r.employee.name,
+                    delivered: r.delivered,
+                    pending: empPending,
+                    cancelled: r.cancelled,
+                    transferred: r.transferred,
+                    total: r.delivered + empPending + r.transferred + r.cancelled,
+                  };
                 })}
-                <div className="rounded border-2 border-navy p-3.5">
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <span className="font-display text-[15px] font-semibold text-navy">TOTAL</span>
-                    <span className="font-mono text-sm font-semibold text-navy">
-                      {employeeRows.reduce((s, r) => s + r.delivered, 0) +
-                        employeePendingTotal +
-                        employeeRows.reduce((s, r) => s + r.transferred, 0) +
-                        employeeRows.reduce((s, r) => s + r.cancelled, 0)}{" "}
-                      total
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 font-mono text-xs sm:grid-cols-2">
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">Delivered</span>
-                      <span>{employeeRows.reduce((s, r) => s + r.delivered, 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">Sales</span>
-                      <span>{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">DL Charge</span>
-                      <span>{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">Pending</span>
-                      <span>{employeePendingTotal}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">Cancelled</span>
-                      <span>{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-ink-soft">Transfer</span>
-                      <span>{employeeRows.reduce((s, r) => s + r.transferred, 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Desktop: full table */}
-              <div className="table-wrap"><table className="data-table hidden md:table">
-                <thead>
-                  <tr>
-                   <th>Employee</th>
-    <th className="text-right">Delivered</th>
-    <th className="text-right">Sales</th>
-    <th className="text-right">DL Charge</th>
-    <th className="text-right">Pending</th>
-    <th className="text-right">Cancelled</th>
-    <th className="text-right">Transfer</th>
-    <th className="text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                 {employeeRows.map((r) => {
-      const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
-      const empTotal = r.delivered + empPending + r.transferred + r.cancelled;
-      return (
-        <tr key={r.employee.id}>
-          <td>{r.employee.name}</td>
-          <td className="text-right font-mono">{r.delivered}</td>
-          <td className="text-right font-mono">{fmtNumber(r.totalSales)}</td>
-          <td className="text-right font-mono">{fmtNumber(r.totalDeliveryCharge)}</td>
-          <td className="text-right font-mono">{empPending}</td>
-          <td className="text-right font-mono">{r.cancelled}</td>
-          <td className="text-right font-mono">{r.transferred}</td>
-          <td className="text-right font-mono">{empTotal}</td>
-        </tr>
-      );
-    })}
-                 <tr className="font-semibold border-t-2 border-line">
-  <td>TOTAL</td>
-  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.delivered, 0)}</td>
-  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalSales, 0))}</td>
-  <td className="text-right font-mono">{fmtNumber(employeeRows.reduce((s, r) => s + r.totalDeliveryCharge, 0))}</td>
-  <td className="text-right font-mono">{employeePendingTotal}</td>
-  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.cancelled, 0)}</td>
-  <td className="text-right font-mono">{employeeRows.reduce((s, r) => s + r.transferred, 0)}</td>
-  <td className="text-right font-mono">
-    {employeeRows.reduce((s, r) => s + r.delivered, 0) +
-      employeePendingTotal +
-      employeeRows.reduce((s, r) => s + r.transferred, 0) +
-      employeeRows.reduce((s, r) => s + r.cancelled, 0)}
-  </td>
-</tr>
-                </tbody>
-              </table></div>
+                totals={{
+                  delivered: employeeRows.reduce((s, r) => s + r.delivered, 0),
+                  pending: employeePendingTotal,
+                  cancelled: employeeRows.reduce((s, r) => s + r.cancelled, 0),
+                  transferred: employeeRows.reduce((s, r) => s + r.transferred, 0),
+                  total:
+                    employeeRows.reduce((s, r) => s + r.delivered, 0) +
+                    employeePendingTotal +
+                    employeeRows.reduce((s, r) => s + r.transferred, 0) +
+                    employeeRows.reduce((s, r) => s + r.cancelled, 0),
+                }}
+              />
             </div>
             <div className="border border-line bg-white p-5">
               <h2 className="mb-5 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">Delivery Status</h2>

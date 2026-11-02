@@ -108,9 +108,9 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
     const step = () => {
       i = (i + 1) % keys.length;
       setAutoKey(keys[i]);
-      t = setTimeout(step, 2600);
+      t = setTimeout(step, 4000);
     };
-    t = setTimeout(step, autoKey ? 2600 : 1300);
+    t = setTimeout(step, autoKey ? 4000 : 1300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, userHover, visibleKeys]);
