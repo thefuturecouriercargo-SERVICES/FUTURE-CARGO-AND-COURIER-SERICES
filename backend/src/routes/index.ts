@@ -25,6 +25,7 @@ import agentReportRoutes from "./agentReport.routes";
 import cashInHandRoutes from "./cashInHand.routes";
 import vendorCreditTrialRoutes from "./vendorCreditTrial.routes";
 import pnlInsightsRoutes from "./pnlInsights.routes";
+import driverProfitRoutes from "./driverProfit.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -55,4 +56,5 @@ router.use("/agent-report", agentReportRoutes);
 router.use("/cash-in-hand", cashInHandRoutes);
 router.use("/vendor-credit-trial", vendorCreditTrialRoutes);
 router.use("/pnl-insights", pnlInsightsRoutes);
+router.use("/driver-profit", driverProfitRoutes);
 export default router;
