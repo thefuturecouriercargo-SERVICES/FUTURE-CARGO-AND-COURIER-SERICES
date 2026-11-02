@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { VendorAuthProvider } from "@/context/VendorAuthContext";
 import VendorShell from "@/components/VendorShell";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface CustomerRequest {
   id: string;
@@ -38,6 +39,7 @@ function Requests() {
       .then(setData)
       .catch(() => setData({ enabled: false, slug: null, requests: [] }));
   }, [tab]);
+  useLiveRefresh(load);
   useEffect(() => {
     load();
     const t = setInterval(load, 30000); // new requests appear by themselves

@@ -65,6 +65,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
 import OrderDrawer from "@/components/OrderDrawer";
 import ContactEditModal from "@/components/ContactEditModal";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 const emptyForm = {
   cnNo: "",
   vendorId: "",
@@ -205,6 +206,7 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
   }, [load]);
 
   useSocketEvent("order:changed", load);
+  useLiveRefresh(load, { socket: false });
 
  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 

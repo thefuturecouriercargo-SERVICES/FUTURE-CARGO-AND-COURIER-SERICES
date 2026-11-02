@@ -10,6 +10,7 @@ import { Employee, EMIRATES, Order, STATUSES, Vendor } from "@/types";
 import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 type SortKey = "cnNo" | "total" | "confirmed";
 type SortDir = "asc" | "desc";
 
@@ -93,6 +94,8 @@ export default function BankLedgerPage() {
 
   useSocketEvent("order:changed", load);
   useSocketEvent("order:changed", loadCarryover);
+  useLiveRefresh(load, { socket: false });
+  useLiveRefresh(loadCarryover, { socket: false });
 
   const sorted = useMemo(() => {
     const copy = [...orders];

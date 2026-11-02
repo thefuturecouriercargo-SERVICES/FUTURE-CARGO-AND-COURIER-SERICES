@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/context/AuthContext";
 import RegisterSW from "@/components/RegisterSW";
+import AppRefresh from "@/components/AppRefresh";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="font-sans antialiased">
         <RegisterSW />
+        <AppRefresh />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

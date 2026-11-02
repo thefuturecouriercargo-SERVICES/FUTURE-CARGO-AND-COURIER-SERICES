@@ -12,6 +12,7 @@ import ContactEditModal from "@/components/ContactEditModal";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface Summary {
   assigned: number;
@@ -416,6 +417,7 @@ export default function DriverPortalPage() {
   });
   useSocketEvent("order:removed", load);
   useSocketEvent("order:changed", load);
+  useLiveRefresh(load, { socket: false });
 
   // Personal milestone celebration — only fires when the count actually crosses a
   // threshold during this session (never retroactively on first load), so a driver

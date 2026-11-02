@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, currentMonthStr } from "@/lib/format";
 import { Order } from "@/types";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface DayRow {
   date: string;
@@ -43,6 +44,7 @@ export default function DriverHistoryPage() {
       setLoading(false);
     }
   }, [month]);
+  useLiveRefresh(load);
 
   useEffect(() => {
     load();

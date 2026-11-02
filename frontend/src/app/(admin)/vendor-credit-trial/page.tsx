@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { confirmDialog, toast } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 type Mode = "AFTER_DELIVERY" | "ADVANCE";
 type MoneyType = "PAYMENT" | "RECEIPT" | "OPENING" | "ADJUSTMENT";
@@ -132,6 +133,7 @@ export default function VendorCreditTrialPage() {
   }, [load, loadLedger, openId]);
   useSocketEvent("order:changed", refresh);
   useSocketEvent("vendorPayment:changed", refresh);
+  useLiveRefresh(refresh, { socket: false });
 
   const rows = useMemo(() => {
     if (!data) return [];

@@ -10,6 +10,7 @@ import { EMIRATES, OrderBookingDetails } from "@/types";
 import OrderDetails from "@/components/OrderDetails";
 
 import VendorHeader from "@/components/VendorHeader";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 interface VendorOrder {
   id: string;
   date: string;
@@ -123,6 +124,7 @@ function VendorPortalContent() {
     setCredit(creditRes);
     setPayments(paymentsRes);
   }, [fromDate, toDate, creditDate]);
+  useLiveRefresh(load);
 
   const loadMonthly = useCallback(async () => {
     setMonthly(await apiFetch<MonthlyReport>("/vendor-portal/monthly", { query: { month } }));

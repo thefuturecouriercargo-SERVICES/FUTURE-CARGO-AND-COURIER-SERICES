@@ -64,6 +64,7 @@ import { Order, OrderStatus, Summary, Vendor } from "@/types";
 import { DashboardSkeleton, PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import ShareReportButton from "@/components/ShareReportButton";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 interface DailyResponse {
   date: string;
   summary: Summary;
@@ -202,6 +203,7 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
 }, [search]);
 
   useSocketEvent("order:changed", load);
+  useLiveRefresh(load, { socket: false });
 
   const loadNewEntries = useCallback(async () => {
     setLoadingNewEntries(true);

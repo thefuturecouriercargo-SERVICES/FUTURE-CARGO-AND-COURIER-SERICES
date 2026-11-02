@@ -8,6 +8,7 @@ import VendorShell from "@/components/VendorShell";
 import VendorOrderStatus from "@/components/VendorOrderStatus";
 import OrderDetails from "@/components/OrderDetails";
 import { OrderBookingDetails } from "@/types";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface DayOrder {
   id: string;
@@ -60,6 +61,7 @@ function Daily() {
   const load = useCallback(async () => {
     setData(await apiFetch<DailyData>("/vendor-portal/daily", { query: { date } }));
   }, [date]);
+  useLiveRefresh(load);
 
   useEffect(() => {
     if (vendor) load();

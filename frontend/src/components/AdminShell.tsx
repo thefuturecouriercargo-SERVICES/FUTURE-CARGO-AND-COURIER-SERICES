@@ -1,5 +1,7 @@
 "use client";
 
+import LiveBridge from "@/components/LiveBridge";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -80,6 +82,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   return (
     <div className={`admin-shell ${prefs.dark ? "theme-midnight" : ""} ${prefs.compact ? "density-compact" : ""} min-h-screen bg-paper text-ink`}>
       <FeedbackHost />
+      <LiveBridge />
       <CommandPalette links={visibleNav.map((n) => ({ href: n.href, label: n.label, group: n.group }))} />
       <AdminVoiceAssistant />
       <div className="z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">

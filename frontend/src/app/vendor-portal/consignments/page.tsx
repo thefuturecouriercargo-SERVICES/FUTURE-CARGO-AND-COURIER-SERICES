@@ -13,6 +13,7 @@ import OrderDetails from "@/components/OrderDetails";
 import { Booking, BookingInput } from "@/types";
 
 import VendorHeader from "@/components/VendorHeader";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -63,6 +64,7 @@ function ConsignmentsContent() {
     const res = await apiFetch<{ bookings: Booking[] }>("/vendor-portal/bookings");
     setBookings(res.bookings);
   }, []);
+  useLiveRefresh(load);
 
   useEffect(() => {
     if (!loading && !vendor) router.push("/vendor-login");

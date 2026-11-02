@@ -19,6 +19,7 @@ import { Booking, BookingInput, EMIRATES, Employee, Vendor } from "@/types";
 import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -112,6 +113,7 @@ export default function AwaitingPickupPage() {
   }, []);
 
   useSocketEvent("booking:changed", () => load());
+  useLiveRefresh(load, { socket: false });
 
   // Day list for the chosen status (all vendors, both sources) — drives the totals.
   const statusList = useMemo(

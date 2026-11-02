@@ -10,6 +10,7 @@ import BarChart from "@/components/charts/BarChart";
 import { Summary } from "@/types";
 
 import { PageSkeleton } from "@/components/ui/Skeleton";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 interface MonthlyResponse {
   month: string;
   summary: Summary;
@@ -40,6 +41,7 @@ export default function MonthlyDashboardPage() {
   }, [load]);
 
   useSocketEvent("order:changed", load);
+  useLiveRefresh(load, { socket: false });
 
   return (
     <div>

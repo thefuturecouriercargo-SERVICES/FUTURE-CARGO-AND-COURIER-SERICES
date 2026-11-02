@@ -7,6 +7,7 @@ import { toast, confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { useAuth } from "@/context/AuthContext";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface Row {
   driver: { id: string; name: string };
@@ -95,6 +96,7 @@ export default function CashHandoverPage() {
       )
     );
   }, [date]);
+  useLiveRefresh(load);
 
   useEffect(() => {
     setData(null);
