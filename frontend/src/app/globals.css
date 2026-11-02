@@ -644,3 +644,16 @@ html {
     font-size: 16px !important;
   }
 }
+
+/* Live Flow: line lights up toward the circle that changed, then the circle ripples twice. */
+@keyframes lf-zap {
+  from { left: -40%; }
+  to { left: 100%; }
+}
+@keyframes lf-ripple {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lf-fx { animation: none !important; opacity: 0 !important; }
+}
