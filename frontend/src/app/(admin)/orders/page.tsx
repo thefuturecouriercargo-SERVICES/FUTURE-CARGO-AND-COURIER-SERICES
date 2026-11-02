@@ -131,6 +131,45 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
     setDuplicateGroups(res.groups);
   }, []);
 
+  // Header search → "Open in Daily Entry": jump to that order's day, filter to
+  // its CN and open its panel (Edit / Delete live there).
+  const loadedDateRef = useRef<string | null>(null);
+  const [jump, setJump] = useState<{ date: string; cn: number; id: string } | null>(null);
+
+  const startJump = useCallback((j: { date: string; cn: number; id: string }) => {
+    setSearch(String(j.cn));
+    setStatusFilter("");
+    setPaymentFilter("");
+    setEmirateFilter("");
+    setEmployeeFilter("");
+    setVendorFilter("");
+    setMinAmount("");
+    setMaxAmount("");
+    setDrawerId(null);
+    setDate(j.date);
+    setJump(j);
+  }, []);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const d = p.get("date"), cn = p.get("cn"), id = p.get("open");
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && cn && id) {
+      startJump({ date: d, cn: Number(cn), id });
+      window.history.replaceState(null, "", "/orders");
+    }
+    const onOpen = (e: Event) => startJump((e as CustomEvent).detail);
+    window.addEventListener("fc-open-order", onOpen);
+    return () => window.removeEventListener("fc-open-order", onOpen);
+  }, [startJump]);
+
+  useEffect(() => {
+    if (!jump || loading || loadedDateRef.current !== jump.date) return;
+    const found = [...orders, ...pendingCarryover].some((o) => o.id === jump.id);
+    if (found) setDrawerId(jump.id);
+    else toast(`CN ${jump.cn} not found on ${jump.date} — it may have been deleted`, "error");
+    setJump(null);
+  }, [jump, loading, orders, pendingCarryover]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -140,6 +179,7 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
         apiFetch<Employee[]>("/employees"),
       ]);
     setOrders(ordersRes.orders);
+    loadedDateRef.current = date;
         setVendors(vendorsRes);
         setEmployees(employeesRes);
         const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover");

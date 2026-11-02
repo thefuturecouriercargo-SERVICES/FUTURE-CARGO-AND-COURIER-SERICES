@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
@@ -23,9 +24,18 @@ interface Hit {
   note?: string | null;
   billNo?: string | null;
   vendorRef?: string | null;
+  orderId?: string | null;
+  orderDate?: string | null;
+  enteredAt?: string;
+  resolvedAt?: string | null;
   booking?: OrderBookingDetails | null;
   matched: string[];
 }
+
+const fmtDT = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })
+    : "—";
 
 const STAGE: Record<Stage, { text: string; cls: string }> = {
   AWAITING_PICKUP: { text: "Awaiting pickup", cls: "bg-pending-bg text-pending" },
@@ -50,6 +60,19 @@ export default function AdminSearch() {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // Jump to the order's day on Daily Entry and open it there (Edit / Delete).
+  function openInDailyEntry(h: Hit) {
+    if (!h.orderId || !h.orderDate) return;
+    const detail = { date: h.orderDate, cn: h.cnNo, id: h.orderId };
+    setOpen(false);
+    if (window.location.pathname.startsWith("/orders")) {
+      window.dispatchEvent(new CustomEvent("fc-open-order", { detail }));
+    } else {
+      router.push(`/orders?date=${detail.date}&cn=${detail.cn}&open=${detail.id}`);
+    }
+  }
 
   // "/" focuses the search box (unless already typing somewhere).
   useEffect(() => {
@@ -221,6 +244,40 @@ export default function AdminSearch() {
                   </button>
                   {isOpen && (
                     <div className="border-t border-line bg-paper p-3">
+                      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="rounded-lg border border-line bg-white px-3 py-2">
+                          <p className="font-mono text-[9px] uppercase tracking-wide text-ink-soft">Entered</p>
+                          <p className="font-mono text-xs font-semibold text-navy">{fmtDT(h.enteredAt)}</p>
+                          {h.orderDate && (
+                            <p className="font-mono text-[10px] text-ink-soft">
+                              Sheet day {new Date(h.orderDate + "T00:00:00").toLocaleDateString("en-GB")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="rounded-lg border border-line bg-white px-3 py-2">
+                          <p className="font-mono text-[9px] uppercase tracking-wide text-ink-soft">
+                            {h.stage === "DELIVERED" ? "Delivered" : h.stage === "CANCELLED" ? "Cancelled" : "Delivered / Cancelled"}
+                          </p>
+                          <p
+                            className={`font-mono text-xs font-semibold ${
+                              h.stage === "DELIVERED" ? "text-delivered" : h.stage === "CANCELLED" ? "text-cancelled" : "text-ink-soft"
+                            }`}
+                          >
+                            {h.stage === "DELIVERED" || h.stage === "CANCELLED" ? fmtDT(h.resolvedAt) : `Not yet — ${STAGE[h.stage]?.text ?? h.stage}`}
+                          </p>
+                        </div>
+                      </div>
+                      {h.orderId ? (
+                        <button
+                          type="button"
+                          onClick={() => openInDailyEntry(h)}
+                          className="mb-3 w-full rounded-lg border border-brass bg-brass/15 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide text-navy hover:bg-brass/30"
+                        >
+                          ✎ Open in Daily Entry — edit / delete
+                        </button>
+                      ) : (
+                        <p className="mb-3 text-xs text-ink-soft">Not on Daily Entry yet ({STAGE[h.stage]?.text ?? h.stage}).</p>
+                      )}
                       {h.note && <p className="mb-2 text-sm text-cancelled">{h.note}</p>}
                       {h.booking ? (
                         <OrderDetails riskCheck booking={h.booking} cnNo={h.cnNo} vendorName={h.vendorName} total={h.amount} />

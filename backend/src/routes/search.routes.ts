@@ -32,6 +32,14 @@ export interface SearchHit {
   note?: string | null;
   billNo?: string | null;
   vendorRef?: string | null;
+  // Daily Entry order behind this hit (none while awaiting pickup / rejected).
+  orderId?: string | null;
+  // The Daily Entry sheet day (YYYY-MM-DD) the order sits on.
+  orderDate?: string | null;
+  // When it was entered into the system.
+  enteredAt: string;
+  // When it was marked Delivered / Cancelled (null while still open).
+  resolvedAt?: string | null;
   booking?: {
     customerName: string;
     customerPhone: string;
@@ -103,6 +111,8 @@ router.get(
             remarks: true,
             driverNote: true,
             emirate: true,
+            resolvedAt: true,
+            createdAt: true,
             employee: { select: { name: true } },
           },
         },
@@ -161,6 +171,10 @@ router.get(
           note: b.status === "REJECTED" ? b.rejectReason : (b.order?.remarks ?? b.order?.driverNote ?? null),
           billNo: b.billNo,
           vendorRef: b.vendorRef,
+          orderId: b.order?.id ?? null,
+          orderDate: b.order ? b.order.date.toISOString().slice(0, 10) : null,
+          enteredAt: (b.order?.createdAt ?? b.createdAt).toISOString(),
+          resolvedAt: b.order?.resolvedAt ? b.order.resolvedAt.toISOString() : null,
           booking: {
             customerName: b.customerName,
             customerPhone: b.customerPhone,
@@ -197,6 +211,10 @@ router.get(
           note: o.remarks ?? o.driverNote ?? null,
           billNo: null,
           vendorRef: null,
+          orderId: o.id,
+          orderDate: o.date.toISOString().slice(0, 10),
+          enteredAt: o.createdAt.toISOString(),
+          resolvedAt: o.resolvedAt ? o.resolvedAt.toISOString() : null,
           booking: null,
           matched,
         };
