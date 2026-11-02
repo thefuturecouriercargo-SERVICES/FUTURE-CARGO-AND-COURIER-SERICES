@@ -43,7 +43,7 @@ function matchAgent(raw: string | null | undefined): { agent: string | null; sur
   if (t.startsWith("RA") || t.startsWith("RH") || t.startsWith("RE")) return { agent: "RAHIMA", sure: false };
   // Single letters / two-letter look-alikes.
   if (t === "D" || t === "KO" || t === "XD" || t === "HD" || t === "KP") return { agent: "KD", sure: false };
-  if (["L", "I", "J", "Y", "7"].includes(t)) return { agent: "T", sure: false };
+  if (["L", "I", "J", "Y", "V", "A", "7"].includes(t)) return { agent: "T", sure: false };
   if (t === "X" || t === "R") return { agent: "K", sure: false };
   if (t === "W") return { agent: "M", sure: false };
   if (t === "H") return { agent: "N", sure: false };
@@ -52,15 +52,35 @@ function matchAgent(raw: string | null | undefined): { agent: string | null; sur
   return { agent: t, sure: false };
 }
 
+/** "MUSAFFAH" → "Musaffah"; leaves mixed-case text alone. */
+function tidyAddress(raw: string | null | undefined): string | null {
+  let a = String(raw ?? "").trim();
+  if (!a) return null;
+  // A leading emirate code written above the area ("AD Musaffa") is not part of the address.
+  a = a.replace(/^(AD|AUH|DXB|SHJ|AJM|RAK|FUJ|UAQ)\b[\s,.\-]*/i, "").trim() || a;
+  a = a.replace(/\bmus+a(?:l?f)+a?h?\b/gi, "Musaffah");
+  if (a === a.toUpperCase() && /[A-Z]{3}/.test(a)) a = a.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase());
+  return a;
+}
+
+/** Fill / fix the emirate from the area when the slip names an Abu Dhabi area or the code "AD". */
+function fixEmirate(emirate: string | null | undefined, address: string | null, rawAddress: string | null | undefined): string | null {
+  const em = emirate && (EMIRATES as readonly string[]).includes(emirate) ? emirate : null;
+  const text = `${rawAddress ?? ""} ${address ?? ""}`;
+  if (/\bmus+a(?:l?f)+a?h?\b|\bkhalifa\s*city\b|^\s*(AD|AUH)\b/i.test(text)) return "ABUDHABI";
+  return em;
+}
+
 const PROMPT = `You are reading a photo of an order slip for a courier company in the UAE.
 Vendors write these by hand (or send a screenshot/printed bill). Extract every order on it.
 
 How these slips usually look:
 - A number at the top (often underlined), e.g. "1211" = the vendor's own bill/order number → vendorRef.
 - Emirate written as a word or code: DXB/Dubai → DUBAI, SHJ/Sharjah → SHARJAH, AD/AUH/Abu Dhabi → ABUDHABI (vendors often write just "AD"), AIN/Al Ain → AL AIN, AJM/Ajman → AJMAN, RAK → RAS AL KHAIMAH, FUJ/Fujairah → FUJAIRAH, UAQ → UMM AL QUWAIN. Areas imply the emirate (Business Bay, Deira, JLT, Marina, Al Barsha… → DUBAI; Al Nahda/Muwaileh/Al Majaz → SHARJAH unless the slip says Dubai; Mussafah/Khalifa City → ABUDHABI).
-- Area / building / street → address (keep the words as written, fix obvious spelling like "Busness bay" → "Business Bay").
+- Area / building / street → address (keep the words as written, fix obvious spelling like "Busness bay" → "Business Bay"). Write the address in normal Title Case, not all capitals.
+- A short code on its own line ABOVE the area (AD, DXB, SHJ, AJM…) is the EMIRATE, not part of the address. E.g. "AD / Musaffa" → emirate ABUDHABI, address "Musaffah". Handwritten "Musaffa", "Musafa", "Mussafa", "Musalfa" all mean "Musaffah" (Abu Dhabi).
 - A UAE phone number, usually 05X XXX XXXX. Write it as "05X XXX XXXX". If a digit is unreadable, give your best reading and add "phone" to unclear.
-- Quantity like "1pce", "2 pcs", "1 pc" and any product name → items, written like "1 × Perfume" or "1 piece" when no product is named.
+- Quantity like "1pce", "2 pcs", "1 pc", "2 items" and any product name → items, ALWAYS written as "<qty> × <product>", e.g. "1 × Perfume", "2 × Bag". When no product is named write "<qty> × Item" (e.g. "2 pcs" → "2 × Item"). Never write "2 items" or "2 pcs".
 - Shoes are common: "1 shoe", "2 shoes", "1 pair", "1 sh" → items "1 × Shoe" / "2 × Shoe". Read the number before it carefully.
 - An amount like "55/-", "AED 55", "55 dhs" → codAmount (whole number). "Paid" / "prepaid" → 0.
 - "Refund" / "Rfd" / "return money" next to an amount means the courier PAYS the customer → codAmount is MINUS (e.g. "Refund 120" → -120), and put "REFUND" in notes.
@@ -73,7 +93,8 @@ How these slips usually look:
   · Single-letter agents: N, T, F, M, K. Two-letter: KD. Names: THAHSI, SULU, HAIRA, RAHIMA.
   · "K" and "KD" are DIFFERENT agents — a lone K is "K"; K with a D beside it is "KD".
   · "M" and "N" are DIFFERENT agents — count the humps/strokes carefully (M has two peaks, N has one diagonal).
-  · "T" is often written fast with a hooked or slanted top bar, so it can look like "L" or "7" → it is "T". Only call it "K" when the letter clearly has the two arms of a K.
+  · "T" is often written fast with a hooked or slanted top bar, so it can look like "L", "7", "λ", "ʎ", "Y" or an upside-down "V" (two strokes meeting at an angle, one longer) → it is "T".
+  · Only call it "K" when there is a clear straight upright stroke on the LEFT with two separate arms coming off it to the right. A two-stroke angle/tent shape without that upright is "T", never "K".
   · A lone single letter in a corner IS the agent, not a stray mark.
   · THAHSI, SULU, HAIRA and RAHIMA are written as names; read them even if the spelling is rough (e.g. "Thasi", "Tahsi", "Haira", "Hayra", "Sulu", "Rahima", "Rahema").
   · If you are not fully sure which agent it is, give your best match from the list and add "agent" to unclear.
@@ -170,8 +191,8 @@ export async function readOrderPhoto(imageBase64: string, mime = "image/jpeg", v
     customerName: o.customerName?.trim() || null,
     agent,
     customerPhone: o.customerPhone?.trim() || null,
-    address: o.address?.trim() || null,
-    emirate: o.emirate && (EMIRATES as readonly string[]).includes(o.emirate) ? o.emirate : null,
+    address: tidyAddress(o.address),
+    emirate: fixEmirate(o.emirate, tidyAddress(o.address), o.address),
     items: o.items?.trim() || null,
     codAmount: typeof o.codAmount === "number" && Number.isFinite(o.codAmount) ? Math.round(o.codAmount) : null,
     notes: o.notes?.trim() || null,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
-import { EW_AGENTS, PICKUP_RE } from "@/lib/notes";
+import { EW_AGENTS, NO_AGENT, PICKUP_RE } from "@/lib/notes";
 
 /**
  * Bulk entry from photos of handwritten order slips (e.g. a vendor that only
@@ -83,7 +83,7 @@ function problems(f: Fields, needBill = false): string[] {
   const p: string[] = [];
   if (needBill && !f.vendorRef.trim()) p.push("vendorRef");
   // EW: every bill must carry its agent.
-  if (needBill && !(EW_AGENTS as readonly string[]).includes(f.agent.trim().toUpperCase())) p.push("agent");
+  if (needBill && ![...EW_AGENTS, NO_AGENT].includes(f.agent.trim().toUpperCase() as never)) p.push("agent");
   if (f.customerPhone.replace(/\D/g, "").length < 7) p.push("customerPhone");
   if (!f.address.trim()) p.push("address");
   if (!f.emirate) p.push("emirate");
@@ -537,10 +537,20 @@ export default function PhotoBulkEntry({
                       <input value={c.fields.items} onChange={(e) => setField(c.key, "items", e.target.value)} className={cls(c, "items")} />
                     </div>
                     <div>
-                      <label className={lbl}>Agent{needBill ? " *" : ""}</label>
+                      <label className={`${lbl} flex items-center justify-between`}>
+                        <span>Agent{needBill ? " *" : ""}</span>
+                        <button
+                          type="button"
+                          onClick={() => setField(c.key, "agent", c.fields.agent === NO_AGENT ? "" : NO_AGENT)}
+                          className={`rounded border px-1.5 text-[10px] normal-case ${c.fields.agent === NO_AGENT ? "border-gold bg-gold font-bold text-navy" : "border-line"}`}
+                        >
+                          Not mentioned
+                        </button>
+                      </label>
                       <select value={c.fields.agent} onChange={(e) => setField(c.key, "agent", e.target.value)} className={`${cls(c, "agent")} font-bold`}>
                         <option value="">—</option>
-                        {c.fields.agent && !(EW_AGENTS as readonly string[]).includes(c.fields.agent) && <option value={c.fields.agent}>{c.fields.agent} (?)</option>}
+                        <option value={NO_AGENT}>Not mentioned</option>
+                        {c.fields.agent && ![...EW_AGENTS, NO_AGENT].includes(c.fields.agent as never) && <option value={c.fields.agent}>{c.fields.agent} (?)</option>}
                         {EW_AGENTS.map((a) => (
                           <option key={a} value={a}>
                             {a}

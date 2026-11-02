@@ -3,6 +3,9 @@ import React from "react";
 /** EW's agents / salesmen — must match AGENTS in backend photoReader.service.ts. */
 export const EW_AGENTS = ["N", "T", "THAHSI", "SULU", "F", "M", "KD", "HAIRA", "RAHIMA", "K"] as const;
 
+/** Picked when the slip has no agent written. Stored as "Agent NONE"; labels print a plain, empty agent box. */
+export const NO_AGENT = "NONE";
+
 /** "Pickup delivery": we collect a parcel from the customer. Payment is usually the delivery charge, or nothing. */
 export const PICKUP_RE = /\b(pick\s*-?\s*up|p\/u|collect(ion)?\s+from\s+customer|reverse\s+pick)/i;
 export function isPickup(b: { notes?: string | null; items?: string | null } | null | undefined): boolean {
@@ -84,7 +87,7 @@ export function NotesText({
   const p = parseNotes(notes);
   const items: React.ReactNode[] = [];
   if (p.bill && !hideBill) items.push(<><b>BILL:</b> {p.bill}</>);
-  if (p.agent && !hideAgent) items.push(<><b>AGENT:</b> <b>{p.agent}</b></>);
+  if (p.agent && !hideAgent) items.push(<><b>AGENT:</b> <b>{p.agent === NO_AGENT ? "—" : p.agent}</b></>);
   for (const part of visibleParts(p.parts, hidePickup)) {
     if (part.label) items.push(<><b>{part.label.toUpperCase()}:</b> {part.text}</>);
     else if (part.strong) items.push(<b style={{ fontWeight: 800 }}>{part.text}</b>);

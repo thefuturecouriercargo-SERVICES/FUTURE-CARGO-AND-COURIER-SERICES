@@ -1,6 +1,6 @@
 "use client";
 
-import { NotesText, isPickup, parseNotes, visibleParts } from "@/lib/notes";
+import { NO_AGENT, NotesText, isPickup, parseNotes, visibleParts } from "@/lib/notes";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
@@ -82,7 +82,13 @@ export function splitItems(items?: string | null): LabelItem[] {
       const body = priced ? priced[1] : raw;
       const price = priced ? priced[2] : undefined;
       const m = body.match(/^(\d+)\s*[×x]\s*(.+)$/i);
-      const row: LabelItem = m ? { qty: m[1], name: m[2].trim(), price } : { qty: "1", name: body, price };
+      // "2 items", "2 pcs", "3 shoes", "2pc bag" — a leading count without "×" is still the quantity.
+      const n = !m ? body.match(/^(\d{1,3})(?:\s*(?:pcs?|pces?|pieces?|items?|nos?|qty)\b\.?|\s+)\s*(.*)$/i) : null;
+      const row: LabelItem = m
+        ? { qty: m[1], name: m[2].trim(), price }
+        : n && Number(n[1]) > 0 && (n[2].trim() || /\D/.test(body))
+          ? { qty: n[1], name: n[2].trim() || "Item", price }
+          : { qty: "1", name: body, price };
       if (marked) row.header = true;
       return row;
     });
@@ -171,7 +177,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
               {hasOrderNo ? <span>ORDER #{booking.vendorRef}</span> : billNo ? <span>BILL: {billNo}</span> : null}
               {parsed.agent && (
                 <span style={{ border: "1.5px solid #000", padding: "0 3px", fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>
-                  AGENT: {parsed.agent}
+                  AGENT: {parsed.agent === NO_AGENT ? <span style={{ display: "inline-block", width: 28 }} /> : parsed.agent}
                 </span>
               )}
             </div>

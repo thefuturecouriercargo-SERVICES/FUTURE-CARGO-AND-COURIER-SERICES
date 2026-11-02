@@ -209,7 +209,7 @@ const ABUDHABI: AreaRule[] = [
   [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*12\b)|(?:\bme\s*-?\s*12\b)|\bshabiya[\s\-']*12\b|\bshabhiya[\s\-']*12\b/i, "SHABIYA 12"],
   [/\bsh?abh?(?:iy|i|y)ah?\b/i, "SHABIYA"],
   [/\bicad\b|\bicad[\s\-']*\d\b|\bindustrial[\s\-']*city[\s\-']*of[\s\-']*abu[\s\-']*dhabi\b|\bmussafah[\s\-']*south\b/i, "ICAD"],
-  [/\bmussafah\b|\bmusaffah\b|\bmussaffa\b|\bmusafah\b|\bmussafa\b|\bmusafa\b|\bm-?\d+[\s\-']*mussafah\b|(?:\bm\s*-?\s*\d{1,2}\b.*\b(mussaf|musaf))|\bmussafah[\s\-']*industrial\b|\bmohammed[\s\-']*bin[\s\-']*zayed[\s\-']*industrial\b/i, "MUSSAFAH"],
+  [/\bmussafah\b|\bmusaffah\b|\bmussaffa\b|\bmusafah\b|\bmussafa\b|\bmusafa\b|\bmusaffa\b|\bmusalfa\b|\bm-?\d+[\s\-']*mussafah\b|(?:\bm\s*-?\s*\d{1,2}\b.*\b(mussaf|musaf))|\bmussafah[\s\-']*industrial\b|\bmohammed[\s\-']*bin[\s\-']*zayed[\s\-']*industrial\b/i, "MUSSAFAH"],
   [/\bshakhbout\b|\bshakbout\b|\bshakhboot\b|\bkhalifa[\s\-']*city[\s\-']*b\b|\bkcb\b|\bkhalifa[\s\-']*b\b/i, "SHAKHBOUT CITY"],
   [/\bkhalifa[\s\-']*street\b|\bkhaleefa[\s\-']*street\b|\bkhalifa[\s\-']*st\b|\bsheikh[\s\-']*khalifa[\s\-']*street\b|\bsheikh[\s\-']*khalifa[\s\-']*bin[\s\-']*zayed[\s\-']*street\b/i, "KHALIFA STREET"],
   [/\bal[\s\-]*falah[\s\-']*street\b|\bfalah[\s\-']*st\b|\bold[\s\-']*passport[\s\-']*road\b/i, "AL FALAH STREET"],
