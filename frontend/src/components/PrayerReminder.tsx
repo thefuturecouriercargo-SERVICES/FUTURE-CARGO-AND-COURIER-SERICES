@@ -74,6 +74,8 @@ export default function PrayerReminder() {
   const [info, setInfo] = useState<PrayerInfo | null>(null);
   const [active, setActive] = useState<{ name: string; at: string; quote: PrayerQuote } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const [push, setPush] = useState<"unsupported" | "off" | "on" | "denied">("unsupported");
 
   const load = useCallback(async () => {
     try {
@@ -122,7 +124,12 @@ export default function PrayerReminder() {
     const a = audioRef.current;
     if (a) {
       a.currentTime = 0;
-      a.play().catch(playChime);
+      a.play()
+        .then(() => setAudioBlocked(false))
+        .catch(() => {
+          setAudioBlocked(true);
+          playChime();
+        });
     } else playChime();
     try {
       navigator.vibrate?.([400, 200, 400]);
@@ -150,6 +157,59 @@ export default function PrayerReminder() {
     return () => clearInterval(t);
   }, [info, fire]);
 
+  // Opened from an Azan notification (/driver?prayer=asr) — show the popup and Azan straight away.
+  useEffect(() => {
+    if (!info) return;
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get("prayer");
+    if (!name) return;
+    params.delete("prayer");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    const p = info.prayers.find((x) => x.name === name);
+    if (!p) return;
+    safeSet(shownKey(info.date, p.name), "1");
+    fire(p.name, p.at);
+  }, [info, fire]);
+
+  // Push notifications: register the service worker, and re-subscribe quietly if already allowed.
+  const subscribe = useCallback(async (ask: boolean) => {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        setPush("unsupported");
+        return;
+      }
+      const { key } = await apiFetch<{ key: string | null }>("/driver/push/key");
+      if (!key) {
+        setPush("unsupported");
+        return;
+      }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      let perm = Notification.permission;
+      if (perm === "default" && ask) perm = await Notification.requestPermission();
+      if (perm === "denied") return setPush("denied");
+      if (perm !== "granted") return setPush("off");
+      const raw = atob(key.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (key.length % 4)) % 4));
+      const appKey = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+      const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey }));
+      await apiFetch("/driver/push/subscribe", { method: "POST", body: sub.toJSON() });
+      setPush("on");
+    } catch {
+      setPush((s) => (s === "on" ? s : "off"));
+    }
+  }, []);
+
+  useEffect(() => {
+    void subscribe(false);
+  }, [subscribe]);
+
+  const replay = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = 0;
+    a.play().then(() => setAudioBlocked(false)).catch(() => undefined);
+  };
+
   const close = () => {
     const a = audioRef.current;
     if (a) {
@@ -173,6 +233,18 @@ export default function PrayerReminder() {
         </span>
       )}
 
+      {push === "off" && (
+        <button
+          onClick={() => void subscribe(true)}
+          className="animate-pulse rounded border border-brass-light px-2 py-1 font-mono text-[11px] font-bold text-brass-light"
+        >
+          🔔 ബാങ്ക് അലേർട്ട് ON ചെയ്യുക
+        </button>
+      )}
+      {push === "denied" && (
+        <span className="font-mono text-[10px] text-cancelled">🔕 Notifications blocked — allow in phone settings</span>
+      )}
+
       {active && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md overflow-hidden rounded-xl border-2 border-brass bg-navy text-paper shadow-2xl">
@@ -190,6 +262,11 @@ export default function PrayerReminder() {
               <p className="text-base font-semibold text-brass-light" dir="rtl" lang="ar">
                 اللّٰهُ أَكْبَرُ اللّٰهُ أَكْبَرُ
               </p>
+              {audioBlocked && (
+                <button onClick={replay} className="mt-3 rounded-full border border-brass-light px-4 py-1.5 text-sm font-semibold text-brass-light" lang="ml">
+                  ▶ ബാങ്ക് കേൾക്കുക
+                </button>
+              )}
               <p className="mt-4 text-xl font-semibold leading-relaxed" lang="ml">
                 “{active.quote.text}”
               </p>

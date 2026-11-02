@@ -10,6 +10,7 @@ import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
 import { fixOtherEmirates } from "./services/inspiredWoo.service";
+import { startAzanPushScheduler } from "./services/azanPush.service";
 
 async function main() {
   const app = createApp();
@@ -34,6 +35,8 @@ async function main() {
   // Inspired website orders → Awaiting Pickup every 5 min (no-op until configured).
   startWooSyncScheduler();
   startPhotoPruneScheduler();
+  // Azan push notifications to drivers at each prayer time.
+  startAzanPushScheduler();
   void runVendorLoginResetOnce();
   void fixOtherEmirates()
     .then((n) => n && console.log(`[emirates] fixed ${n} parcel(s) saved as OTHER`))

@@ -89,6 +89,7 @@ expenseEntries ExpenseEntry[]
   payrollEntries PayrollEntry[]
   agentPayments  AgentPayment[] @relation("AgentPayments")
   cashHandovers  CashHandover[]
+  pushSubscriptions PushSubscription[]
   @@map("users")
 }
 // A deduction from a driver's collected cash. Optionally tagged with the vendor
@@ -592,4 +593,20 @@ model AgentRecon {
   @@unique([cn, kind])
   @@index([kind, reportDate])
   @@map("agent_recon")
+}
+
+// Browser push subscriptions (driver phones) — used for the Azan reminder
+// so it reaches drivers even when the portal is closed.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

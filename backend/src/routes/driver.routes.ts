@@ -11,7 +11,8 @@ import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { salariesForMonth } from "../lib/salary";
 import { updateOrderContact, withContact } from "../lib/orderContact";
-import { EMIRATE_LABEL, normalizeEmirate, prayerTimesFor } from "../lib/prayerTimes";
+import { EMIRATE_LABEL, prayerTimesFor } from "../lib/prayerTimes";
+import { driverEmirate, pushConfigured, vapidPublicKey } from "../services/azanPush.service";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
 
@@ -99,21 +100,29 @@ router.get(
 router.get(
   "/prayer",
   asyncHandler(async (req, res) => {
-    const { start } = dayRange();
-    const orders = await prisma.order.findMany({
-      where: {
-        employeeId: req.user!.sub,
-        OR: [{ date: start }, { status: { in: ["PENDING", "TRANSFER"] }, date: { lt: start } }],
-      },
-      select: { emirate: true, booking: { select: { emirate: true } } },
-    });
-    const counts: Record<string, number> = {};
-    for (const o of orders) {
-      const em = normalizeEmirate(o.booking?.emirate) ?? normalizeEmirate(o.emirate);
-      if (em) counts[em] = (counts[em] ?? 0) + 1;
-    }
-    const emirate = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "DUBAI";
+    const { emirate, counts } = await driverEmirate(req.user!.sub);
     res.json({ emirate, emirateLabel: EMIRATE_LABEL[emirate] ?? emirate, counts, ...prayerTimesFor(emirate) });
+  })
+);
+
+// Azan push notifications — the phone subscribes once, then gets the Azan alert even with the portal closed.
+router.get(
+  "/push/key",
+  asyncHandler(async (_req, res) => res.json({ key: pushConfigured() ? vapidPublicKey() : null }))
+);
+
+router.post(
+  "/push/subscribe",
+  asyncHandler(async (req, res) => {
+    const sub = z
+      .object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }) })
+      .parse(req.body);
+    await prisma.pushSubscription.upsert({
+      where: { endpoint: sub.endpoint },
+      create: { userId: req.user!.sub, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+      update: { userId: req.user!.sub, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+    });
+    res.json({ ok: true });
   })
 );
 
