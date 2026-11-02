@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
 import { addDays, fmtNumber, todayStr, fmtDayDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -80,6 +81,15 @@ employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { tot
 
 export default function DailyDashboardPage() {
   const [date, setDate] = useState(todayStr());
+  // On desktop, Today + Share sit as two small boxes in the top header bar.
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const pick = () => setHeaderSlot(mq.matches ? document.getElementById("shell-actions") : null);
+    pick();
+    mq.addEventListener("change", pick);
+    return () => mq.removeEventListener("change", pick);
+  }, []);
   const [data, setData] = useState<DailyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingCarryover, setPendingCarryover] = useState<Order[]>([]);
@@ -252,6 +262,27 @@ const filteredOrders = sourceOrders.filter((o) => {
   return true;
 });
 
+const todayButton = (
+  <button
+    onClick={() => setDate(todayStr())}
+    className={headerSlot ? "h-9 rounded-xl bg-navy px-3 text-xs font-semibold text-paper hover:bg-navy-2" : "touch-target rounded-xl bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2"}
+  >
+    Today
+  </button>
+);
+const shareButton = data ? (
+  <ShareReportButton
+      iconOnly={!!headerSlot}
+              date={useRange ? `${fromDate} → ${toDate}` : date}
+              sales={Number(data.summary.totalSales) || 0}
+              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
+              delivered={data.summary.delivered}
+              pending={data.summary.pending + nonAgentPendingCarryover.length}
+              transferred={data.summary.transferred}
+              cancelled={data.summary.cancelled}
+            />
+) : null;
+
 return (
           <div>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -275,20 +306,9 @@ return (
           <button onClick={() => setDate(addDays(date, 1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             Next →
           </button>
-          <button onClick={() => setDate(todayStr())} className="touch-target rounded-xl bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
-            Today
-          </button>
-          {data && (
-            <ShareReportButton
-              date={useRange ? `${fromDate} → ${toDate}` : date}
-              sales={Number(data.summary.totalSales) || 0}
-              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
-              delivered={data.summary.delivered}
-              pending={data.summary.pending + nonAgentPendingCarryover.length}
-              transferred={data.summary.transferred}
-              cancelled={data.summary.cancelled}
-            />
-          )}
+          {!headerSlot && todayButton}
+          {!headerSlot && shareButton}
+          {headerSlot && createPortal(<>{todayButton}{shareButton}</>, headerSlot)}
         </div>
         <div className="flex flex-wrap items-center gap-2">
   <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
