@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isLiveFlowSoundOn, playLiveFlowSound, setLiveFlowSoundOn, unlockLiveFlowSound } from "@/lib/liveFlowSound";
 
 interface LiveFlowPanelProps {
   pending: number;
@@ -90,8 +91,31 @@ export default function LiveFlowPanel({ pending, transferred, delivered, cancell
     const small = (d: number) => d > 0 && d <= 10;
     const order: Tone[] = ["delivered", "cancelled", "transferred", "pending"];
     const target = order.find((k) => small(now[k] - before[k]));
-    if (target) setFx({ target, key: Date.now() });
+    if (target) {
+      setFx({ target, key: Date.now() });
+      playLiveFlowSound(target, PATH[target].length);
+    }
   }, [pending, transferred, delivered, cancelled]);
+
+  // Sound on/off (remembered per device). Browsers need one tap on the page before sound can play.
+  const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => {
+    setSoundOn(isLiveFlowSoundOn());
+    const unlock = () => unlockLiveFlowSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    setLiveFlowSoundOn(next);
+    unlockLiveFlowSound();
+    if (next) setTimeout(() => playLiveFlowSound("delivered", PATH.delivered.length), 50);
+  };
 
   const zapFor = (line: number) => {
     if (!fx) return undefined;
@@ -110,6 +134,21 @@ export default function LiveFlowPanel({ pending, transferred, delivered, cancell
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-delivered" aria-hidden />
             Live
           </span>
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-label={soundOn ? "Turn Live Flow sound off" : "Turn Live Flow sound on"}
+            title={soundOn ? "Sound on" : "Sound off"}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
+              soundOn ? "border-delivered/40 text-delivered" : "border-line text-ink-soft"
+            }`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" />
+              <path d="M9 17v1a3 3 0 0 0 6 0v-1" />
+              {!soundOn && <path d="M3 3l18 18" />}
+            </svg>
+          </button>
         </div>
         <span className="text-[13px] text-ink-soft">
           <b className="font-semibold text-navy">{delivered.toLocaleString("en-US")}</b> of {t.toLocaleString("en-US")} delivered
