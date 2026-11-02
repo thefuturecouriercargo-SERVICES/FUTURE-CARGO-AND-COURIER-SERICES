@@ -448,7 +448,7 @@ router.get(
         };
       })
       // Fresh start: an order we had already closed as Delivered before the start day is old business — skip it.
-      .filter((r) => !(r.order?.status === "DELIVERED" && r.order.resolvedAt && r.order.resolvedAt < new Date(start.getTime() - 4 * 3600 * 1000)));
+      .filter((r) => !(r.order?.status === "DELIVERED" && r.order.resolvedAt && new Date(r.order.resolvedAt).getTime() < start.getTime() - 4 * 3600 * 1000));
 
     res.json({
       start: RECON_START,
