@@ -86,8 +86,6 @@ export default function MonthlyDashboardPage() {
             </div>
           </div>
 
-          <MonthEndReport month={month} />
-
           <div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
               Daily Deliveries — {data.month}
@@ -193,6 +191,10 @@ export default function MonthlyDashboardPage() {
                 </tbody>
               </table></div>
             </div>
+          </div>
+
+          <div className="mt-5">
+            <MonthEndReport month={month} />
           </div>
         </>
       ) : null}
