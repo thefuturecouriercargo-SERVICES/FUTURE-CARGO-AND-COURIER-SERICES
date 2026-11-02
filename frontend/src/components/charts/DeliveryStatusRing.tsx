@@ -42,10 +42,11 @@ function useAnimatedNumber(value: number, duration = 900) {
 
 /** Live SVG ring for the Dashboard's Delivery Status card —
  * segments sweep in, every status has a blinking beacon at its tip that
- * bursts when its count changes (socket refresh), a light comet orbits the
- * track, and numbers count up. Hovering a legend row or segment highlights it. */
+ * bursts when its count changes (socket refresh). The highlight auto-cycles
+ * through each status one by one (blinks, others fade); hovering takes over. Hovering a legend row or segment highlights it. */
 export default function DeliveryStatusRing({ delivered, pending, transferred, cancelled }: Props) {
-  const [hover, setHover] = useState<string | null>(null);
+  const [userHover, setHover] = useState<string | null>(null);
+  const [autoKey, setAutoKey] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [bursts, setBursts] = useState<Record<string, number>>({});
   const prev = useRef<Record<string, number> | null>(null);
@@ -95,6 +96,26 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
     return seg;
   });
 
+  // Auto-cycle the highlight through each status, one by one, like a hover.
+  // A real mouse hover takes over and pauses the cycle.
+  const visibleKeys = visible.map((v) => v.key).join(",");
+  useEffect(() => {
+    if (!mounted || userHover) return;
+    const keys = visibleKeys ? visibleKeys.split(",") : [];
+    if (!keys.length) return;
+    let i = autoKey ? keys.indexOf(autoKey) : -1;
+    let t: ReturnType<typeof setTimeout>;
+    const step = () => {
+      i = (i + 1) % keys.length;
+      setAutoKey(keys[i]);
+      t = setTimeout(step, 2600);
+    };
+    t = setTimeout(step, autoKey ? 2600 : 1300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, userHover, visibleKeys]);
+
+  const hover = userHover ?? autoKey;
   const active = hover ? items.find((i) => i.key === hover) : null;
   const centreTarget = active ? active.value : delivered;
   const pctTarget = total > 0 ? ((active ? active.value : delivered) / total) * 100 : 0;
@@ -120,9 +141,11 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
         .dsr .burst { animation: dsr-burst 1s ease-out forwards; }
         .dsr .pop { animation: dsr-pop .6s ease-out both; }
         .dsr .orbit { transform-origin: 100px 100px; animation: dsr-orbit 7s linear infinite; }
+        @keyframes dsr-segblink { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+        .dsr .seg-blink { animation: dsr-segblink 1.3s ease-in-out infinite; }
         .dsr .breathe { animation: dsr-breathe 3s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .dsr .ping, .dsr .blink, .dsr .burst, .dsr .orbit, .dsr .breathe, .dsr .pop { animation: none !important; }
+          .dsr .ping, .dsr .blink, .dsr .burst, .dsr .orbit, .dsr .breathe, .dsr .pop, .dsr .seg-blink { animation: none !important; }
           .dsr .ping, .dsr .burst { opacity: 0; }
         }
       `}</style>
@@ -171,7 +194,8 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
               strokeDasharray={`${mounted ? s.len : 0} ${C}`}
               strokeDashoffset={-s.offset}
               filter={hover === s.key ? "url(#ring-glow)" : undefined}
-              opacity={hover && hover !== s.key ? 0.3 : 1}
+              className={hover === s.key ? "seg-blink" : undefined}
+              opacity={hover && hover !== s.key ? 0.25 : 1}
               onMouseEnter={() => setHover(s.key)}
               onMouseLeave={() => setHover(null)}
               style={{
@@ -181,50 +205,34 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
             />
           ))}
 
-          {/* Orbiting comet — a soft light sweeping around the ring */}
-          {total > 0 && (
-            <g className="orbit" style={{ pointerEvents: "none" }}>
-              <circle
-                cx="100"
-                cy="100"
-                r={R}
-                fill="none"
-                stroke="#fff"
-                strokeOpacity={0.22}
-                strokeWidth={STROKE - 6}
-                strokeLinecap="round"
-                strokeDasharray={`26 ${C}`}
-              />
-              <circle cx={100 + R * Math.cos(26 / R)} cy={100 + R * Math.sin(26 / R)} r="2.2" fill="#fff" opacity={0.85} filter="url(#dot-glow)" />
-            </g>
-          )}
-
           {/* Inner dashed guide, gently breathing */}
           <circle className="breathe" cx="100" cy="100" r={R - 22} fill="none" stroke="rgb(var(--c-line))" strokeWidth="1" strokeDasharray="2 4" />
 
           {/* Blinking beacons — one per status, at each segment's tip */}
           {mounted &&
             segments.map((s) => {
-              const dim = hover && hover !== s.key;
+              const on = hover === s.key;
+              if (!on && !bursts[s.key]) return null;
               return (
                 <g
                   key={`dot-${s.key}`}
-                  opacity={dim ? 0.25 : 1}
+                  opacity={1}
                   style={{ transition: "opacity 200ms", cursor: "pointer" }}
                   onMouseEnter={() => setHover(s.key)}
                   onMouseLeave={() => setHover(null)}
                 >
-                  {/* Expanding ping ring, staggered per status */}
-                  <circle className="fb ping" cx={s.dotX} cy={s.dotY} r="5" fill={s.color} style={{ animationDelay: `${s.idx * 0.45}s` }} />
+                  {on && <circle key={`p-${s.key}`} className="fb ping" cx={s.dotX} cy={s.dotY} r="5" fill={s.color} />}
                   {/* One-off burst when this status's count changes */}
                   {bursts[s.key] ? (
                     <circle key={bursts[s.key]} className="fb burst" cx={s.dotX} cy={s.dotY} r="5" fill="none" stroke={s.color} strokeWidth="2" />
                   ) : null}
                   {/* Core dot */}
-                  <g className="fb pop" style={{ animationDelay: `${0.9 + s.idx * 0.12}s` }}>
-                    <circle cx={s.dotX} cy={s.dotY} r={hover === s.key ? 7 : 5.5} fill="rgb(var(--c-paper))" stroke={s.color} strokeWidth="2.5" style={{ transition: "r 200ms" }} />
-                    <circle className="fb blink" cx={s.dotX} cy={s.dotY} r="2.6" fill={s.color} filter="url(#dot-glow)" style={{ animationDelay: `${s.idx * 0.3}s` }} />
-                  </g>
+                  {on && (
+                    <g key={`c-${s.key}`} className="fb pop">
+                      <circle cx={s.dotX} cy={s.dotY} r="6.5" fill="rgb(var(--c-paper))" stroke={s.color} strokeWidth="2.5" />
+                      <circle className="fb blink" cx={s.dotX} cy={s.dotY} r="3" fill={s.color} filter="url(#dot-glow)" />
+                    </g>
+                  )}
                 </g>
               );
             })}
@@ -249,23 +257,20 @@ export default function DeliveryStatusRing({ delivered, pending, transferred, ca
       </div>
 
       <ul className="w-full space-y-1">
-        {items.map((i, idx) => {
+        {items.map((i) => {
           const pct = total > 0 ? (i.value / total) * 100 : 0;
           return (
             <li
               key={i.key}
               onMouseEnter={() => setHover(i.key)}
               onMouseLeave={() => setHover(null)}
-              className={`rounded-xl px-3 py-2.5 transition ${hover === i.key ? "bg-paper-2" : ""}`}
+              className={`rounded-xl px-3 py-2.5 transition duration-300 ${hover === i.key ? "bg-paper-2" : hover ? "opacity-40" : ""}`}
             >
               <div className="mb-1.5 flex items-center gap-2.5 text-sm">
                 {/* Pulsing status dot */}
                 <span className="relative flex h-2.5 w-2.5" aria-hidden>
-                  {i.value > 0 && (
-                    <span
-                      className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-                      style={{ background: i.color, animationDelay: `${idx * 0.45}s`, animationDuration: "2.2s" }}
-                    />
+                  {hover === i.key && i.value > 0 && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70" style={{ background: i.color }} />
                   )}
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: i.color, boxShadow: `0 0 8px rgb(${i.rgb} / 0.7)` }} />
                 </span>
