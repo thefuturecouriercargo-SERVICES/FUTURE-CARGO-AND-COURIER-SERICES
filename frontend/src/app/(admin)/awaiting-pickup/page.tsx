@@ -235,9 +235,13 @@ export default function AwaitingPickupPage() {
   }
 
   async function remove(b: Booking) {
-    if (!(await confirmDialog(`Delete booking CN ${b.cnNo} (${b.customerName})? This can't be undone.`))) return;
+    const text = b.labelPrintedAt
+      ? `CN ${b.cnNo} (${b.customerName}) — label already printed. It will be marked Cancelled (kept in search), not erased. Continue?`
+      : `Delete booking CN ${b.cnNo} (${b.customerName})? This can't be undone.`;
+    if (!(await confirmDialog(text))) return;
     try {
-      await apiFetch(`/bookings/${b.id}`, { method: "DELETE" });
+      const r = await apiFetch<{ cancelled?: boolean }>(`/bookings/${b.id}`, { method: "DELETE" });
+      if (r?.cancelled) setMsg({ ok: true, text: `CN ${b.cnNo} marked Cancelled (label was printed).` });
       await load();
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "Delete failed" });

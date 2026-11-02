@@ -440,6 +440,10 @@ router.delete(
   "/bookings/:id",
   asyncHandler(async (req, res) => {
     const existing = await ownAwaitingBooking(req.vendor!.sub, req.params.id);
+    // A printed label may already be on a parcel — deleting would leave a CN that exists nowhere.
+    if (existing.labelPrintedAt) {
+      throw new ApiError(400, `Label for CN ${existing.cnNo} is already printed — ask Future Courier to cancel it`);
+    }
     await prisma.booking.delete({ where: { id: existing.id } });
     await writeAuditLog({ action: "BOOKING_DELETE", entity: "Booking", entityId: existing.id, meta: { cnNo: existing.cnNo, by: "VENDOR" } });
     emitGlobal("booking:changed", { type: "deleted", id: existing.id });

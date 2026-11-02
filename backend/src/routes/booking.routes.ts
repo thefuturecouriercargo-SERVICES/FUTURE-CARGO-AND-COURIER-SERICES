@@ -419,6 +419,16 @@ router.delete(
     const existing = await prisma.booking.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, "Booking not found");
     if (existing.status === "ACCEPTED") throw new ApiError(400, "Already in Daily Entry — delete the consignment there instead");
+    // Label already printed → keep the record as Cancelled so the CN still shows in search.
+    if (existing.labelPrintedAt) {
+      const reason = "Cancelled by office (label was already printed)";
+      const booking = existing.status === "REJECTED"
+        ? await prisma.booking.findUniqueOrThrow({ where: { id: existing.id }, include: INCLUDE })
+        : await prisma.booking.update({ where: { id: existing.id }, data: { status: "REJECTED", rejectReason: reason }, include: INCLUDE });
+      await writeAuditLog({ userId: req.user!.sub, action: "BOOKING_REJECT", entity: "Booking", entityId: booking.id, meta: { cnNo: booking.cnNo, reason } });
+      emitGlobal("booking:changed", { type: "rejected", id: booking.id });
+      return res.json({ deleted: false, cancelled: true, booking });
+    }
     await prisma.booking.delete({ where: { id: existing.id } });
     await writeAuditLog({ userId: req.user!.sub, action: "BOOKING_DELETE", entity: "Booking", entityId: existing.id, meta: { cnNo: existing.cnNo } });
     emitGlobal("booking:changed", { type: "deleted", id: existing.id });

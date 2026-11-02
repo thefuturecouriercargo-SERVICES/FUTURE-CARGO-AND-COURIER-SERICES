@@ -397,9 +397,15 @@ function ConsignmentsContent() {
                             >
                               Edit
                             </button>
-                            <button onClick={() => remove(b)} className="text-xs text-cancelled hover:underline">
-                              Delete
-                            </button>
+                            {b.labelPrintedAt ? (
+                              <span className="text-xs text-ink-soft" title="Label already printed — ask Future Courier to cancel it">
+                                🔒 Printed
+                              </span>
+                            ) : (
+                              <button onClick={() => remove(b)} className="text-xs text-cancelled hover:underline">
+                                Delete
+                              </button>
+                            )}
                           </>
                         )}
                       </td>
