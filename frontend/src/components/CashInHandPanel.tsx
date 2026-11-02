@@ -63,6 +63,7 @@ export default function CashInHandPanel() {
     try {
       await apiFetch("/cash-in-hand/manual", { method: "PUT", body: { amount, note: manualNote.trim() } });
       await load();
+      window.dispatchEvent(new Event("cash-in-hand-changed"));
       toast("Manual entry saved", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save", "error");
@@ -85,6 +86,7 @@ export default function CashInHandPanel() {
       await apiFetch(`/cash-in-hand/month/${edit.month}`, { method: "PUT", body: { workingDays: days, dailyRate: rate, costOverride } });
       setEdit(null);
       await load();
+      window.dispatchEvent(new Event("cash-in-hand-changed"));
       toast(`${monthName(edit.month)} updated`, "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save", "error");

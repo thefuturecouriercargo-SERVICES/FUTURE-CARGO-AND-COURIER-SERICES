@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import CashInHandPanel from "@/components/CashInHandPanel";
 import PnlInsightsPanel from "@/components/PnlInsightsPanel";
 import DriverDailyProfitPanel from "@/components/DriverDailyProfitPanel";
+import MonthlyStatement from "@/components/MonthlyStatement";
 interface PnlData {
   revenue: number;
   totalExpenses: number;
@@ -116,26 +117,13 @@ export default function PnlPage() {
   return (
     <div>
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Reports</p>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Profit &amp; Loss</h1>
-        <div className="flex gap-2">
-          <a
-            href={pnlExportUrl({ from, to, format: "pdf" })}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
-          >
-            Download PDF
-          </a>
-          <a
-            href={pnlExportUrl({ from, to, format: "excel" })}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy"
-          >
-            Download Excel
-          </a>
-        </div>
+      <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Profit &amp; Loss</h1>
+
+      <MonthlyStatement />
+
+      <div className="mb-3 border-t border-line pt-6">
+        <h2 className="font-display text-[18px] font-semibold text-navy">Details &amp; Tools</h2>
+        <p className="text-xs text-ink-soft">Custom date range, cash-in-hand settings, insights and driver profit.</p>
       </div>
 
       <div className="mb-6 flex flex-wrap items-end gap-3 border border-line bg-white p-5">
@@ -153,6 +141,14 @@ export default function PnlPage() {
         <button onClick={setLastMonth} className="rounded border border-line px-3 py-2 text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
           Last month
         </button>
+        <div className="ml-auto flex gap-2">
+          <a href={pnlExportUrl({ from, to, format: "pdf" })} target="_blank" rel="noopener noreferrer" className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy">
+            Range PDF
+          </a>
+          <a href={pnlExportUrl({ from, to, format: "excel" })} target="_blank" rel="noopener noreferrer" className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass hover:text-navy">
+            Range Excel
+          </a>
+        </div>
       </div>
 
       <CashInHandPanel />

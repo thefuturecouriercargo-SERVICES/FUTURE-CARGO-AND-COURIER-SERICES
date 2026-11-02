@@ -96,6 +96,10 @@ export function pnlExportUrl(query: Record<string, string | undefined>) {
   return buildRelativeUrl("/reports/pnl", query);
 }
 
+export function cashStatementUrl(query: Record<string, string | undefined>) {
+  return buildRelativeUrl("/cash-in-hand/statement", query);
+}
+
 export function expenseReportUrl(query: Record<string, string | undefined>) {
   return buildRelativeUrl("/reports/expenses/export", query);
 }
