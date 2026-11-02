@@ -172,7 +172,7 @@ export default function AdminSearch() {
           }}
           inputMode="search"
           enterKeyHint="search"
-          placeholder="Search CN, order no, bill no, name, phone…"
+          aria-label="Search"
           className="h-11 w-full rounded-xl border border-line bg-[#121A2B] pl-10 pr-9 text-sm text-white placeholder:text-ink-soft focus:border-brass focus:outline-none"
         />
         {q && (
