@@ -119,9 +119,7 @@ export default function MonthEndReport({ month }: { month: string }) {
           ["RTO %", `${c.rtoPct}%`, `${p.rtoPct}%`, `${Math.round((c.rtoPct - p.rtoPct) * 10) / 10} pts`],
           ["Still pending", fmtNumber(c.pending), fmtNumber(p.pending), ""],
           ["COD sales (AED)", fmtNumber(c.sales), fmtNumber(p.sales), pct(c.sales, p.sales)],
-          ["Delivery charges (AED)", fmtNumber(c.dlCharge), fmtNumber(p.dlCharge), pct(c.dlCharge, p.dlCharge)],
           ["Expenses (AED)", fmtNumber(c.expenses), fmtNumber(p.expenses), pct(c.expenses, p.expenses)],
-          ["Profit (AED)", fmtNumber(c.profit), fmtNumber(p.profit), pct(c.profit, p.profit)],
           ["Sent with agent", fmtNumber(c.agentOrders), fmtNumber(p.agentOrders), ""],
         ],
         headStyles: { fillColor: navy, textColor: gold },
@@ -146,8 +144,8 @@ export default function MonthEndReport({ month }: { month: string }) {
       };
       section(
         "Vendors",
-        ["Vendor", "Parcels", "Delivered", "RTO", "RTO %", "DL charge"],
-        data.vendors.map((v) => [v.name, fmtNumber(v.orders), fmtNumber(v.delivered), fmtNumber(v.cancelled), `${v.rtoPct}%`, fmtNumber(v.dlCharge)])
+        ["Vendor", "Parcels", "Delivered", "RTO", "RTO %"],
+        data.vendors.map((v) => [v.name, fmtNumber(v.orders), fmtNumber(v.delivered), fmtNumber(v.cancelled), `${v.rtoPct}%`])
       );
       section(
         "Drivers",
@@ -191,9 +189,7 @@ export default function MonthEndReport({ month }: { month: string }) {
     { label: "Parcels", value: fmtNumber(c.orders), change: <Change now={c.orders} before={p.orders} /> },
     { label: "Delivered", value: fmtNumber(c.delivered), change: <Change now={c.delivered} before={p.delivered} /> },
     { label: "RTO %", value: `${c.rtoPct}%`, change: <Change now={c.rtoPct} before={p.rtoPct} points invert />, tone: c.rtoPct >= 15 ? "text-cancelled" : undefined },
-    { label: "Delivery charges", value: fmtNumber(c.dlCharge), change: <Change now={c.dlCharge} before={p.dlCharge} /> },
     { label: "Expenses", value: fmtNumber(c.expenses), change: <Change now={c.expenses} before={p.expenses} invert /> },
-    { label: "Profit", value: fmtNumber(c.profit), change: <Change now={c.profit} before={p.profit} />, tone: c.profit < 0 ? "text-cancelled" : "text-delivered" },
   ];
   const maxVendor = Math.max(1, ...data.vendors.map((v) => v.orders));
 
@@ -209,7 +205,7 @@ export default function MonthEndReport({ month }: { month: string }) {
         </button>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cards.map((k) => (
           <div key={k.label} className="rounded-lg bg-paper-2 p-3">
             <p className="text-[11px] uppercase tracking-wider text-ink-soft">{k.label}</p>
