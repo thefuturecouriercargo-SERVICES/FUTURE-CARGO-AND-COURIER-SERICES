@@ -40,6 +40,14 @@ interface MonthEnd {
   days: ({ date: string } & Stats)[];
   emirates: ({ name: string } & Stats)[];
   areaRows: [string, string, string, string][];
+  /** Parcels handed to agents — kept out of everything else, shown on the last page. */
+  agent?: {
+    current: Stats;
+    previous: Stats;
+    agents: ({ name: string } & Stats)[];
+    vendors: ({ name: string } & Stats)[];
+    emirates: ({ name: string } & Stats)[];
+  };
 }
 type AreaStat = { name: string; orders: number; delivered: number; cancelled: number; rtoPct: number };
 type Notes = { achievements: string; problems: string; tasks: string; wishes: string };
@@ -110,8 +118,9 @@ function highlights(d: MonthEnd, areas: AreaStat[]) {
   const finished = (s: { delivered: number; cancelled: number }) => s.delivered + s.cancelled;
   const vendorWatch = d.vendors.filter((v) => finished(v) >= 20 && v.rtoPct >= 20).sort((a, b) => b.rtoPct - a.rtoPct).slice(0, 3);
   const hotspots = areas.filter((a) => finished(a) >= 10 && a.rtoPct > 0).sort((a, b) => b.rtoPct - a.rtoPct).slice(0, 5);
-  const totalMoved = c.orders + c.agentOrders;
-  const prevMoved = p.orders + p.agentOrders;
+  // Our drivers only — agent parcels are reported on their own page.
+  const totalMoved = c.orders;
+  const prevMoved = p.orders;
   return { top, sharpest, improved, busiest, bestDelivery, vendorWatch, hotspots, totalMoved, prevMoved, areasServed: areas.length };
 }
 
@@ -347,7 +356,7 @@ async function buildPdf(d: MonthEnd, areas: AreaStat[], h: ReturnType<typeof hig
   y = 62;
 
   /* ---- Headline cards ---- */
-  sectionTitle("The month in numbers", "Company drivers · agent parcels shown separately");
+  sectionTitle("The month in numbers", "Our drivers only · agent parcels on the last page");
   type Card = { label: string; value: string; note: string; tone: RGB; accent?: RGB };
   const change = (now: number, before: number, invert = false): { note: string; tone: RGB } => {
     const v = pctChange(now, before);
@@ -373,7 +382,9 @@ async function buildPdf(d: MonthEnd, areas: AreaStat[], h: ReturnType<typeof hig
   ];
   const cw = (W - 8) / 3;
   const ch = 22;
-  cards.forEach((k, i) => {
+  const drawCards = (list: Card[]) => {
+  ensure(Math.ceil(list.length / 3) * (ch + 4) + 4);
+  list.forEach((k, i) => {
     const x = L + (i % 3) * (cw + 4);
     const cy = y + Math.floor(i / 3) * (ch + 4);
     doc.setFillColor(...PAPER);
@@ -392,15 +403,17 @@ async function buildPdf(d: MonthEnd, areas: AreaStat[], h: ReturnType<typeof hig
     doc.setTextColor(...k.tone);
     doc.text(k.note, x + 5, cy + 19.3);
   });
-  y += 2 * ch + 8;
+  y += Math.ceil(list.length / 3) * (ch + 4) + 4;
+  };
+  drawCards(cards);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...GREY);
   const extra = [
-    `Sent with agent: ${fmtNumber(c.agentOrders)} (${fmtNumber(c.agentDelivered)} delivered, ${fmtNumber(c.agentCancelled)} RTO)`,
-    `Total moved: ${fmtNumber(h.totalMoved)}`,
+    `Drivers: ${fmtNumber(d.drivers.length)}`,
     `Vendors: ${fmtNumber(c.vendorCount)}`,
+    `Areas: ${fmtNumber(h.areasServed)}`,
     `Working days: ${fmtNumber(c.activeDays)}`,
   ].join("   ·   ");
   doc.text(extra, L, y);
@@ -616,6 +629,51 @@ async function buildPdf(d: MonthEnd, areas: AreaStat[], h: ReturnType<typeof hig
     y += bh + 6;
   }
 
+  /* ---- Last page: agent parcels, kept apart from everything above ---- */
+  const ag = d.agent;
+  if (ag && ag.current.orders > 0) {
+    doc.addPage();
+    y = 22;
+    sectionTitle("Agent consignments", "Parcels handed to our agent · not counted anywhere above");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...GREY);
+    doc.text(`${mn} compared with ${monthName(d.prevMonth)}`, L, y);
+    y += 5;
+    const a = ag.current;
+    const b = ag.previous;
+    drawCards([
+      { label: "HANDED TO AGENT", value: fmtNumber(a.orders), ...change(a.orders, b.orders), accent: GOLD },
+      { label: "DELIVERED", value: fmtNumber(a.delivered), ...change(a.delivered, b.delivered), accent: GREEN },
+      { label: "SUCCESS RATE", value: `${success(a)}%`, ...pts(success(a), success(b)), accent: GREEN },
+      { label: "RTO (RETURNED)", value: fmtNumber(a.cancelled), ...change(a.cancelled, b.cancelled, true), accent: RED },
+      { label: "RTO %", value: `${a.rtoPct}%`, ...pts(a.rtoPct, b.rtoPct, true), accent: RED },
+      { label: "STILL PENDING", value: fmtNumber(a.pending), note: "awaiting agent status", tone: GREY, accent: AMBER },
+    ]);
+    y += 4;
+    if (ag.agents.length > 1) {
+      sectionTitle("By agent");
+      table(
+        ["Agent", "Parcels", "Delivered", "RTO", "Pending", "Success %"],
+        ag.agents.map((x) => [pdfSafe(x.name), fmtNumber(x.orders), fmtNumber(x.delivered), fmtNumber(x.cancelled), fmtNumber(x.pending), x.delivered + x.cancelled ? `${success(x)}%` : "-"])
+      );
+    }
+    sectionTitle("Agent parcels by vendor");
+    table(
+      ["Vendor", "Parcels", "Delivered", "RTO", "Pending", "RTO %"],
+      ag.vendors.map((v) => [pdfSafe(v.name), fmtNumber(v.orders), fmtNumber(v.delivered), fmtNumber(v.cancelled), fmtNumber(v.pending), `${v.rtoPct}%`]),
+      false,
+      5
+    );
+    sectionTitle("Agent parcels by emirate");
+    table(
+      ["Emirate", "Parcels", "Delivered", "RTO", "RTO %"],
+      ag.emirates.map((e) => [titleCase(e.name), fmtNumber(e.orders), fmtNumber(e.delivered), fmtNumber(e.cancelled), `${e.rtoPct}%`]),
+      false,
+      4
+    );
+  }
+
   /* ---- Page chrome ---- */
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
@@ -784,8 +842,8 @@ export default function MonthEndReport({ month }: { month: string }) {
         ))}
       </div>
       <p className="mb-5 text-xs text-ink-soft">
-        Sent with agent: <b>{fmtNumber(c.agentOrders)}</b> ({fmtNumber(c.agentDelivered)} delivered, {fmtNumber(c.agentCancelled)} RTO) · Total moved: <b>{fmtNumber(h.totalMoved)}</b> · Vendors:{" "}
-        <b>{fmtNumber(c.vendorCount)}</b> · Working days: <b>{fmtNumber(c.activeDays)}</b>
+        Our drivers only · Drivers: <b>{fmtNumber(data.drivers.length)}</b> · Vendors: <b>{fmtNumber(c.vendorCount)}</b> · Areas: <b>{fmtNumber(h.areasServed)}</b> · Working days:{" "}
+        <b>{fmtNumber(c.activeDays)}</b> · Agent parcels are shown separately at the bottom
       </p>
 
       {h.top && (
@@ -929,6 +987,53 @@ export default function MonthEndReport({ month }: { month: string }) {
           </div>
         </div>
       </div>
+
+      {data.agent && data.agent.current.orders > 0 && (
+        <div className="mt-6 border-t border-line pt-5">
+          <h3 className={h2}>Agent consignments — separate</h3>
+          <p className="mb-3 text-xs text-ink-soft">Parcels handed to our agent. Not counted anywhere above; shown on the last page of the PDF.</p>
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { label: "Handed to agent", value: fmtNumber(data.agent.current.orders), change: <Change now={data.agent.current.orders} before={data.agent.previous.orders} /> },
+              { label: "Delivered", value: fmtNumber(data.agent.current.delivered), change: <Change now={data.agent.current.delivered} before={data.agent.previous.delivered} /> },
+              { label: "Success rate", value: `${success(data.agent.current)}%`, change: <Change now={success(data.agent.current)} before={success(data.agent.previous)} points /> },
+              { label: "RTO", value: fmtNumber(data.agent.current.cancelled), change: <Change now={data.agent.current.cancelled} before={data.agent.previous.cancelled} invert /> },
+              { label: "RTO %", value: `${data.agent.current.rtoPct}%`, change: <Change now={data.agent.current.rtoPct} before={data.agent.previous.rtoPct} points invert /> },
+              { label: "Still pending", value: fmtNumber(data.agent.current.pending), change: null },
+            ].map((k) => (
+              <div key={k.label} className="rounded-lg bg-paper-2 p-3">
+                <p className="text-[11px] uppercase tracking-wider text-ink-soft">{k.label}</p>
+                <p className="font-display text-[20px] font-semibold text-navy">{k.value}</p>
+                {k.change}
+              </div>
+            ))}
+          </div>
+          <div className="table-wrap">
+            <table className="data-table text-sm">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th className="text-right">Parcels</th>
+                  <th className="text-right">Delivered</th>
+                  <th className="text-right">RTO</th>
+                  <th className="text-right">RTO %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.agent.vendors.map((v) => (
+                  <tr key={v.name}>
+                    <td>{v.name}</td>
+                    <td className="text-right font-mono">{fmtNumber(v.orders)}</td>
+                    <td className="text-right font-mono">{fmtNumber(v.delivered)}</td>
+                    <td className="text-right font-mono">{fmtNumber(v.cancelled)}</td>
+                    <td className={`text-right font-mono ${v.rtoPct >= 20 ? "text-cancelled" : ""}`}>{v.rtoPct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {notes && (
         <div className="mt-6 border-t border-line pt-5">

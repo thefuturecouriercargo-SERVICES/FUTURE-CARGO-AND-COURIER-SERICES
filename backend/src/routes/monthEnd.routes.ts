@@ -6,10 +6,12 @@ import { monthRange, formatDate } from "../utils/dates";
 
 /**
  * Month-end TEAM report: consignment movement only — no money figures at all
- * (it is shared with the whole team). The month vs. the month before, RTO,
- * daily movement, vendors, drivers (with last month's numbers for "most
- * improved") and emirates. Same counting rules as the Monthly dashboard
- * (orders by entry date, one row per CN, agent parcels kept apart).
+ * (it is shared with the whole team). Everything in the main report counts
+ * OUR drivers only: the month vs. the month before, RTO, daily movement,
+ * vendors, drivers (with last month's numbers for "most improved"), areas and
+ * emirates. Parcels handed to an agent are reported separately under `agent`
+ * (shown on the last page). Same counting rules as the Monthly dashboard
+ * (orders by entry date, one row per CN).
  *
  * Areas are worked out on the page (the area list lives in the frontend), so the
  * response carries a compact [area, address, emirate, status] row per order.
@@ -91,13 +93,14 @@ async function summary(monthStr: string) {
   return {
     all,
     own,
+    agent,
     summary: {
       ...stats(own),
       agentOrders: agent.length,
       agentDelivered: agent.filter((o) => o.status === "DELIVERED").length,
       agentCancelled: agent.filter((o) => o.status === "CANCELLED").length,
-      vendorCount: new Set(all.map((o) => o.vendor.name)).size,
-      activeDays: new Set(all.map((o) => formatDate(o.date))).size,
+      vendorCount: new Set(own.map((o) => o.vendor.name)).size,
+      activeDays: new Set(own.map((o) => formatDate(o.date))).size,
     },
   };
 }
@@ -114,17 +117,15 @@ router.get(
     const label = `${year}-${String(month).padStart(2, "0")}`;
     const [cur, prev] = await Promise.all([summary(label), summary(prevMonth(label))]);
 
-    // Vendors: every order they gave us (incl. ones sent with the agent), since RTO is about their customers.
-    const vendors = [...groupBy(cur.all, (o) => o.vendor.name).entries()]
-      .map(([name, list]) => ({ name, ...stats(list) }))
-      .sort((a, b) => b.orders - a.orders);
+    const byName = (list: Row[], key: (o: Row) => string) =>
+      [...groupBy(list, key).entries()].map(([name, rows]) => ({ name, ...stats(rows) })).sort((a, b) => b.orders - a.orders);
+    const emirateOf = (o: Row) => (o.booking?.emirate || o.emirate || "OTHER").toUpperCase();
 
-    // Day by day, all parcels (company + agent).
-    const days = [...groupBy(cur.all, (o) => formatDate(o.date)).entries()]
+    // Our drivers only — agent parcels are reported separately below.
+    const vendors = byName(cur.own, (o) => o.vendor.name);
+    const days = [...groupBy(cur.own, (o) => formatDate(o.date)).entries()]
       .map(([date, list]) => ({ date, ...stats(list) }))
       .sort((a, b) => a.date.localeCompare(b.date));
-
-    const emirates = groupBy(cur.all, (o) => (o.booking?.emirate || o.emirate || "OTHER").toUpperCase());
 
     res.json({
       month: label,
@@ -135,9 +136,17 @@ router.get(
       drivers: driverStats(cur.own),
       prevDrivers: driverStats(prev.own).map(({ name, delivered, rtoPct }) => ({ name, delivered, rtoPct })),
       days,
-      emirates: [...emirates.entries()].map(([name, list]) => ({ name, ...stats(list) })).sort((a, b) => b.orders - a.orders),
-      // [chosen area, address, emirate, status initial]
-      areaRows: cur.all.map((o) => [o.area ?? "", o.booking?.address ?? o.custAddress ?? "", o.booking?.emirate ?? o.emirate, o.status[0]]),
+      emirates: byName(cur.own, emirateOf),
+      // [chosen area, address, emirate, status initial] — our drivers only
+      areaRows: cur.own.map((o) => [o.area ?? "", o.booking?.address ?? o.custAddress ?? "", o.booking?.emirate ?? o.emirate, o.status[0]]),
+      // Parcels handed to agents — shown separately on the last page.
+      agent: {
+        current: stats(cur.agent),
+        previous: stats(prev.agent),
+        agents: byName(cur.agent, (o) => o.employee.name),
+        vendors: byName(cur.agent, (o) => o.vendor.name),
+        emirates: byName(cur.agent, emirateOf),
+      },
     });
   })
 );
