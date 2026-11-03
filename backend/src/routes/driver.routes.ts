@@ -287,15 +287,17 @@ async function raceDay(day: Date) {
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const [drivers, delivered, assigned] = await Promise.all([
     prisma.user.findMany({ where: { role: "DRIVER", active: true, isAgent: false }, select: { id: true, name: true } }),
-    prisma.order.groupBy({ by: ["employeeId"], where: { status: "DELIVERED", resolvedAt: { gte: from, lt: to } }, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["employeeId"], where: { status: "DELIVERED", resolvedAt: { gte: from, lt: to } }, _count: { _all: true }, _max: { resolvedAt: true } }),
     prisma.order.groupBy({ by: ["employeeId"], where: { date: day }, _count: { _all: true } }),
   ]);
   const count = new Map(delivered.map((d) => [d.employeeId, d._count._all]));
+  // When each driver reached their current count — on a tie, whoever got there first stays ahead.
+  const reached = new Map(delivered.map((d) => [d.employeeId, d._max.resolvedAt?.getTime() ?? Infinity]));
   const working = new Set(assigned.map((a) => a.employeeId));
   return drivers
     .filter((d) => count.has(d.id) || working.has(d.id))
-    .map((d) => ({ id: d.id, name: d.name, code: raceCode(d.name), n: count.get(d.id) ?? 0 }))
-    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+    .map((d) => ({ id: d.id, name: d.name, code: raceCode(d.name), n: count.get(d.id) ?? 0, at: reached.get(d.id) ?? Infinity }))
+    .sort((a, b) => b.n - a.n || a.at - b.at || a.name.localeCompare(b.name));
 }
 router.get(
   "/race",

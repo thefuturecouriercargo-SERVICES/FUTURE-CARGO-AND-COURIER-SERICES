@@ -126,16 +126,16 @@ export default function DriverRace() {
 
   if (!data || data.drivers.length === 0) return null;
 
-  // Leader sits at 90% of the line; pins that get close stack above / below.
-  const sorted = [...data.drivers].sort((a, b) => a.pos - b.pos || b.rank - a.rank);
-  let lastX = -99;
-  let lvl = 0;
-  const placed = sorted.map((p) => {
-    const x = p.pos * 0.9 * width;
-    lvl = x - lastX < 28 ? lvl + 1 : 0;
-    lastX = x;
-    return { ...p, x, y: lvl ? (lvl % 2 ? -16 : 16) : 0 };
-  });
+  // One clean row, no overlaps: drivers in race order; anyone close or tied lines up
+  // one pin-width behind the driver in front (ties: who reached the count first is in front).
+  const PIN = 26;
+  const ordered = [...data.drivers].sort((a, b) => a.rank - b.rank);
+  const step = Math.min(PIN + 4, width / Math.max(1, ordered.length - 1));
+  const xs = ordered.map((p) => p.pos * 0.94 * width);
+  for (let k = 1; k < xs.length; k++) xs[k] = Math.min(xs[k], xs[k - 1] - step);
+  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], 0);
+  for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step);
+  const placed = ordered.map((p, k) => ({ ...p, x: Math.min(xs[k], width) }));
   const noOneYet = !data.drivers.some((p) => p.pos > 0);
   const pool = noOneYet && data.yesterdayWinner
     ? [`Yesterday's winner: ${data.yesterdayWinner.name} 🏆`, "New race — first delivery takes the lead"]
@@ -146,24 +146,24 @@ export default function DriverRace() {
 
   return (
     <div className="mt-2.5">
-      <div className="flex h-[60px] items-center gap-3 rounded-2xl border border-white/15 bg-[#0A1226] px-3.5 shadow-md">
+      <div className="flex h-[52px] items-center gap-2.5 rounded-2xl border border-white/15 bg-[#0A1226] px-3">
         <span className="min-w-[34px] text-center font-display text-2xl font-extrabold text-[#F3D58E]">
           {data.me ? `P${data.me.rank}` : "—"}
         </span>
-        <div ref={trackRef} className="relative mx-4 h-1 min-w-0 flex-1 rounded bg-white/15">
+        <div ref={trackRef} className="relative mx-[13px] h-[3px] min-w-0 flex-1 rounded bg-white/15">
           {width > 0 &&
             placed.map((p) => (
               <span
                 key={p.code}
                 title={p.name}
-                className="absolute top-1/2 grid h-[30px] w-[30px] place-items-center rounded-full border-2 border-[#0E1A38] text-[11px] font-extrabold text-[#0A1226]"
+                className="absolute top-1/2 grid h-[26px] w-[26px] place-items-center rounded-full text-[10px] font-extrabold text-[#0A1226]"
                 style={{
                   left: p.x,
                   background: colorOf(p.code),
-                  transform: `translate(-50%, calc(-50% + ${p.y}px))`,
-                  transition: "left 1s cubic-bezier(.3,.7,.3,1), transform .5s",
+                  transform: "translate(-50%, -50%)",
+                  transition: "left 1s cubic-bezier(.3,.7,.3,1)",
                   zIndex: p.me ? 9 : 8 - p.rank,
-                  boxShadow: flash.has(p.code) ? "0 0 0 5px #4ADE80" : p.me ? "0 0 0 2px #F3D58E" : undefined,
+                  boxShadow: flash.has(p.code) ? "0 0 0 4px #4ADE80" : p.me ? "0 0 0 2px #F3D58E" : undefined,
                 }}
               >
                 {p.code}
