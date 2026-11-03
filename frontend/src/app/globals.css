@@ -667,3 +667,26 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .radar-sweep--on { animation-duration: 4s; }
 }
+
+/* ─── Report Builder motion ─────────────────────────────────────────── */
+@keyframes rb-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes rb-pop { 0% { opacity: 0; transform: scale(0.6); } 70% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes rb-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 90, 0); } 50% { box-shadow: 0 0 0 6px rgba(212, 175, 90, 0.14); } }
+@keyframes rb-flash-a { 0% { border-color: #d4af5a; box-shadow: 0 0 0 5px rgba(212, 175, 90, 0.3); } 100% { box-shadow: 0 0 0 0 rgba(212, 175, 90, 0); } }
+@keyframes rb-flash-b { 0% { border-color: #d4af5a; box-shadow: 0 0 0 5px rgba(212, 175, 90, 0.3); } 100% { box-shadow: 0 0 0 0 rgba(212, 175, 90, 0); } }
+@keyframes rb-shimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
+.rb-fade-up { animation: rb-fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rb-d1 { animation-delay: 0.06s; }
+.rb-d2 { animation-delay: 0.14s; }
+.rb-pop { animation: rb-pop 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rb-glow { animation: rb-glow 2.6s ease-in-out infinite; }
+.rb-flash-a { animation: rb-flash-a 1.1s ease-out; }
+.rb-flash-b { animation: rb-flash-b 1.1s ease-out; }
+.rb-bar { background: linear-gradient(90deg, #d4af5a 0%, #f1d58f 50%, #d4af5a 100%); background-size: 200px 100%; animation: rb-shimmer 1s linear infinite; }
+.rb-lift { transition: transform 0.15s ease, background-color 0.2s, border-color 0.2s, color 0.2s; }
+.rb-lift:hover { transform: translateY(-1px); }
+.rb-lift:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .rb-fade-up, .rb-pop, .rb-glow, .rb-flash-a, .rb-flash-b, .rb-bar { animation: none !important; }
+  .rb-lift { transition: none !important; }
+}

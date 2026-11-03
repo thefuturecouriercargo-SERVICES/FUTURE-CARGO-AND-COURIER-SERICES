@@ -8,6 +8,7 @@ import { authenticate } from "../middleware/auth";
 import { parseDateParam, formatDate, dubaiDateStr } from "../utils/dates";
 import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
 import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
+import { writeAuditLog } from "../services/audit.service";
 
 const router = Router();
 router.use(authenticate);
@@ -165,6 +166,10 @@ router.get(
       filterSummary,
       rangeCount: rangeOrders.length,
       carriedCount: carriedOrders.length,
+      statusCounts: rows.reduce<Record<string, number>>((acc, r) => {
+        acc[r.status] = (acc[r.status] ?? 0) + 1;
+        return acc;
+      }, {}),
       rows: rows.slice(0, 500), // cap what's shown on-screen; the real export has no cap
       truncated: rows.length > 500,
       totalRows: rows.length,
@@ -176,12 +181,72 @@ router.get(
   })
 );
 
+function shiftDay(dateStr: string, days: number): string {
+  const d = parseDateParam(dateStr);
+  d.setUTCDate(d.getUTCDate() + days);
+  return formatDate(d);
+}
+
+// A vendor's past Report Builder exports, plus the suggested next range:
+// from the day after the latest report's end date, up to yesterday (Dubai).
+router.get(
+  "/vendor-history",
+  asyncHandler(async (req, res) => {
+    const vendorId = req.query.vendorId as string | undefined;
+    const yesterday = shiftDay(dubaiDateStr(new Date()), -1);
+    if (!vendorId) {
+      res.json({ history: [], last: null, suggestion: null, upToDate: false, yesterday });
+      return;
+    }
+    const logs = await prisma.auditLog.findMany({
+      where: { action: "REPORT_EXPORT", entity: "VendorReport", entityId: vendorId },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    });
+    const seen = new Set<string>();
+    const history: { from: string; to: string; format: string; rows: number; exportedAt: string }[] = [];
+    for (const l of logs) {
+      const m = (l.meta ?? {}) as Record<string, unknown>;
+      const from = String(m.from ?? "");
+      const to = String(m.to ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) continue;
+      const key = `${from}|${to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      history.push({ from, to, format: String(m.format ?? "excel"), rows: Number(m.rows ?? 0), exportedAt: l.createdAt.toISOString() });
+    }
+    // "Last report" = the one reaching furthest forward, so the suggestion never
+    // re-covers days already reported (even if an older range was re-exported later).
+    const last = history.reduce<(typeof history)[number] | null>((best, h) => (!best || h.to > best.to ? h : best), null);
+    let suggestion: { from: string; to: string } | null = null;
+    let upToDate = false;
+    if (last) {
+      const from = shiftDay(last.to, 1);
+      if (from > yesterday) upToDate = true;
+      else suggestion = { from, to: yesterday };
+    }
+    res.json({ history: history.slice(0, 5), last, suggestion, upToDate, yesterday });
+  })
+);
+
 router.get(
   "/export",
   asyncHandler(async (req, res) => {
     const format = (req.query.format as string) ?? "excel";
     const q = req.query as Record<string, unknown>;
     const { rangeOrders, carriedOrders, columns, rows, sumTotal, sumDl, sumCancelled, balance, filterSummary } = await computeConsignmentReport(q);
+
+    // Remember vendor exports with a full date range, so the Report Builder can
+    // suggest the next range (day after the last report → yesterday).
+    if (q.vendorId && q.from && q.to) {
+      await writeAuditLog({
+        userId: req.user?.sub,
+        action: "REPORT_EXPORT",
+        entity: "VendorReport",
+        entityId: q.vendorId as string,
+        meta: { from: q.from, to: q.to, format, rows: rows.length },
+      });
+    }
 
     if (format === "pdf") {
       res.setHeader("Content-Type", "application/pdf");
