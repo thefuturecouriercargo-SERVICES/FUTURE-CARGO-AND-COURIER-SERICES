@@ -117,7 +117,7 @@ export default function AssignPage() {
     <button
       key={t}
       onClick={() => setTab(t)}
-      className={`rounded-md px-3.5 py-2 text-[13px] font-semibold ${tab === t ? "bg-brass text-navy" : "text-ink-soft hover:text-ink"}`}
+      className={`rounded-md px-3.5 py-2 text-[13px] font-semibold ${tab === t ? "bg-navy text-paper" : "text-ink-soft hover:text-ink"}`}
     >
       {label}
     </button>

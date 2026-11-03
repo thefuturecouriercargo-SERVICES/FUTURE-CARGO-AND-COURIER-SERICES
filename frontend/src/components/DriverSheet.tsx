@@ -28,7 +28,7 @@ function sortForRoute(list: Order[]) {
  * no employee is chosen), area by area, with a ✓ box to tick each delivery.
  */
 export default function DriverSheet({ orders, date, driverLabel }: { orders: Order[]; date: string; driverLabel?: string }) {
-  const [size, setSize] = useState<"a4" | "a3">("a4");
+  const size = "a4" as "a4" | "a3"; // always A4
   const [busy, setBusy] = useState(false);
 
   async function make(mode: "download" | "print") {
@@ -151,12 +151,8 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded border border-navy/30 bg-paper px-2 py-1">
+    <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded border border-navy/30 bg-paper px-2 py-1">
       <span className="font-mono text-[10px] uppercase text-ink-soft">Driver sheet</span>
-      <select value={size} onChange={(e) => setSize(e.target.value as "a4" | "a3")} className="rounded border border-line px-1.5 py-1 text-xs">
-        <option value="a4">A4</option>
-        <option value="a3">A3</option>
-      </select>
       <button onClick={() => make("download")} disabled={busy || !orders.length} className="rounded border border-navy bg-white px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-navy disabled:opacity-40">
         ⬇ PDF
       </button>

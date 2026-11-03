@@ -371,15 +371,6 @@ await load();
     await load();
   }
 
-  const totals = orders.reduce(
-    (acc, o) => {
-      acc.total += o.status === "DELIVERED" ? o.total : 0;
-      acc.dl += o.status === "DELIVERED" ? o.deliveryCharge : 0;
-      return acc;
-    },
-    { total: 0, dl: 0 }
-  );
-
 return (
     <AuthGate allow={["SUPER_ADMIN"]}>
     <div>
@@ -404,39 +395,39 @@ return (
 
       <div id="order-form" className="mb-6 border border-line bg-white p-5">
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingId ? "Edit Consignment" : "New Consignment"}</h2>
-        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+        <form onSubmit={onSubmit} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4 lg:flex lg:flex-nowrap">
           {editingId && (
-            <div>
+            <div className="min-w-0 lg:flex-[1.1]">
               <label className="mb-1 block font-mono text-[10px] uppercase text-cancelled">Date (correct if needed)</label>
               <input
                 type="date"
                 value={form.editDate}
                 onChange={(e) => setForm({ ...form, editDate: e.target.value })}
-                className="w-full rounded border border-cancelled px-2.5 py-2 text-sm"
+                className="h-[42px] w-full rounded-lg border border-cancelled px-2.5 text-sm"
                 required
               />
             </div>
           )}
-          <div>
+          <div className="min-w-0 lg:flex-[1.3]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">CN No.</label>
             <input
              ref={cnNoRef}
 value={form.cnNo}
 onChange={(e) => setForm({ ...form, cnNo: e.target.value })}
 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); vendorRef.current?.focus(); } }}
-className="w-full rounded border border-line px-2.5 py-2 text-sm"
+className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm"
 type="number"
 required
             />
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[1.3]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Vendor</label>
             <select
              ref={vendorRef}
 value={form.vendorId}
 onChange={(e) => setForm({ ...form, vendorId: e.target.value })}
 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); totalRef.current?.focus(); } }}
-className="w-full rounded border border-line px-2.5 py-2 text-sm"
+className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm"
 required
             >
               <option value="">Select…</option>
@@ -447,24 +438,24 @@ required
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[0.7]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">DL Charge</label>
-            <input value={selectedVendor ? selectedVendor.deliveryCharge : ""} readOnly className="w-full rounded border border-line bg-paper-2 px-2.5 py-2 text-sm text-ink-soft" />
+            <input value={selectedVendor ? selectedVendor.deliveryCharge : ""} readOnly className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm bg-paper-2 text-ink-soft" />
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[0.9]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Total (AED)</label>
            <input
   ref={totalRef}
   value={form.total}
   onChange={(e) => setForm({ ...form, total: e.target.value })}
-  className="w-full rounded border border-line px-2.5 py-2 text-sm"
+  className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm"
   type="number"
   required
 />
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[0.9]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Payment</label>
-            <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value as (typeof PAYMENTS)[number] })} className="w-full rounded border border-line px-2.5 py-2 text-sm">
+            <select value={form.payment} onChange={(e) => setForm({ ...form, payment: e.target.value as (typeof PAYMENTS)[number] })} className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm">
               {PAYMENTS.map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -472,9 +463,9 @@ required
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[1]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Emirate</label>
-            <select value={form.emirate} onChange={(e) => setForm({ ...form, emirate: e.target.value })} className="w-full rounded border border-line px-2.5 py-2 text-sm">
+            <select value={form.emirate} onChange={(e) => setForm({ ...form, emirate: e.target.value })} className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm">
               {EMIRATES.map((em) => (
                 <option key={em} value={em}>
                   {em}
@@ -482,12 +473,12 @@ required
               ))}
             </select>
           </div>
-          <div>
+          <div className="min-w-0 lg:flex-[1.1]">
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Employee</label>
             <select
               value={form.employeeId}
               onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-              className="w-full rounded border border-line px-2.5 py-2 text-sm"
+              className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm"
               required
             >
               <option value="">Select…</option>
@@ -499,33 +490,42 @@ required
             </select>
           </div>
 
-          <div className="col-span-2 md:col-span-4 lg:col-span-7 flex items-end gap-3">
-            <div>
-              <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Status</label>
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as OrderStatus })} className="rounded border border-line px-2.5 py-2 text-sm">
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          <label className="flex items-center gap-1.5 text-xs font-mono text-ink-soft mr-2">
-                <input type="checkbox" checked={lockFields} onChange={(e) => setLockFields(e.target.checked)} />
-                Lock Emirate & Employee
-              </label>
-              <button type="submit" disabled={saving} className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
-
+          <div className="min-w-0 lg:flex-[0.9]">
+            <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Status</label>
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as OrderStatus })} className="h-[42px] w-full rounded-lg border border-line px-2.5 text-sm">
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 flex items-end gap-2 md:col-span-4 lg:shrink-0">
+            <button
+              type="button"
+              onClick={() => setLockFields(!lockFields)}
+              aria-pressed={lockFields}
+              aria-label="Keep emirate and employee for the next entry"
+              title={lockFields ? "Emirate & employee locked" : "Lock emirate & employee"}
+              className={`flex h-[42px] w-[44px] shrink-0 items-center justify-center rounded-lg border ${lockFields ? "border-brass bg-paper-2 text-brass" : "border-line text-ink-soft hover:border-brass"}`}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d={lockFields ? "M8 11V7a4 4 0 0 1 8 0v4" : "M8 11V7a4 4 0 0 1 7.5-2"} />
+              </svg>
+            </button>
+            <button type="submit" disabled={saving} className="h-[42px] whitespace-nowrap rounded-lg bg-navy px-4 font-mono text-xs font-bold uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
               {saving ? "Saving…" : editingId ? "Save changes" : "Add consignment"}
             </button>
             {editingId && (
-              <button type="button" onClick={resetForm} className="rounded border border-line px-4 py-2 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
+              <button type="button" onClick={resetForm} className="h-[42px] whitespace-nowrap rounded-lg border border-line px-4 font-mono text-xs uppercase tracking-wide text-ink-soft hover:border-brass">
                 Cancel
               </button>
             )}
-            {error && <span className="text-xs text-cancelled">{error}</span>}
           </div>
+          {error && <span className="col-span-2 text-xs text-cancelled md:col-span-4 lg:hidden">{error}</span>}
         </form>
+        {error && <p className="mt-2 hidden text-xs text-cancelled lg:block">{error}</p>}
       </div>
 
           <div className="border border-line bg-white p-5">
@@ -533,16 +533,13 @@ required
               <h2 className="font-display text-[18px] font-semibold text-navy">
                {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
           </h2>
-          <div className="font-mono text-xs text-ink-soft">
-            Delivered total <b className="text-ink">{fmtNumber(totals.total)} AED</b> · DL charge <b className="text-ink">{fmtNumber(totals.dl)} AED</b>
-          </div>
         </div>
-     <div className="mb-3 flex flex-wrap gap-2.5">
+     <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 [&>*]:shrink-0">
   <input
     placeholder="Search CN No. or brand…"
     value={search}
     onChange={(e) => setSearch(e.target.value)}
-    className="rounded border border-line px-3 py-1.5 text-sm"
+    className="min-w-[160px] !shrink rounded border border-line px-3 py-1.5 text-sm"
   />
   {voiceSearch.supported && (
     <button
@@ -693,11 +690,17 @@ required
                     <td className="font-mono">
                       <button
                         onClick={() => setDrawerId(o.id)}
-                        className="whitespace-nowrap text-left hover:text-brass hover:underline"
+                        className="whitespace-nowrap text-left hover:text-brass"
                         title="Show details"
                       >
-                        {o.cnNo}
-                        {o.booking && <span className="ml-1" title="Has customer details">👤</span>}
+                        <span className="inline-flex w-[128px] items-center justify-between gap-2 rounded-lg border border-line bg-paper-2 px-2.5 py-1 font-bold tracking-wide">
+                          {o.cnNo}
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className={o.booking ? "text-brass" : "invisible"} role="img" aria-label={o.booking ? "Has customer details" : undefined} aria-hidden={o.booking ? undefined : true}>
+                            {o.booking && <title>Has customer details</title>}
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M4 21a8 8 0 0 1 16 0" />
+                          </svg>
+                        </span>
                       </button>
                     </td>
                     <td>{o.brandName}</td>

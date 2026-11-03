@@ -260,7 +260,7 @@ export default function BarcodeScanner({
             type="button"
             onClick={startCamera}
             disabled={disabled}
-            className={`shrink-0 font-mono text-xs uppercase tracking-wide disabled:opacity-40 ${big ? "min-w-[64px] rounded-xl bg-brass px-4 font-bold text-navy" : "rounded bg-navy px-4 text-paper"}`}
+            className={`shrink-0 font-mono text-xs uppercase tracking-wide disabled:opacity-40 ${big ? "min-w-[64px] rounded-xl bg-navy px-4 font-bold text-paper" : "rounded bg-navy px-4 text-paper"}`}
           >
             📷 Camera
           </button>
