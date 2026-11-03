@@ -82,14 +82,14 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
   if (!status) return null;
 
   return (
-    <div className="mb-5 max-w-3xl border border-line bg-white p-4">
+    <div className="h-full rounded-[10px] border border-line bg-paper-2/40 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="font-display text-[15px] font-semibold text-navy">{status.vendorName} website orders</span>{" "}
           {status.configured ? (
-            <span className="text-xs text-delivered">● connected — checks every 5 min</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-delivered"><span className="ap-pulse inline-block h-2 w-2 rounded-full bg-delivered" aria-hidden="true" />connected — checks every 5 min</span>
           ) : (
-            <span className="text-xs text-cancelled">● not connected</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-cancelled"><span className="inline-block h-2 w-2 rounded-full bg-cancelled" aria-hidden="true" />not connected</span>
           )}
           {status.lastSync && (
             <div className="text-[11px] text-ink-soft">
@@ -106,7 +106,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
               {busy === "test" ? "Testing…" : "Test connection"}
             </button>
             <button onClick={sync} disabled={!!busy} className="rounded bg-navy px-3 py-1.5 font-mono text-[11px] uppercase text-paper disabled:opacity-50">
-              {busy === "sync" ? "Syncing…" : "⟳ Sync now"}
+              <span className={`inline-block ${busy === "sync" ? "ap-spin" : ""}`} aria-hidden="true">⟳</span> {busy === "sync" ? "Checking…" : "Sync now"}
             </button>
           </div>
         )}

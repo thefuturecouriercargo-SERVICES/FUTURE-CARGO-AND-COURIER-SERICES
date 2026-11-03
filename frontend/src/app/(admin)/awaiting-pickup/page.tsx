@@ -6,7 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { revealEditForm } from "@/lib/editForm";
-import { fmtNumber, todayStr, fmtDateLong, fmtDateTime } from "@/lib/format";
+import { fmtNumber, todayStr, fmtDateLong, fmtDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
@@ -23,7 +23,7 @@ import { useLiveRefresh } from "@/lib/useLiveRefresh";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
-  { value: "AWAITING_PICKUP", label: "Awaiting pickup" },
+  { value: "AWAITING_PICKUP", label: "Awaiting" },
   { value: "ACCEPTED", label: "Accepted" },
   { value: "REJECTED", label: "Rejected" },
   { value: "", label: "All" },
@@ -36,9 +36,16 @@ function addDays(d: string, n: number) {
   x.setUTCDate(x.getUTCDate() + n);
   return x.toISOString().slice(0, 10);
 }
-const niceDay = (d: string) =>
-  fmtDateLong(d);
 const sumCod = (list: Booking[]) => list.reduce((s, b) => s + b.codAmount, 0);
+/** "3:05 PM" in Dubai time. */
+const fmtTime = (v: string) =>
+  new Date(v).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Dubai" });
+
+// One grid for the header line and every consignment row.
+const ROW_GRID =
+  "grid grid-cols-[22px_32px_128px_minmax(150px,1fr)_96px_78px_84px_40px_36px] items-center gap-3";
+
+type Fx = "flash" | "dup";
 
 export default function AwaitingPickupPage() {
   const { user } = useAuth();
@@ -64,6 +71,16 @@ export default function AwaitingPickupPage() {
   const [showPhotos, setShowPhotos] = useState(false);
   const [justSaved, setJustSaved] = useState<Booking | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
+
+  // Animation state
+  const [fx, setFx] = useState<Record<string, Fx>>({});
+  const [leaving, setLeaving] = useState<Record<string, "out" | "rej">>({});
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const [shake, setShake] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [toast, setToast] = useState("");
+  const knownIds = useRef<Set<string> | null>(null);
+  const loadedKey = useRef("");
 
   const phoneList = useMemo(() => bookings.filter((b) => b.status === "AWAITING_PICKUP").map((b) => b.customerPhone).sort().join("|"), [bookings]);
   useEffect(() => {
@@ -96,6 +113,22 @@ export default function AwaitingPickupPage() {
     const res = await apiFetch<{ bookings: Booking[]; awaitingCount: number; awaitingDays?: { day: string; count: number }[] }>("/bookings", {
       query: { day: q ? undefined : viewDay || undefined, q: q || undefined },
     });
+    // Orders that arrive while you watch the same day (website sync, vendor
+    // portal, live refresh) slide in with a NEW tag for a few seconds.
+    const key = `${viewDay}|${q}`;
+    if (knownIds.current && loadedKey.current === key) {
+      const fresh = res.bookings.filter((b) => !knownIds.current!.has(b.id)).map((b) => b.id);
+      if (fresh.length) {
+        setNewIds((prev) => new Set([...Array.from(prev), ...fresh]));
+        window.setTimeout(() => setNewIds((prev) => {
+          const next = new Set(prev);
+          fresh.forEach((id) => next.delete(id));
+          return next;
+        }), 4500);
+      }
+    }
+    knownIds.current = new Set(res.bookings.map((b) => b.id));
+    loadedKey.current = key;
     setBookings(res.bookings);
     setTotalAwaiting(res.awaitingCount);
     setAwaitingDays(res.awaitingDays ?? []);
@@ -115,41 +148,72 @@ export default function AwaitingPickupPage() {
   useSocketEvent("booking:changed", () => load());
   useLiveRefresh(load, { socket: false });
 
+  function flashRow(id: string, kind: Fx) {
+    setFx((p) => {
+      const n = { ...p };
+      delete n[id];
+      return n;
+    });
+    window.setTimeout(() => setFx((p) => ({ ...p, [id]: kind })), 20);
+    window.setTimeout(() => setFx((p) => {
+      const n = { ...p };
+      delete n[id];
+      return n;
+    }), 1000);
+    window.setTimeout(() => document.getElementById(`ap-row-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 40);
+  }
+  function showToast(text: string) {
+    setToast(text);
+    window.setTimeout(() => setToast((t) => (t === text ? "" : t)), 2800);
+  }
+  function shakeScan() {
+    setShake(false);
+    window.setTimeout(() => setShake(true), 20);
+    window.setTimeout(() => setShake(false), 420);
+  }
+
   // Day list for the chosen status (all vendors, both sources) — drives the totals.
   const statusList = useMemo(
     () => bookings.filter((b) => !filter || b.status === filter).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
     [bookings, filter]
   );
-  const statusCount = (f: Filter) => bookings.filter((b) => !f || b.status === f).length;
+  const statusCount = (f: Filter) => bookings.filter((b) => (!f || b.status === f) && (!vendorFilter || b.vendorId === vendorFilter)).length;
+
+  const vendorList = useMemo(() => statusList.filter((b) => !vendorFilter || b.vendorId === vendorFilter), [statusList, vendorFilter]);
 
   const shown = useMemo(
     () =>
-      statusList.filter((b) => {
-        if (vendorFilter && b.vendorId !== vendorFilter) return false;
+      vendorList.filter((b) => {
         if (source === "WEBSITE" && !isWebsite(b)) return false;
         if (source === "MANUAL" && isWebsite(b)) return false;
         return true;
       }),
-    [statusList, vendorFilter, source]
+    [vendorList, source]
   );
 
-  // Vendor-wise totals for the day (respecting the status filter).
-  const vendorRows = useMemo(() => {
+  // Every vendor as a box: most orders first, vendors with none kept at zero.
+  const vendorBoxes = useMemo(() => {
     const map = new Map<string, { id: string; name: string; web: Booking[]; manual: Booking[] }>();
+    for (const v of vendors) if (v.active) map.set(v.id, { id: v.id, name: v.name, web: [], manual: [] });
     for (const b of statusList) {
       const row = map.get(b.vendorId) ?? { id: b.vendorId, name: b.vendor.name, web: [], manual: [] };
       (isWebsite(b) ? row.web : row.manual).push(b);
       map.set(b.vendorId, row);
     }
-    return Array.from(map.values()).sort((a, b) => b.web.length + b.manual.length - (a.web.length + a.manual.length));
-  }, [statusList]);
+    return Array.from(map.values()).sort(
+      (a, b) => b.web.length + b.manual.length - (a.web.length + a.manual.length) || a.name.localeCompare(b.name)
+    );
+  }, [statusList, vendors]);
 
-  const webAll = statusList.filter(isWebsite);
-  const manualAll = statusList.filter((b) => !isWebsite(b));
+  const webAll = vendorList.filter(isWebsite);
+  const manualAll = vendorList.filter((b) => !isWebsite(b));
+  const dayWeb = statusList.filter(isWebsite).length;
   const olderAwaiting = viewDay && !q ? awaitingDays.filter((d) => d.day < viewDay) : [];
   const olderCount = olderAwaiting.reduce((s2, d) => s2 + d.count, 0);
+  const selectedVendorName = vendorFilter ? vendorBoxes.find((v) => v.id === vendorFilter)?.name ?? "Vendor" : "All vendors";
 
   const selectedAwaiting = Array.from(selected).filter((id) => bookings.find((b) => b.id === id)?.status === "AWAITING_PICKUP");
+  const selectedCod = sumCod(bookings.filter((b) => selected.has(b.id)));
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -170,6 +234,7 @@ export default function AwaitingPickupPage() {
       apiFetch<Booking>(`/bookings/by-cn/${encodeURIComponent(code)}`)
         .then((found) => {
           if (found.status !== "AWAITING_PICKUP") {
+            shakeScan();
             setMsg({ ok: false, text: `CN ${found.cnNo} (${found.customerName}) is already ${found.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
             return;
           }
@@ -178,22 +243,34 @@ export default function AwaitingPickupPage() {
           setViewDay(d);
           setFilter("AWAITING_PICKUP");
           setSelected((prev) => new Set(prev).add(found.id));
-          setMsg({ ok: true, text: `✓ CN ${found.cnNo} — ${found.vendor.name}, ${found.customerName} selected (entered ${d}).` });
+          setMsg({ ok: true, text: `✓ CN ${found.cnNo} — ${found.vendor.name}, ${found.customerName} selected (entered ${fmtDate(d)}).` });
+          window.setTimeout(() => flashRow(found.id, "flash"), 600);
         })
-        .catch(() => setMsg({ ok: false, text: `${code} is not a vendor booking (checked CN and vendor order No.).` }));
+        .catch(() => {
+          shakeScan();
+          setMsg({ ok: false, text: `${code} is not a vendor booking (checked CN and vendor order No.).` });
+        });
     } else if (b.status !== "AWAITING_PICKUP") {
+      shakeScan();
       setMsg({ ok: false, text: `CN ${b.cnNo} (${b.customerName}) is already ${b.status === "ACCEPTED" ? "accepted" : "rejected"}.` });
+    } else if (selected.has(b.id)) {
+      setMsg({ ok: true, text: `CN ${b.cnNo} is already ticked.` });
+      if (vendorFilter && vendorFilter !== b.vendorId) setVendorFilter("");
+      flashRow(b.id, "dup");
     } else {
       setFilter("AWAITING_PICKUP");
+      if (vendorFilter && vendorFilter !== b.vendorId) setVendorFilter("");
+      if (source && (source === "WEBSITE") !== isWebsite(b)) setSource("");
       setSelected((prev) => new Set(prev).add(b.id));
       setMsg({ ok: true, text: `✓ CN ${b.cnNo} — ${b.vendor.name}, ${b.customerName} selected.` });
+      flashRow(b.id, "flash");
     }
     if (!isTouchDevice()) scanRef.current?.focus();
   }
 
   async function accept() {
+    if (selectedAwaiting.length === 0) return setMsg({ ok: false, text: "Tick the orders to accept first." });
     if (!driverId) return setMsg({ ok: false, text: "Choose a driver first." });
-    if (selectedAwaiting.length === 0) return;
     setAccepting(true);
     setMsg(null);
     try {
@@ -202,11 +279,15 @@ export default function AwaitingPickupPage() {
         body: { ids: selectedAwaiting, employeeId: driverId, emirate: emirate || undefined, date },
       });
       const driver = drivers.find((d) => d.id === driverId)?.name ?? "driver";
-      const parts = [`${r.accepted.length} added to Daily Entry for ${driver}.`];
-      if (r.failed.length) parts.push(`${r.failed.length} failed: ${r.failed.map((f) => f.error).join("; ")}`);
-      setMsg({ ok: r.failed.length === 0, text: parts.join(" ") });
+      // Accepted rows slide out before the list refreshes.
+      setLeaving((p) => ({ ...p, ...Object.fromEntries(r.accepted.map((a) => [a.id, "out" as const])) }));
+      if (r.failed.length) setMsg({ ok: false, text: `${r.failed.length} failed: ${r.failed.map((f) => f.error).join("; ")}` });
+      showToast(`${r.accepted.length} order${r.accepted.length === 1 ? "" : "s"} moved to Daily Entry for ${driver} · Pending`);
       setSelected(new Set());
-      await load();
+      window.setTimeout(async () => {
+        await load();
+        setLeaving({});
+      }, 380);
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "Accept failed" });
     } finally {
@@ -219,7 +300,21 @@ export default function AwaitingPickupPage() {
     if (!reason?.trim()) return;
     try {
       await apiFetch(`/bookings/${b.id}/reject`, { method: "POST", body: { reason: reason.trim() } });
-      await load();
+      setLeaving((p) => ({ ...p, [b.id]: "rej" }));
+      setSelected((prev) => {
+        const n = new Set(prev);
+        n.delete(b.id);
+        return n;
+      });
+      showToast(`CN ${b.cnNo} rejected`);
+      window.setTimeout(async () => {
+        await load();
+        setLeaving((p) => {
+          const n = { ...p };
+          delete n[b.id];
+          return n;
+        });
+      }, 480);
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "Reject failed" });
     }
@@ -262,50 +357,104 @@ export default function AwaitingPickupPage() {
     await load();
   }
 
+  // A label drops out of the printer icon, then the print page opens.
   function printLabels(ids: string[]) {
-    if (ids.length) router.push(`/print-labels?ids=${ids.join(",")}`);
+    if (!ids.length || printing) return;
+    setPrinting(true);
+    window.setTimeout(() => {
+      setPrinting(false);
+      router.push(`/print-labels?ids=${ids.join(",")}`);
+    }, 650);
   }
 
   const allShownSelected = shown.length > 0 && shown.every((b) => selected.has(b.id));
+  const unprinted = shown.filter((b) => !b.labelPrintedAt);
+
+  const box = "rounded-2xl border border-line bg-white";
+  const inner = "rounded-[10px] border border-line bg-paper-2/40";
+  const segOn = "bg-brass/15 text-brass font-semibold";
+  const segOff = "text-ink-soft hover:text-navy";
+
+  const printerIcon = (
+    <span className={`relative inline-block h-[18px] w-[18px] ${printing ? "ap-printing" : ""}`} aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2" />
+      </svg>
+      <svg className="ap-label absolute left-0 top-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d4af5a" strokeWidth="2">
+        <path d="M7 14h10v7H7z" />
+      </svg>
+    </span>
+  );
 
   return (
-    <div>
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Vendor bookings</p>
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Awaiting Pickup</h1>
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className={`${box} flex flex-wrap items-center justify-between gap-4 px-6 py-5`}>
+        <div>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Vendor bookings</p>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy">Awaiting Pickup</h1>
+          <p className="text-sm text-ink-soft">
+            <span key={`dc-${statusList.length}`} className="ap-bump inline-block">{statusList.length}</span> orders · AED {fmtNumber(sumCod(statusList))}
+            {q ? ` · search “${q}” (all days)` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button aria-label="Previous day" onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="h-11 w-11 rounded-lg border border-line text-lg hover:border-brass">
+            ‹
+          </button>
+          <label className="relative flex h-11 items-center gap-2 rounded-lg border border-line px-3 text-sm hover:border-brass">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af5a" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M3 10h18M8 3v4M16 3v4" />
+            </svg>
+            <span className="font-medium">{viewDay ? fmtDateLong(viewDay) : "All days"}</span>
+            <input
+              type="date"
+              aria-label="Pick a day"
+              value={viewDay}
+              onChange={(e) => e.target.value && setViewDay(e.target.value)}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            />
+          </label>
+          <button aria-label="Next day" onClick={() => setViewDay(addDays(viewDay || todayStr(), 1))} className="h-11 w-11 rounded-lg border border-line text-lg hover:border-brass">
+            ›
+          </button>
+          {viewDay !== todayStr() && (
+            <button onClick={() => setViewDay(todayStr())} className="h-11 rounded-lg px-3 text-sm font-medium text-brass hover:underline">
+              Today
+            </button>
+          )}
+          <button
+            onClick={() => setViewDay("")}
+            className={`h-11 rounded-lg px-3 text-sm font-medium ${viewDay === "" ? "bg-brass/15 text-brass" : "text-brass hover:underline"}`}
+            title="Every day (latest 500)"
+          >
+            All days
+          </button>
+        </div>
         {canEdit && (
-          <span className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowPhotos(!showPhotos)}
-            className={`rounded px-5 py-3 font-mono text-sm font-bold uppercase tracking-wide ${
-              showPhotos ? "border border-navy bg-white text-navy" : "bg-navy text-paper hover:bg-navy-2"
-            }`}
-          >
-            {showPhotos ? "✕ Close photos" : "📷 Read order photos"}
-          </button>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setShowForm(!showForm);
-            }}
-            className={`rounded px-5 py-3 font-mono text-sm font-bold uppercase tracking-wide ${
-              showForm && !editing ? "border border-navy bg-white text-navy" : "bg-brass text-white hover:opacity-90"
-            }`}
-          >
-            {showForm && !editing ? "✕ Close form" : "➕ Enter order for a vendor"}
-          </button>
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowPhotos(!showPhotos)}
+              className={`h-11 rounded-lg border px-4 text-sm font-medium ${showPhotos ? "border-brass text-brass" : "border-line text-navy hover:border-brass"}`}
+            >
+              {showPhotos ? "✕ Close photos" : "Read order photos"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(null);
+                setShowForm(!showForm);
+              }}
+              className={`h-11 rounded-lg px-4 text-sm font-semibold ${showForm && !editing ? "border border-brass text-brass" : "bg-navy text-paper hover:bg-navy-2"}`}
+            >
+              {showForm && !editing ? "✕ Close form" : "+ Enter order"}
+            </button>
+          </div>
         )}
       </div>
-      <p className="mb-5 max-w-3xl text-sm text-ink-soft">
-        Orders vendors entered in their portal, plus orders the office enters for small vendors. Print the labels, then
-        tick, pick a driver and accept — they then appear in Daily Entry as Pending, payment Cash. Scan or type a CN to select it.
-      </p>
-
-      <WebsiteSyncPanels onSynced={load} />
 
       {justSaved && (
-        <div className="mb-4 flex max-w-2xl flex-wrap items-center justify-between gap-4 border-2 border-delivered bg-delivered-bg p-4">
+        <div className={`${box} flex flex-wrap items-center justify-between gap-4 border-delivered p-4`}>
           <div>
             <div className="text-sm text-delivered">
               ✓ Saved for <b>{justSaved.vendor.name}</b> — {justSaved.customerName}
@@ -314,13 +463,10 @@ export default function AwaitingPickupPage() {
             <div className="font-mono text-4xl font-bold tracking-wider text-navy">{justSaved.cnNo}</div>
           </div>
           <span className="flex gap-2">
-            <button
-              onClick={() => printLabels([justSaved.id])}
-              className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase text-paper hover:bg-navy-2"
-            >
-              🖨 Print label
+            <button onClick={() => printLabels([justSaved.id])} className="flex h-10 items-center gap-2 rounded-lg bg-navy px-3 text-sm font-semibold text-paper hover:bg-navy-2">
+              {printerIcon} Print label
             </button>
-            <button onClick={() => setJustSaved(null)} className="rounded border border-line bg-white px-3 py-2 font-mono text-[11px] uppercase">
+            <button onClick={() => setJustSaved(null)} className="h-10 rounded-lg border border-line px-3 text-sm">
               Close
             </button>
           </span>
@@ -328,13 +474,13 @@ export default function AwaitingPickupPage() {
       )}
 
       {showPhotos && canEdit && (
-        <div className="mb-6">
+        <div className={`${box} p-4`}>
           <PhotoBulkEntry mode="admin" vendors={vendors} onSaved={load} onPrint={printLabels} />
         </div>
       )}
 
       {(showForm || editing) && canEdit && (
-        <div id="booking-form" className="mb-6 max-w-2xl rounded-xl">
+        <div id="booking-form" className="max-w-2xl rounded-xl">
           <BookingForm
             editing={editing}
             vendors={vendors}
@@ -347,338 +493,291 @@ export default function AwaitingPickupPage() {
         </div>
       )}
 
-      <form onSubmit={onScan} className="mb-4 flex max-w-md gap-2">
-        <input
-          ref={scanRef}
-          value={scan}
-          onChange={(e) => setScan(e.target.value)}
-          inputMode="numeric"
-          placeholder="Scan or type CN…"
-          className="w-full rounded border-2 border-brass px-3 py-2 font-mono text-sm"
-        />
-        <button type="submit" className="rounded border border-line bg-white px-3 py-2 font-mono text-xs uppercase hover:border-brass">
-          Find
-        </button>
-      </form>
-
-      {msg && <p className={`mb-4 text-sm ${msg.ok ? "text-delivered" : "text-cancelled"}`}>{msg.text}</p>}
-
-      <div className="border border-line bg-white p-5">
-        {/* Date */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-2xl font-semibold text-navy">{q ? `Search: “${q}” (all days)` : viewDay ? niceDay(viewDay) : "All days"}</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
-              ◀
-            </button>
-            <input type="date" value={viewDay} onChange={(e) => e.target.value && setViewDay(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm" />
-            <button onClick={() => setViewDay(addDays(viewDay || todayStr(), 1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
-              ▶
-            </button>
-            {viewDay !== todayStr() && (
-              <button onClick={() => setViewDay(todayStr())} className="rounded bg-navy px-3 py-2 font-mono text-xs uppercase text-paper">
-                Today
-              </button>
-            )}
-            <button
-              onClick={() => setViewDay("")}
-              className={`rounded px-3 py-2 font-mono text-xs uppercase ${viewDay === "" ? "bg-navy text-paper" : "border border-line hover:border-brass"}`}
-              title="Every day (latest 500)"
-            >
-              All days
-            </button>
-          </div>
-        </div>
-
-        {olderCount > 0 && filter === "AWAITING_PICKUP" && (
-          <div className="mb-4 flex flex-wrap items-center gap-2 border border-pending bg-pending-bg px-3 py-2 text-sm text-pending">
-            <b>⚠ {olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
-            {olderAwaiting.map((d) => (
-              <button key={d.day} onClick={() => setViewDay(d.day)} className="rounded border border-pending bg-white px-2 py-0.5 font-mono text-xs hover:bg-pending-bg">
-                {d.day.slice(8)}/{d.day.slice(5, 7)} ({d.count})
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Website / Manual / Day total — click to filter */}
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
-          {([
-            { key: "WEBSITE" as Source, label: "🌐 From website", list: webAll },
-            { key: "MANUAL" as Source, label: "✍ Manual (portal + office)", list: manualAll },
-            { key: "" as Source, label: "Day total", list: statusList },
-          ]).map((t) => (
-            <button
-              key={t.label}
-              onClick={() => {
-                setSource(t.key);
-                setSelected(new Set());
-              }}
-              className={`border-2 p-3 text-left transition ${source === t.key ? "border-navy bg-navy text-paper" : "border-line bg-white text-navy hover:border-brass"}`}
-            >
-              <div className="font-mono text-[11px] font-bold uppercase tracking-wide">{t.label}</div>
-              <div className="mt-1 flex items-baseline justify-between gap-2">
-                <span className="font-display text-2xl font-bold">{t.list.length}</span>
-                <span className="font-mono text-sm font-bold">AED {fmtNumber(sumCod(t.list))}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* Vendor-wise totals */}
-        {vendorRows.length > 0 && (
-          <div className="table-scroll mb-5">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Vendor</th>
-                  <th className="text-right">Website</th>
-                  <th className="text-right">Web COD</th>
-                  <th className="text-right">Manual</th>
-                  <th className="text-right">Manual COD</th>
-                  <th className="text-right">Total</th>
-                  <th className="text-right">Total COD</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vendorRows.map((v) => (
-                  <tr
-                    key={v.id}
-                    onClick={() => setVendorFilter(vendorFilter === v.id ? "" : v.id)}
-                    className={`cursor-pointer ${vendorFilter === v.id ? "bg-paper-2 font-bold" : "hover:bg-paper"}`}
-                    title="Click to show only this vendor"
-                  >
-                    <td>
-                      {vendorFilter === v.id ? "▸ " : ""}
-                      {v.name}
-                    </td>
-                    <td className="text-right font-mono">{v.web.length || "—"}</td>
-                    <td className="text-right font-mono">{v.web.length ? fmtNumber(sumCod(v.web)) : "—"}</td>
-                    <td className="text-right font-mono">{v.manual.length || "—"}</td>
-                    <td className="text-right font-mono">{v.manual.length ? fmtNumber(sumCod(v.manual)) : "—"}</td>
-                    <td className="text-right font-mono font-bold">{v.web.length + v.manual.length}</td>
-                    <td className="text-right font-mono font-bold">{fmtNumber(sumCod([...v.web, ...v.manual]))}</td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-navy font-bold">
-                  <td>All vendors</td>
-                  <td className="text-right font-mono">{webAll.length}</td>
-                  <td className="text-right font-mono">{fmtNumber(sumCod(webAll))}</td>
-                  <td className="text-right font-mono">{manualAll.length}</td>
-                  <td className="text-right font-mono">{fmtNumber(sumCod(manualAll))}</td>
-                  <td className="text-right font-mono">{statusList.length}</td>
-                  <td className="text-right font-mono">{fmtNumber(sumCod(statusList))}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f.label}
-              onClick={() => {
-                setFilter(f.value);
-                setSelected(new Set());
-              }}
-              className={`rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide ${
-                filter === f.value ? "bg-navy text-paper" : "border border-line text-ink-soft hover:border-brass"
-              }`}
-            >
-              {f.label}
-              {` (${statusCount(f.value)})`}
-            </button>
-          ))}
-          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="rounded border border-line px-2.5 py-1.5 text-sm">
-            <option value="">All vendors</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Search CN, customer, phone…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="ml-auto rounded border border-line px-2.5 py-1.5 text-sm"
-          />
-        </div>
-
-        {shown.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            <button
-              onClick={() => printLabels(shown.map((b) => b.id))}
-              className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper hover:bg-navy-2"
-            >
-              🖨 Print all ({shown.length})
-            </button>
-            {shown.some((b) => !b.labelPrintedAt) && (
+      <div className="flex flex-wrap items-stretch gap-5">
+        {/* Vendor boxes */}
+        <nav aria-label="Vendors" className={`${box} flex w-full flex-col gap-2.5 p-4 lg:w-[270px] lg:flex-none`}>
+          <span className="px-0.5 pb-1 text-xs text-ink-soft">Vendors · most orders first</span>
+          {[{ id: "", name: "All vendors", web: statusList.filter(isWebsite), manual: statusList.filter((b) => !isWebsite(b)) }, ...vendorBoxes].map((v) => {
+            const count = v.web.length + v.manual.length;
+            const on = vendorFilter === v.id;
+            const zero = count === 0;
+            return (
               <button
-                onClick={() => printLabels(shown.filter((b) => !b.labelPrintedAt).map((b) => b.id))}
-                className="rounded border border-navy bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2"
+                key={v.id || "all"}
+                onClick={() => {
+                  setVendorFilter(v.id);
+                  setSelected(new Set());
+                }}
+                className={`ap-vbox flex flex-col gap-1 rounded-[10px] border px-4 py-3 text-left transition ${
+                  on ? "border-brass bg-brass/10" : zero ? "border-line bg-transparent text-ink-soft" : "border-line bg-paper-2/40 hover:border-brass/60"
+                }`}
               >
-                🖨 Print new only ({shown.filter((b) => !b.labelPrintedAt).length})
+                <span className="flex w-full items-center justify-between gap-2">
+                  <span className={`truncate ${on ? "font-semibold" : "font-medium"}`}>{v.name}</span>
+                  <span key={`${v.id}-${count}`} className={`ap-bump inline-block font-semibold ${on ? "text-brass" : ""}`}>
+                    {count}
+                  </span>
+                </span>
+                <span className="text-xs text-ink-soft">
+                  {zero
+                    ? "AED 0"
+                    : [v.web.length ? `${v.web.length} website` : "", v.manual.length ? `${v.manual.length} manual` : "", `AED ${fmtNumber(sumCod([...v.web, ...v.manual]))}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                </span>
               </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
+          {/* Selected vendor summary + scan */}
+          <div className={`${box} flex flex-col gap-4 p-5`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 className="font-display text-xl font-semibold text-navy">{selectedVendorName}</h2>
+              <span className="text-sm text-ink-soft">
+                {vendorList.length} orders · AED {fmtNumber(sumCod(vendorList))}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {([
+                { key: "WEBSITE" as Source, label: "Website", list: webAll },
+                { key: "MANUAL" as Source, label: "Manual", list: manualAll },
+                { key: "" as Source, label: "Total", list: vendorList },
+              ]).map((t) => {
+                const on = source === t.key;
+                const gold = t.key === "";
+                return (
+                  <button
+                    key={t.label}
+                    onClick={() => {
+                      setSource(t.key);
+                      setSelected(new Set());
+                    }}
+                    className={`flex flex-col gap-1 rounded-[10px] border px-4 py-3 text-left transition ${
+                      on ? "border-brass bg-brass/10" : "border-line bg-paper-2/40 hover:border-brass/60"
+                    }`}
+                  >
+                    <span className={`text-xs ${gold || on ? "text-brass" : "text-ink-soft"}`}>{t.label}</span>
+                    <span key={`${t.label}-${t.list.length}`} className={`ap-bump inline-block self-start font-display text-2xl font-semibold ${gold ? "text-brass" : "text-navy"}`}>
+                      {t.list.length}
+                    </span>
+                    <span className={`text-xs ${gold ? "text-brass" : "text-ink-soft"}`}>AED {fmtNumber(sumCod(t.list))}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <form onSubmit={onScan} className={`flex gap-2 rounded-[10px] border border-line bg-paper p-1 ${shake ? "ap-shake" : ""}`}>
+              <input
+                ref={scanRef}
+                value={scan}
+                onChange={(e) => setScan(e.target.value)}
+                inputMode="numeric"
+                aria-label="Scan or type CN"
+                placeholder="Scan or type CN…"
+                className="min-w-0 flex-1 !border-0 !bg-transparent px-3 py-2 font-mono text-[15px] !shadow-none"
+              />
+              <button type="submit" className="h-10 rounded-lg bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
+                Find
+              </button>
+            </form>
+            {msg && <p className={`-mt-1 text-sm ${msg.ok ? "text-brass" : "text-cancelled"}`}>{msg.text}</p>}
+            {olderCount > 0 && filter === "AWAITING_PICKUP" && (
+              <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-pending bg-pending-bg px-3 py-2 text-sm text-pending">
+                <b>⚠ {olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
+                {olderAwaiting.map((d) => (
+                  <button key={d.day} onClick={() => setViewDay(d.day)} className="rounded-md border border-pending px-2 py-0.5 font-mono text-xs hover:bg-pending/10">
+                    {fmtDate(d.day)} ({d.count})
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-        )}
 
-        {selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 border border-brass bg-paper-2 px-3 py-2.5 text-sm">
-            <span className="font-medium">{selected.size} selected</span>
-            <button onClick={() => printLabels(Array.from(selected))} className="rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase text-navy">
-              🖨 Print labels
-            </button>
-            {canEdit && selectedAwaiting.length > 0 && (
-              <>
-                <span className="mx-1 text-ink-soft">|</span>
-                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="rounded border border-line px-2 py-1.5 text-sm">
-                  <option value="">Driver…</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                      {d.isAgent ? " (agent)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <select value={emirate} onChange={(e) => setEmirate(e.target.value)} className="rounded border border-line px-2 py-1.5 text-sm" title="Leave as-is to keep each booking's emirate">
-                  <option value="">Keep emirate</option>
-                  {EMIRATES.map((e) => (
-                    <option key={e} value={e}>
-                      {e}
-                    </option>
-                  ))}
-                </select>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded border border-line px-2 py-1.5 text-sm" />
-                <button
-                  onClick={accept}
-                  disabled={accepting}
-                  className="rounded bg-delivered px-3 py-1.5 font-mono text-[11px] uppercase text-white disabled:opacity-50"
-                >
-                  {accepting ? "Adding…" : `✓ Accept ${selectedAwaiting.length} → Daily Entry`}
-                </button>
-              </>
-            )}
-            <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-ink-soft hover:underline">
-              Clear
-            </button>
-          </div>
-        )}
-
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>
+          {/* Orders */}
+          <div className={`${box} flex flex-col gap-3 p-4`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.label}
+                    onClick={() => {
+                      setFilter(f.value);
+                      setSelected(new Set());
+                    }}
+                    className={`h-9 rounded-lg px-3.5 text-[13px] ${filter === f.value ? segOn : segOff}`}
+                  >
+                    {f.label} {statusCount(f.value)}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
+                <span className={`flex h-9 items-center gap-2 rounded-lg pl-3 text-[13px] ${source === "" ? segOn : segOff}`}>
                   <input
                     type="checkbox"
+                    aria-label="Select all shown orders"
+                    title="Select all shown orders"
                     checked={allShownSelected}
                     onChange={() => setSelected(allShownSelected ? new Set() : new Set(shown.map((b) => b.id)))}
                   />
-                </th>
-                <th className="text-right">#</th>
-                <th>CN No.</th>
-                <th>Vendor</th>
-                <th>Customer</th>
-                <th>Emirate</th>
-                <th className="text-right">COD</th>
-                <th>Status</th>
-                <th>Entered</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="!static !shadow-none">
+                  <button onClick={() => { setSource(""); setSelected(new Set()); }} className="h-9 pr-3.5">
+                    All {vendorList.length}
+                  </button>
+                </span>
+                <button onClick={() => { setSource("WEBSITE"); setSelected(new Set()); }} className={`h-9 rounded-lg px-3.5 text-[13px] ${source === "WEBSITE" ? segOn : segOff}`}>
+                  Website {webAll.length}
+                </button>
+                <button onClick={() => { setSource("MANUAL"); setSelected(new Set()); }} className={`h-9 rounded-lg px-3.5 text-[13px] ${source === "MANUAL" ? segOn : segOff}`}>
+                  Manual {manualAll.length}
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                placeholder="Search CN, customer, phone…"
+                aria-label="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 min-w-[220px] flex-1 rounded-lg border border-line px-3 text-sm"
+              />
+              {shown.length > 0 && (
+                <button onClick={() => printLabels(shown.map((b) => b.id))} className="flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm hover:border-brass">
+                  {printerIcon} Print all ({shown.length})
+                </button>
+              )}
+              {unprinted.length > 0 && (
+                <button onClick={() => printLabels(unprinted.map((b) => b.id))} className="flex h-10 items-center gap-2 rounded-lg border border-brass px-3 text-sm text-brass">
+                  {printerIcon} Print new only ({unprinted.length})
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <div className="flex min-w-[820px] flex-col gap-2">
+                <div className={`${ROW_GRID} px-4 py-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft`}>
+                  <span />
+                  <span>SL</span>
+                  <span>CN No</span>
+                  <span>Name / Phone</span>
+                  <span>Emirate</span>
+                  <span className="text-right">Amount</span>
+                  <span>Entered</span>
+                  <span>Actions</span>
+                  <span className="text-center">Label</span>
+                </div>
+
+                {shown.length === 0 ? (
+                  <div className={inner}>
                     {filter === "AWAITING_PICKUP" ? (
-                      <EmptyState compact icon="check" tone="green" title="All caught up" hint={`Nothing waiting for pickup on this day${totalAwaiting ? ` — ${totalAwaiting} awaiting in total` : ""}.`} />
+                      <EmptyState compact icon="check" tone="green" title="All caught up" hint={`Nothing waiting for pickup here${totalAwaiting ? ` — ${totalAwaiting} awaiting in total` : ""}.`} />
                     ) : (
                       <EmptyState compact icon="inbox" title="No bookings here" />
                     )}
-                  </td>
-                </tr>
-              ) : (
-                shown.flatMap((b, idx) => {
-                  const rows = [
-                    <tr key={b.id} className={selected.has(b.id) ? "bg-paper-2" : ""}>
-                      <td>
-                        <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} />
-                      </td>
-                      <td className="text-right font-mono text-sm font-bold text-ink-soft">{idx + 1}</td>
-                      <td className="font-mono">
-                        <b>{b.cnNo}</b>
-                      </td>
-                      <td>{b.vendor.name}</td>
-                      <td>
-                        <button onClick={() => setExpanded(expanded === b.id ? null : b.id)} className="text-left hover:underline">
-                          <div className="font-medium">{b.customerName}</div>
-                          <div className="text-xs text-ink-soft">{b.customerPhone}</div>
-                          {(() => {
-                            const d = b.customerPhone.replace(/[^0-9]/g, "");
-                            const r = d.length >= 9 ? risky[d.slice(-9)] : undefined;
-                            if (!r || b.status !== "AWAITING_PICKUP") return null;
-                            return (
+                  </div>
+                ) : (
+                  shown.map((b, idx) => {
+                    const d = b.customerPhone.replace(/[^0-9]/g, "");
+                    const r = d.length >= 9 ? risky[d.slice(-9)] : undefined;
+                    const cls = [
+                      "ap-row",
+                      fx[b.id] ? `ap-${fx[b.id]}` : "",
+                      leaving[b.id] ? `ap-${leaving[b.id]}` : "",
+                      newIds.has(b.id) ? "ap-in" : "",
+                      selected.has(b.id) ? "border-brass/50 bg-brass/[0.07]" : "border-line bg-paper-2/40",
+                    ].join(" ");
+                    return (
+                      <div key={b.id} id={`ap-row-${b.id}`} className={`${cls} rounded-[10px] border`}>
+                        <div className={`${ROW_GRID} px-4 py-3`}>
+                          <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} aria-label={`Select CN ${b.cnNo}`} />
+                          <span className="text-sm text-ink-soft">{idx + 1}</span>
+                          <span className="flex min-w-0 flex-col gap-0.5">
+                            <span className="font-mono font-semibold text-navy">{b.cnNo}</span>
+                            <span className="flex flex-wrap items-center gap-1 text-[11px]">
+                              <span className={isWebsite(b) ? "text-brass" : "text-ink-soft"} title={b.vendorRef ? `Website order #${b.vendorRef}` : undefined}>
+                                {isWebsite(b) ? `Website${b.vendorRef ? ` #${b.vendorRef}` : ""}` : b.createdBy === "ADMIN" ? "Manual · office" : "Manual"}
+                              </span>
+                              {newIds.has(b.id) && <span className="ap-newtag rounded bg-brass px-1 text-[10px] font-bold text-[#14100a]">NEW</span>}
+                            </span>
+                            {!vendorFilter && <span className="truncate text-[11px] text-ink-soft">{b.vendor.name}</span>}
+                          </span>
+                          <button onClick={() => setExpanded(expanded === b.id ? null : b.id)} className="min-w-0 text-left hover:underline">
+                            <div className="truncate font-medium">{b.customerName}</div>
+                            <div className="text-xs text-ink-soft">{b.customerPhone}</div>
+                            {r && b.status === "AWAITING_PICKUP" && (
                               <div
                                 className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.level === "high" ? "bg-cancelled-bg text-cancelled" : "bg-pending-bg text-pending"}`}
                                 title="This customer refused parcels before (any vendor). Call to confirm before dispatch."
                               >
                                 ⚠ Refused {r.cancelled}× before{r.delivered ? ` · ${r.delivered} delivered` : ""}
                               </div>
-                            );
-                          })()}
-                        </button>
-                      </td>
-                      <td>{b.emirate}</td>
-                      <td className="text-right font-mono">{fmtNumber(b.codAmount)}</td>
-                      <td>
-                        <BookingStatusBadge booking={b} />
-                        {b.status === "ACCEPTED" && b.order && <div className="mt-0.5 text-xs text-ink-soft">{b.order.employee.name}</div>}
-                      </td>
-                      <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                        {fmtDateTime(b.createdAt)}
-                        {b.createdBy === "ADMIN" && <div className="text-[9px] uppercase">by office</div>}
-                        {b.createdBy === "WEBSITE" && (
-                          <div className="text-[9px] font-bold uppercase text-transferred" title={b.vendorRef ? `Website order #${b.vendorRef}` : "Website order"}>
-                            web{b.vendorRef ? ` #${b.vendorRef}` : ""}
-                          </div>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap text-right">
-                        <RowActions
-                          label={`Actions for CN ${b.cnNo}`}
-                          actions={[
-                            { label: "Print label", onClick: () => printLabels([b.id]) },
-                            ...(b.hasPhoto ? [{ label: "View slip photo", onClick: () => window.open(`/api/bookings/${b.id}/photo`, "_blank", "noopener,noreferrer") }] : []),
-                            ...(canEdit && b.status !== "ACCEPTED"
-                              ? [
-                                  {
-                                    label: "Edit",
-                                    onClick: () => {
-                                      setEditing(b);
-                                      setShowForm(true);
-                                      revealEditForm("booking-form");
-                                    },
-                                  },
-                                ]
-                              : []),
-                            ...(canEdit && b.status === "REJECTED" ? [{ label: "Reopen", onClick: () => reopen(b) }] : []),
-                            ...(canEdit && b.status === "AWAITING_PICKUP" ? [{ label: "Reject", onClick: () => reject(b), danger: true }] : []),
-                            ...(canEdit && b.status === "REJECTED" ? [{ label: "Delete", onClick: () => remove(b), danger: true }] : []),
-                          ]}
-                        />
-                      </td>
-                    </tr>,
-                  ];
-                  if (expanded === b.id) {
-                    rows.push(
-                      <tr key={`${b.id}-details`} className="bg-paper">
-                        <td />
-                        <td />
-                        <td colSpan={8} className="py-3 text-sm">
-                          <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                            )}
+                          </button>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm">{b.emirate}</span>
+                            {b.status !== "AWAITING_PICKUP" && (
+                              <span className="mt-0.5 block">
+                                <BookingStatusBadge booking={b} />
+                                {b.status === "ACCEPTED" && b.order && <span className="block text-[11px] text-ink-soft">{b.order.employee.name}</span>}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-right font-mono font-semibold">{fmtNumber(b.codAmount)}</span>
+                          <span className="text-[13px] text-ink-soft">
+                            {(!viewDay || q) && <span className="block text-[11px]">{fmtDate(b.createdAt)}</span>}
+                            {fmtTime(b.createdAt)}
+                          </span>
+                          <span>
+                            <RowActions
+                              label={`Actions for CN ${b.cnNo}`}
+                              actions={[
+                                { label: "Print label", onClick: () => printLabels([b.id]) },
+                                ...(b.hasPhoto ? [{ label: "View slip photo", onClick: () => window.open(`/api/bookings/${b.id}/photo`, "_blank", "noopener,noreferrer") }] : []),
+                                ...(canEdit && b.status !== "ACCEPTED"
+                                  ? [
+                                      {
+                                        label: "Edit",
+                                        onClick: () => {
+                                          setEditing(b);
+                                          setShowForm(true);
+                                          revealEditForm("booking-form");
+                                        },
+                                      },
+                                    ]
+                                  : []),
+                                ...(canEdit && b.status === "REJECTED" ? [{ label: "Reopen", onClick: () => reopen(b) }] : []),
+                                ...(canEdit && b.status === "AWAITING_PICKUP" ? [{ label: "Reject", onClick: () => reject(b), danger: true }] : []),
+                                ...(canEdit && b.status === "REJECTED" ? [{ label: "Delete", onClick: () => remove(b), danger: true }] : []),
+                              ]}
+                            />
+                          </span>
+                          <span className="grid place-items-center">
+                            {b.labelPrintedAt ? (
+                              <span
+                                role="img"
+                                aria-label="Label printed"
+                                title={`Label printed${b.labelPrintedAt ? ` · ${fmtDate(b.labelPrintedAt)} ${fmtTime(b.labelPrintedAt)}` : ""}`}
+                                className="grid h-[26px] w-[26px] place-items-center rounded-full bg-delivered-bg text-delivered"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                                  <path d="M5 12.5l4 4L19 7" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <span
+                                role="img"
+                                aria-label="Label not printed"
+                                title="Label not printed"
+                                className="grid h-[26px] w-[26px] place-items-center rounded-full border-[1.5px] border-dashed border-cancelled text-cancelled"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                                  <path d="M6 6l12 12M18 6L6 18" />
+                                </svg>
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {expanded === b.id && (
+                          <div className="grid gap-x-6 gap-y-1 border-t border-line px-4 py-3 pl-[90px] text-sm sm:grid-cols-2">
                             <div>
                               <span className="font-mono text-[10px] uppercase text-ink-soft">Address </span>
                               <span className="whitespace-pre-wrap">{b.address}</span>
@@ -712,17 +811,82 @@ export default function AwaitingPickupPage() {
                               </a>
                             </div>
                           </div>
-                        </td>
-                      </tr>
+                        )}
+                      </div>
                     );
-                  }
-                  return rows;
-                })
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Action bar */}
+          <div className={`${box} flex flex-wrap items-center gap-2.5 px-5 py-4 ${selected.size ? "border-brass/60" : ""}`}>
+            <span className="mr-auto text-sm">
+              <span key={`sel-${selected.size}`} className="ap-bump inline-block font-semibold">{selected.size}</span> selected
+              <span className="text-ink-soft"> · AED {fmtNumber(selectedCod)}</span>
+              {selected.size > 0 && (
+                <button onClick={() => setSelected(new Set())} className="ml-3 text-xs text-ink-soft hover:underline">
+                  Clear
+                </button>
               )}
-            </tbody>
-          </table>
+            </span>
+            <button
+              onClick={() => printLabels(Array.from(selected))}
+              disabled={selected.size === 0}
+              className="flex h-11 items-center gap-2 rounded-lg border border-line px-4 text-sm hover:border-brass disabled:opacity-40"
+            >
+              {printerIcon} {printing ? "Printing…" : "Print labels"}
+            </button>
+            {canEdit && (
+              <>
+                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Driver" className="h-11 rounded-lg border border-line px-3 text-sm">
+                  <option value="">Driver…</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                      {d.isAgent ? " (agent)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <select value={emirate} onChange={(e) => setEmirate(e.target.value)} aria-label="Emirate" className="h-11 rounded-lg border border-line px-3 text-sm" title="Leave as-is to keep each booking's emirate">
+                  <option value="">Keep emirate</option>
+                  {EMIRATES.map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+                <input type="date" value={date} aria-label="Daily Entry date" onChange={(e) => setDate(e.target.value)} className="h-11 rounded-lg border border-line px-3 text-sm" />
+                <button
+                  onClick={accept}
+                  disabled={accepting || selectedAwaiting.length === 0}
+                  className="h-11 rounded-lg bg-navy px-5 text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-40"
+                >
+                  {accepting ? "Adding…" : `Accept${selectedAwaiting.length ? ` ${selectedAwaiting.length}` : ""}`}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Website connections */}
+      <div className={`${box} flex flex-col gap-3 p-5`}>
+        <span className="text-[13px] text-ink-soft">Website connections · {dayWeb} website order{dayWeb === 1 ? "" : "s"} on this day</span>
+        <div className="grid gap-4 md:grid-cols-2">
+          <WebsiteSyncPanels onSynced={load} />
+        </div>
+      </div>
+
+      {toast && (
+        <div role="status" className="ap-toast fixed bottom-8 left-1/2 z-[90] flex items-center gap-2.5 rounded-xl bg-[#d4af5a] px-5 py-3.5 font-semibold text-[#14100a] shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            <path d="M5 12.5l4 4L19 7" />
+          </svg>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
