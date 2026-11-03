@@ -311,7 +311,22 @@ router.get(
       if (y[0]?.n) winner = { name: y[0].name, code: y[0].code };
     }
     res.json({
-      me: mine ? { rank: list.indexOf(mine) + 1, delivered: mine.n } : null,
+      me: mine
+        ? (() => {
+            const k = list.indexOf(mine);
+            const ahead = list[k - 1];
+            const behind = list[k + 1];
+            const first = (n: string) => n.split(/\s+/)[0];
+            return {
+              rank: k + 1,
+              delivered: mine.n,
+              // Only the gap is sent, never the other drivers' own counts.
+              ahead: ahead ? { name: first(ahead.name), need: ahead.n - mine.n + 1 } : null,
+              behind: behind ? { name: first(behind.name), gap: mine.n - behind.n } : null,
+              total: list.length,
+            };
+          })()
+        : null,
       drivers: list.map((d, i) => ({ code: d.code, name: d.name.split(/\s+/)[0], rank: i + 1, pos: d.n / lead, me: d.id === me })),
       yesterdayWinner: winner,
     });

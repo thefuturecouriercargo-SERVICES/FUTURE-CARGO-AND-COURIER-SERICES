@@ -6,7 +6,8 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 interface RacePin { code: string; name: string; rank: number; pos: number; me: boolean }
-interface RaceData { me: { rank: number; delivered: number } | null; drivers: RacePin[]; yesterdayWinner: { name: string; code: string } | null }
+interface RaceMe { rank: number; delivered: number; total: number; ahead: { name: string; need: number } | null; behind: { name: string; gap: number } | null }
+interface RaceData { me: RaceMe | null; drivers: RacePin[]; yesterdayWinner: { name: string; code: string } | null }
 
 const COLORS = ["#4FD1C5", "#F2836B", "#E2B453", "#A78BFA", "#60A5FA", "#F472B6", "#34D399", "#FB923C"];
 function colorOf(code: string) {
@@ -15,11 +16,36 @@ function colorOf(code: string) {
   return COLORS[h % COLORS.length];
 }
 
+const SAFE = ["Every delivery moves you forward", "Safe ride first — the race is long", "Bismillah, keep going", "One good hour can change everything"];
+
+/** Comments that fit the driver's situation right now (shown in rotation). */
+function ambient(me: RaceMe, now: Date): string[] {
+  const out: string[] = [];
+  const minsLeft = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
+  if (me.delivered === 0) out.push("Your first delivery puts you on the board");
+  if (me.ahead) {
+    out.push(me.ahead.need <= 2 ? `Just ${me.ahead.need} more and you pass ${me.ahead.name}!` : `${me.ahead.need} more to catch ${me.ahead.name}`);
+  } else {
+    out.push("You're leading the race 👑");
+    if (me.behind) out.push(me.behind.gap <= 1 ? `${me.behind.name} is right behind you — don't slow down` : `Leading by ${me.behind.gap} — keep it up`);
+  }
+  if (me.ahead && me.behind && me.behind.gap <= 1) out.push(`${me.behind.name} is close behind you`);
+  if (me.rank === me.total && me.total > 1) out.push("Plenty of time — one good run changes everything");
+  if (me.delivered > 0 && me.delivered % 10 === 0) out.push(`${me.delivered} delivered — great run!`);
+  if (minsLeft <= 120) out.push(`Final stretch — ${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m to 12`);
+  else out.push(`${Math.floor(minsLeft / 60)}h ${minsLeft % 60}m left to 12 midnight`);
+  out.push(SAFE[now.getHours() % SAFE.length]);
+  return out;
+}
+
 /** One-line live race to 12 midnight. Shows places only — never other drivers' counts. */
 export default function DriverRace() {
   const [data, setData] = useState<RaceData | null>(null);
   const [width, setWidth] = useState(0);
   const [flash, setFlash] = useState<Set<string>>(new Set());
+  const [event, setEvent] = useState<{ text: string; tone: "good" | "bad" | "info" } | null>(null);
+  const [tickN, setTickN] = useState(0);
+  const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const prevRanks = useRef<Map<string, number>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -31,6 +57,35 @@ export default function DriverRace() {
       for (const p of d.drivers) {
         const before = prevRanks.current.get(p.code);
         if (before !== undefined && p.rank < before) gained.add(p.code);
+      }
+      // Overtake comments: compare places with the last refresh.
+      const prev = prevRanks.current;
+      if (prev.size) {
+        const was = (c: string) => prev.get(c);
+        const meNow = d.drivers.find((p) => p.me);
+        let ev: { text: string; tone: "good" | "bad" | "info" } | null = null;
+        if (meNow && was(meNow.code) !== undefined) {
+          const myOld = was(meNow.code)!;
+          if (meNow.rank < myOld) {
+            const passed = d.drivers.filter((p) => !p.me && (was(p.code) ?? 99) < myOld && p.rank > meNow.rank).map((p) => p.name);
+            ev = { tone: "good", text: meNow.rank === 1 ? `You took the lead! ${passed.length ? passed.join(" & ") + " overtaken" : ""} 👑` : `You overtook ${passed.join(" & ") || "a driver"}! Now P${meNow.rank} 🔥` };
+          } else if (meNow.rank > myOld) {
+            const by = d.drivers.filter((p) => !p.me && (was(p.code) ?? 99) > myOld && p.rank < meNow.rank).map((p) => p.name);
+            ev = { tone: "bad", text: `${by.join(" & ") || "Someone"} just passed you — take it back!` };
+          }
+        }
+        if (!ev) {
+          const mover = d.drivers.find((p) => !p.me && (was(p.code) ?? 99) > p.rank);
+          if (mover) {
+            const victim = d.drivers.find((p) => !p.me && p.code !== mover.code && (was(p.code) ?? 99) < (was(mover.code) ?? 99) && p.rank > mover.rank);
+            ev = { tone: "info", text: mover.rank === 1 ? `${mover.name} takes the lead!` : `${mover.name} overtook ${victim?.name ?? "a driver"} → P${mover.rank}` };
+          }
+        }
+        if (ev) {
+          setEvent(ev);
+          if (eventTimer.current) clearTimeout(eventTimer.current);
+          eventTimer.current = setTimeout(() => setEvent(null), 12000);
+        }
       }
       prevRanks.current = new Map(d.drivers.map((p) => [p.code, p.rank]));
       setData(d);
@@ -53,7 +108,11 @@ export default function DriverRace() {
   useEffect(() => {
     load();
     const i = setInterval(load, 120000);
-    return () => clearInterval(i);
+    const r = setInterval(() => setTickN((n) => n + 1), 7000);
+    return () => {
+      clearInterval(i);
+      clearInterval(r);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -78,6 +137,12 @@ export default function DriverRace() {
     return { ...p, x, y: lvl ? (lvl % 2 ? -16 : 16) : 0 };
   });
   const noOneYet = !data.drivers.some((p) => p.pos > 0);
+  const pool = noOneYet && data.yesterdayWinner
+    ? [`Yesterday's winner: ${data.yesterdayWinner.name} 🏆`, "New race — first delivery takes the lead"]
+    : data.me
+      ? ambient(data.me, new Date())
+      : [];
+  const line = event?.text ?? pool[tickN % Math.max(1, pool.length)] ?? "";
 
   return (
     <div className="mb-5">
@@ -112,13 +177,16 @@ export default function DriverRace() {
           12
         </span>
       </div>
-      <div className="mt-1.5 pl-1 text-[13px] text-ink-soft">
-        {noOneYet && data.yesterdayWinner ? (
-          <>Yesterday&apos;s winner: <b className="text-ink">{data.yesterdayWinner.name}</b></>
-        ) : data.me ? (
-          <>You · <b className="text-ink">{data.me.delivered}</b> delivered today</>
-        ) : null}
+      <div className="mt-1.5 flex items-center gap-2 pl-1 text-[13px]">
+        <span
+          key={line}
+          className={`race-comment min-w-0 flex-1 truncate font-semibold ${event?.tone === "good" ? "text-delivered" : event?.tone === "bad" ? "text-cancelled" : "text-ink"}`}
+        >
+          {line}
+        </span>
+        {data.me && <span className="shrink-0 font-mono text-[11px] text-ink-soft">You · {data.me.delivered} today</span>}
       </div>
+      <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}@media (prefers-reduced-motion:reduce){.race-comment{animation:none}}`}</style>
     </div>
   );
 }
