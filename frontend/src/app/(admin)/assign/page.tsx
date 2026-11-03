@@ -22,11 +22,13 @@ interface ScanLog {
 }
 
 const DRIVER_KEY = "assignDriverId";
+type Tab = "scan" | "drivers" | "history";
 
 export default function AssignPage() {
   const [drivers, setDrivers] = useState<Employee[]>([]);
   const [driverId, setDriverId] = useState("");
   const [log, setLog] = useState<ScanLog[]>([]);
+  const [tab, setTab] = useState<Tab>("scan");
 
   useEffect(() => {
     apiFetch<Employee[]>("/employees")
@@ -100,92 +102,155 @@ export default function AssignPage() {
   const errors = log.filter((l) => l.kind === "ERROR").length;
   const totalAed = log.filter((l) => l.kind === "ACCEPTED" || l.kind === "REASSIGNED").reduce((s, l) => s + (l.total ?? 0), 0);
 
-  const kindStyle: Record<ScanLog["kind"], string> = {
-    ACCEPTED: "border-delivered bg-delivered-bg text-delivered",
-    REASSIGNED: "border-transferred bg-transferred-bg text-transferred",
-    ALREADY: "border-line bg-paper text-ink-soft",
-    ERROR: "border-cancelled bg-cancelled-bg text-cancelled",
+  const tone: Record<ScanLog["kind"], { box: string; tag: string; dot: string; head: string }> = {
+    ACCEPTED: { box: "border-delivered bg-delivered-bg", tag: "bg-delivered-bg text-delivered", dot: "bg-delivered", head: "text-delivered" },
+    REASSIGNED: { box: "border-pending bg-pending-bg", tag: "bg-pending-bg text-pending", dot: "bg-pending", head: "text-pending" },
+    ALREADY: { box: "border-line bg-paper-2", tag: "bg-paper-2 text-ink-soft", dot: "bg-ink-soft", head: "text-ink-soft" },
+    ERROR: { box: "border-cancelled bg-cancelled-bg", tag: "bg-cancelled-bg text-cancelled", dot: "bg-cancelled", head: "text-cancelled" },
   };
-  const kindLabel: Record<ScanLog["kind"], string> = { ACCEPTED: "Added", REASSIGNED: "Moved", ALREADY: "Already", ERROR: "Error" };
+  const kindLabel: Record<ScanLog["kind"], string> = { ACCEPTED: "Assigned", REASSIGNED: "Moved", ALREADY: "Already", ERROR: "Failed" };
+  const headLine = (l: ScanLog) =>
+    l.kind === "ACCEPTED" ? `Assigned to ${l.driver}` : l.kind === "REASSIGNED" ? `Moved to ${l.driver}` : l.kind === "ALREADY" ? `Already with ${l.driver}` : "Not assigned";
+  const last = log[0];
+
+  const tabBtn = (t: Tab, label: string) => (
+    <button
+      key={t}
+      onClick={() => setTab(t)}
+      className={`rounded-md px-3.5 py-2 text-[13px] font-semibold ${tab === t ? "bg-brass text-navy" : "text-ink-soft hover:text-ink"}`}
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
-    <div className="min-w-0 max-w-2xl">
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Dispatch</p>
-      <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Scan &amp; Assign</h1>
-      <p className="mb-5 text-sm text-ink-soft">
-        Choose the driver, then scan each parcel. Vendor orders waiting for pickup go into Daily Entry for that driver as
-        Pending (Cash). A pending order of another driver is moved to this driver.
-      </p>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
+      {/* Header: title · today's export · tabs — ends where the camera button ends */}
+      <div className="flex min-w-0 flex-wrap items-end justify-between gap-3 lg:col-start-1">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Dispatch</p>
+            <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[30px]">Scan &amp; Assign</h1>
+          </div>
+          <DriverScanExport driverName={driverName} refreshKey={log.length} variant="header" />
+        </div>
+        <div className="flex gap-1 rounded-lg border border-line bg-white p-1">
+          {tabBtn("scan", "Scan")}
+          {tabBtn("drivers", "Today by driver")}
+          {tabBtn("history", "Scan history")}
+        </div>
+      </div>
+      <div className="hidden lg:block" aria-hidden="true" />
 
-      <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">1. Driver</label>
-      <select
-        value={driverId}
-        onChange={(e) => chooseDriver(e.target.value)}
-        className={`mb-4 w-full rounded border px-3 py-3 text-base ${driverId ? "border-line" : "border-2 border-brass"}`}
-      >
-        <option value="">Choose driver…</option>
-        {drivers.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-            {d.isAgent ? " (agent)" : ""}
-          </option>
-        ))}
-      </select>
+      {/* Driver + scan box + camera on one line */}
+      <div className="min-w-0 lg:col-start-1">
+        <BarcodeScanner
+          big
+          onCode={(c) => onCode(c)}
+          disabled={!driverId}
+          placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"}
+          leading={
+            <select
+              value={driverId}
+              onChange={(e) => chooseDriver(e.target.value)}
+              aria-label="Driver"
+              className={`min-h-[64px] w-44 shrink-0 rounded-xl border-2 bg-paper-2 px-3 text-lg font-bold sm:w-56 ${driverId ? "border-brass text-navy" : "border-cancelled text-ink-soft"}`}
+            >
+              <option value="">Choose driver…</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.isAgent ? " (agent)" : ""}
+                </option>
+              ))}
+            </select>
+          }
+        />
+      </div>
+      <div className="hidden lg:block" aria-hidden="true" />
 
-
-      <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">2. Scan parcels{driverName ? ` for ${driverName}` : ""}</label>
-      <BarcodeScanner
-        onCode={(c) => onCode(c)}
-        lastResult={log[0] ? { text: `${log[0].kind === "ERROR" ? "" : `CN ${log[0].code} · `}${log[0].message}`, tone: log[0].kind === "ERROR" ? "bad" : log[0].kind === "ACCEPTED" ? "ok" : "warn", id: log[0].at.getTime() } : null}
-        disabled={!driverId} placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"} />
-
-      <DriverScanExport driverName={driverName} refreshKey={log.length} />
-
-      {log.length > 0 && (
+      {tab === "scan" ? (
         <>
-          <div className="mt-5 grid grid-cols-4 gap-px border border-line bg-line text-center">
-            <div className="bg-white p-3">
-              <div className="font-mono text-[10px] uppercase text-ink-soft">Added</div>
-              <div className="font-display text-2xl font-semibold text-delivered">{added}</div>
-            </div>
-            <div className="bg-white p-3">
-              <div className="font-mono text-[10px] uppercase text-ink-soft">Moved</div>
-              <div className="font-display text-2xl font-semibold text-transferred">{moved}</div>
-            </div>
-            <div className="bg-white p-3">
-              <div className="font-mono text-[10px] uppercase text-ink-soft">Errors</div>
-              <div className="font-display text-2xl font-semibold text-cancelled">{errors}</div>
-            </div>
-            <div className="bg-white p-3">
-              <div className="font-mono text-[10px] uppercase text-ink-soft">AED</div>
-              <div className="font-display text-2xl font-semibold text-navy">{fmtNumber(totalAed)}</div>
-            </div>
-          </div>
-
-          <div className="mt-3 space-y-1.5">
-            {log.map((l, i) => (
-              <div key={i} className={`flex items-start justify-between gap-3 rounded border px-3 py-2 text-sm ${kindStyle[l.kind]}`}>
-                <div>
-                  <span className="mr-2 font-mono text-[10px] font-bold uppercase">{kindLabel[l.kind]}</span>
-                  {l.message}
-                  <div className="text-[11px] opacity-80">→ {l.driver}</div>
+          <div className="flex min-w-0 flex-col gap-4 lg:col-start-1">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              {/* Latest result */}
+              {last ? (
+                <div key={last.at.getTime()} role="status" className={`scan-flash rounded-xl border-2 p-4 ${tone[last.kind].box}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`font-mono text-[11px] font-bold uppercase tracking-[0.12em] ${tone[last.kind].head}`}>{headLine(last)}</span>
+                    <span className="font-mono text-[11px] text-ink-soft">{last.at.toLocaleTimeString("en-GB")}</span>
+                  </div>
+                  <div className="mt-1 font-mono text-2xl font-bold text-ink">{last.code}</div>
+                  <div className="mt-1 text-sm text-ink">
+                    {[last.vendor, last.total != null ? `AED ${fmtNumber(last.total)} COD` : ""].filter(Boolean).join(" · ")}
+                  </div>
+                  <div className="mt-1 text-xs text-ink-soft">{last.message}</div>
                 </div>
-                <span className="shrink-0 font-mono text-[11px] opacity-70">{l.at.toLocaleTimeString("en-GB")}</span>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => setLog([])} className="mt-3 text-xs text-ink-soft hover:underline">
-            Clear this list
-          </button>
-        </>
-      )}
+              ) : (
+                <div className="flex items-center rounded-xl border border-dashed border-line bg-white p-4 text-sm text-ink-soft">
+                  {driverId ? "Scan a parcel — the result shows here." : "Choose a driver, then scan."}
+                </div>
+              )}
 
-      <ScanHistory />
-    </div>
-    <aside className="lg:sticky lg:top-20 lg:self-start">
-      <ScanProgressPanel refreshKey={log.length} />
-    </aside>
+              {/* This session */}
+              <div className="rounded-xl border border-line bg-white p-4">
+                <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-soft">This session</div>
+                <div className="font-display text-3xl font-semibold text-navy">{added + moved}</div>
+                <div className="text-sm text-ink-soft">
+                  parcels · <span className="font-semibold text-brass">AED {fmtNumber(totalAed)}</span>
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {added} new · {moved} moved · {errors} failed
+                </div>
+                <DriverScanExport driverName={driverName} refreshKey={log.length} />
+              </div>
+            </div>
+
+            {/* Last scans */}
+            <div className="flex min-h-[260px] flex-1 flex-col rounded-xl border border-line bg-white">
+              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                <span className="font-display text-[17px] font-semibold text-navy">Last scans</span>
+                <div className="flex items-center gap-3 text-xs">
+                  {log.length > 0 && (
+                    <button onClick={() => setLog([])} className="text-ink-soft hover:underline">
+                      Clear list
+                    </button>
+                  )}
+                  <button onClick={() => setTab("history")} className="font-semibold text-brass hover:underline">
+                    Open full history
+                  </button>
+                </div>
+              </div>
+              {log.length === 0 ? (
+                <p className="p-4 text-sm text-ink-soft">No scans yet in this session.</p>
+              ) : (
+                <div className="divide-y divide-line">
+                  {log.map((l, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${tone[l.kind].dot}`} />
+                      <span className="w-24 shrink-0 font-mono font-semibold">{l.code}</span>
+                      <span className="min-w-0 flex-1 truncate" title={l.message}>
+                        <span className="font-semibold">{l.vendor ?? ""}</span>
+                        <span className="text-ink-soft"> {l.vendor ? "· " : ""}{l.message}</span>
+                      </span>
+                      <span className="w-16 shrink-0 text-right font-mono">{l.total != null ? fmtNumber(l.total) : ""}</span>
+                      <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase ${tone[l.kind].tag}`}>{kindLabel[l.kind]}</span>
+                      <span className="w-16 shrink-0 text-right font-mono text-[11px] text-ink-soft">{l.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <aside className="min-w-0">
+            <ScanProgressPanel refreshKey={log.length} />
+          </aside>
+        </>
+      ) : (
+        <div className="min-w-0 lg:col-span-2">
+          <ScanHistory view={tab === "drivers" ? "drivers" : "list"} inTab />
+        </div>
+      )}
     </div>
   );
 }

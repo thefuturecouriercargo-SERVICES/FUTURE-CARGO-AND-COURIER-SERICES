@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 type Detector = { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> };
 
 export function beep(ok = true) {
@@ -54,6 +54,8 @@ export default function BarcodeScanner({
   autoCamera,
   placeholder = "Scan barcode or type CN, then Enter",
   lastResult,
+  leading,
+  big,
 }: {
   onCode: (code: string) => Promise<void> | void;
   disabled?: boolean;
@@ -61,6 +63,10 @@ export default function BarcodeScanner({
   placeholder?: string;
   /** Latest scan's result — flashes just above the camera so it's seen while scanning. */
   lastResult?: ScanResult | null;
+  /** Shown before the scan box on the same line (e.g. the driver picker). */
+  leading?: ReactNode;
+  /** Taller scan box and camera button. */
+  big?: boolean;
 }) {
   const [typed, setTyped] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
@@ -236,7 +242,8 @@ export default function BarcodeScanner({
   return (
     <div>
       <div className="flex gap-2">
-        <form onSubmit={onSubmit} className="flex-1">
+        {leading}
+        <form onSubmit={onSubmit} className="min-w-0 flex-1">
           <input
             ref={inputRef}
             value={typed}
@@ -245,7 +252,7 @@ export default function BarcodeScanner({
             inputMode="numeric"
             autoComplete="off"
             placeholder={placeholder}
-            className="w-full rounded border-2 border-brass px-3 py-3 font-mono text-base disabled:bg-paper-2"
+            className={`w-full rounded border-2 border-brass px-3 font-mono disabled:bg-paper-2 ${big ? "h-full min-h-[64px] rounded-xl text-lg" : "py-3 text-base"}`}
           />
         </form>
         {!cameraOn ? (
@@ -253,7 +260,7 @@ export default function BarcodeScanner({
             type="button"
             onClick={startCamera}
             disabled={disabled}
-            className="shrink-0 rounded bg-navy px-4 font-mono text-xs uppercase tracking-wide text-paper disabled:opacity-40"
+            className={`shrink-0 font-mono text-xs uppercase tracking-wide disabled:opacity-40 ${big ? "min-w-[64px] rounded-xl bg-brass px-4 font-bold text-navy" : "rounded bg-navy px-4 text-paper"}`}
           >
             📷 Camera
           </button>

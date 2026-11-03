@@ -57,89 +57,111 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
   useSocketEvent("booking:changed", () => load().catch(() => undefined));
   useSocketEvent("order:changed", () => load().catch(() => undefined));
 
-  if (!data) return <div className="border border-line bg-white p-4 text-sm text-ink-soft">Loading scan check…</div>;
+  if (!data) return <div className="h-full rounded-xl border border-line bg-white p-4 text-sm text-ink-soft">Loading scan check…</div>;
   const t = data.totals;
   const done = t.byDriver + t.byOffice + t.byHand;
-  const pct = t.total ? Math.round((done / t.total) * 100) : 100;
+  const pct = t.total ? Math.round((done / t.total) * 1000) / 10 : 100;
   const list = data.vendors.filter((v) => showDone || v.left > 0 || v.older.length > 0 || v.total === 0);
+  const finished = data.vendors.length - data.vendors.filter((v) => v.left > 0 || v.older.length > 0 || v.total === 0).length;
+  const w = (n: number) => `${t.total ? (n / t.total) * 100 : 0}%`;
+  const parts: [string, number, string][] = [
+    ["Driver", t.byDriver, "bg-brass"],
+    ["Office", t.byOffice, "bg-transferred"],
+    ["By hand", t.byHand, "bg-ink-soft"],
+    ["Left", t.left, "bg-cancelled"],
+  ];
 
   return (
-    <div className="border border-line bg-white">
-      <div className="border-b border-line p-3">
-        <div className="mb-1 flex items-center justify-between gap-2">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-white">
+      <div className="border-b border-line px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-[17px] font-semibold text-navy">Left to scan</h2>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setDay(addDays(day, -1))} className="rounded border border-line px-2 py-0.5 text-xs" aria-label="Previous day">
-              ←
+          <div className="flex items-center overflow-hidden rounded-md border border-line">
+            <button onClick={() => setDay(addDays(day, -1))} className="px-2 py-1 text-xs text-ink-soft hover:text-ink" aria-label="Previous day">
+              ‹
             </button>
-            <span className="font-mono text-[11px]">{fmtDay(data.scanDay)}</span>
-            <button onClick={() => setDay(addDays(day, 1))} disabled={day >= todayStr()} className="rounded border border-line px-2 py-0.5 text-xs disabled:opacity-30" aria-label="Next day">
-              →
+            <span className="px-1.5 font-mono text-[11px] font-semibold">{fmtDay(data.batchDay)}</span>
+            <button onClick={() => setDay(addDays(day, 1))} disabled={day >= todayStr()} className="px-2 py-1 text-xs text-ink-soft hover:text-ink disabled:opacity-30" aria-label="Next day">
+              ›
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-ink-soft">
-          Orders vendors added on <b>{fmtDay(data.batchDay)}</b> — scanned after 12 midnight.
-        </p>
-        <div className="mt-2 h-2 overflow-hidden rounded bg-paper-2">
-          <div className={`h-full ${t.left ? "bg-pending" : "bg-delivered"}`} style={{ width: `${pct}%` }} />
+        <p className="mt-0.5 text-[11px] text-ink-soft">Vendor orders booked {fmtDay(data.batchDay)}, scanned after midnight</p>
+      </div>
+
+      <div className="border-b border-line px-4 py-4">
+        <div className="flex items-end justify-between">
+          <div className="flex items-baseline gap-2">
+            <span className={`font-mono text-4xl font-bold leading-none ${t.left ? "text-cancelled" : "text-delivered"}`}>{t.left}</span>
+            <span className="text-sm text-ink-soft">of {t.total} left</span>
+          </div>
+          <span className="font-mono text-sm font-semibold text-ink">{pct}% done</span>
         </div>
-        <div className="mt-2 grid grid-cols-4 gap-1 text-center">
-          {[
-            ["Left", t.left, t.left ? "text-cancelled" : "text-delivered"],
-            ["Driver", t.byDriver, "text-navy"],
-            ["Office", t.byOffice, "text-navy"],
-            ["By hand", t.byHand, "text-ink-soft"],
-          ].map(([l, n, c]) => (
-            <div key={l as string}>
-              <div className="font-mono text-[9px] uppercase text-ink-soft">{l}</div>
-              <div className={`font-display text-lg font-semibold ${c}`}>{n as number}</div>
+        <div className="mt-3 flex h-2 gap-0.5 overflow-hidden rounded bg-paper-2">
+          {parts.map(([l, n, c]) => (n ? <div key={l} className={c} style={{ width: w(n) }} /> : null))}
+        </div>
+        <div className="mt-3 grid grid-cols-4">
+          {parts.map(([l, n, c], i) => (
+            <div key={l} className={`flex flex-col gap-0.5 ${i ? "border-l border-line pl-2.5" : ""}`}>
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-soft">
+                <span className={`h-2 w-2 rounded-sm ${c}`} />
+                {l}
+              </span>
+              <span className="font-mono text-lg font-bold text-ink">{n}</span>
             </div>
           ))}
         </div>
-        <p className="mt-1 text-[11px] text-ink-soft">
-          {done} of {t.total} done
-          {t.older ? <span className="text-cancelled"> · {t.older} older still waiting</span> : null}
-          {t.addedToday ? ` · ${t.addedToday} added today (scan tomorrow)` : ""}
-        </p>
+        {t.older ? <p className="mt-2 text-[11px] text-cancelled">{t.older} older orders still waiting</p> : null}
       </div>
 
       {data.vendors.length === 0 ? (
-        <p className="p-3 text-sm text-ink-soft">No vendor orders for this day.</p>
+        <p className="p-4 text-sm text-ink-soft">No vendor orders for this day.</p>
       ) : (
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
                 <th>Vendor</th>
+                <th className="text-right">Booked</th>
+                <th className="text-right">Scanned</th>
                 <th className="text-right">Left</th>
-                <th className="text-right">Drv</th>
-                <th className="text-right">Off</th>
-                <th className="text-right">Of</th>
               </tr>
             </thead>
             <tbody>
               {list.map((v) => {
                 const isOpen = open === v.vendorId;
                 const waiting = [...v.leftList, ...v.older];
+                const scanned = v.byDriver + v.byOffice + v.byHand;
                 return (
                   <Fragment key={v.vendorId}>
                     <tr onClick={() => waiting.length && setOpen(isOpen ? null : v.vendorId)} className={waiting.length ? "cursor-pointer" : ""}>
-                      <td className="font-semibold">
-                        {waiting.length ? <span className="mr-1 text-[10px] text-ink-soft">{isOpen ? "▾" : "▸"}</span> : null}
-                        {v.vendor}
-                        {v.older.length > 0 && <span className="ml-1 rounded bg-cancelled-bg px-1 font-mono text-[9px] text-cancelled">+{v.older.length} old</span>}
-                        {v.total === 0 && v.addedToday > 0 && <span className="ml-1 text-[10px] font-normal text-ink-soft">{v.addedToday} today</span>}
+                      <td>
+                        <div className="flex items-center gap-1 font-semibold">
+                          {waiting.length ? <span className="text-[10px] text-ink-soft">{isOpen ? "▾" : "▸"}</span> : null}
+                          {v.vendor}
+                          {v.older.length > 0 && <span className="ml-1 rounded bg-cancelled-bg px-1 font-mono text-[9px] text-cancelled">+{v.older.length} old</span>}
+                          {v.total === 0 && v.addedToday > 0 && <span className="ml-1 text-[10px] font-normal text-ink-soft">{v.addedToday} today</span>}
+                        </div>
+                        {v.total > 0 && (
+                          <div className="mt-1.5 h-[3px] overflow-hidden rounded bg-paper-2">
+                            <div className={v.left ? "h-full bg-brass" : "h-full bg-delivered"} style={{ width: `${Math.max(3, (scanned / v.total) * 100)}%` }} />
+                          </div>
+                        )}
                       </td>
-                      <td className={`text-right font-mono font-bold ${v.left ? "text-cancelled" : "text-delivered"}`}>{v.left ? v.left : v.total ? "✓" : "—"}</td>
-                      <td className="text-right font-mono">{v.byDriver || ""}</td>
-                      <td className="text-right font-mono">{v.byOffice || ""}</td>
                       <td className="text-right font-mono text-ink-soft">{v.total}</td>
+                      <td className="text-right font-mono text-ink-soft">{scanned}</td>
+                      <td className="text-right">
+                        {v.left ? (
+                          <span className="inline-block min-w-[28px] rounded bg-cancelled-bg px-2 py-0.5 text-center font-mono text-xs font-bold text-cancelled">{v.left}</span>
+                        ) : (
+                          <span className="font-mono text-xs font-bold text-delivered">{v.total ? "✓" : "—"}</span>
+                        )}
+                      </td>
                     </tr>
                     {isOpen &&
                       waiting.map((b) => (
                         <tr key={b.id} className="bg-paper-2">
-                          <td colSpan={5} className="!bg-paper-2 text-xs">
+                          <td colSpan={4} className="!bg-paper-2 text-xs">
                             <span className="font-mono font-bold text-navy">CN {b.cnNo}</span> · {b.customerName} · {b.emirate} ·{" "}
                             <span className="font-mono">{fmtNumber(b.codAmount)}</span>
                             {!b.printed && <span className="ml-1 rounded bg-pending-bg px-1 text-[10px] text-pending">label not printed</span>}
@@ -154,9 +176,12 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
           </table>
         </div>
       )}
-      <button onClick={() => setShowDone((s) => !s)} className="w-full border-t border-line p-2 text-xs text-navy">
-        {showDone ? "Hide finished vendors" : `Show finished vendors (${data.vendors.length - list.length})`}
-      </button>
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line px-4 py-2.5 text-xs text-ink-soft">
+        <button onClick={() => setShowDone((s) => !s)} className="font-semibold text-brass hover:underline">
+          {showDone ? "Hide finished vendors" : `${finished} vendors complete`}
+        </button>
+        {t.addedToday ? <span>+{t.addedToday} booked today · due tomorrow</span> : null}
+      </div>
     </div>
   );
 }

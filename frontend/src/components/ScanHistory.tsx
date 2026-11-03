@@ -266,7 +266,8 @@ async function makeScanExcel(shown: ScanRow[], o: ExportOpts) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export default function ScanHistory() {
+/** view "drivers" shows only the per-driver summary; "list" (default) shows everything. inTab drops the top margin. */
+export default function ScanHistory({ view = "list", inTab = false }: { view?: "list" | "drivers"; inTab?: boolean } = {}) {
   const [day, setDay] = useState(todayStr());
   const [rows, setRows] = useState<ScanRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -387,9 +388,9 @@ export default function ScanHistory() {
   const sel = "rounded border border-line px-2 py-1.5 text-sm";
 
   return (
-    <div className="mt-8 border border-line bg-white p-4 md:p-5">
+    <div className={`${inTab ? "" : "mt-8 "}border border-line bg-white p-4 md:p-5`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-2xl font-semibold text-navy">Scan history</h2>
+        <h2 className="font-display text-2xl font-semibold text-navy">{view === "drivers" ? "Today by driver" : "Scan history"}</h2>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setDay(addDays(day, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
             ◀
@@ -515,6 +516,8 @@ export default function ScanHistory() {
         </div>
       )}
 
+      {view !== "drivers" && (
+      <>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
@@ -571,14 +574,29 @@ export default function ScanHistory() {
         </table>
       </div>
       <p className="mt-2 text-xs text-ink-soft">Scans are recorded from today onwards. Click a driver in the table above to filter.</p>
+      </>
+      )}
     </div>
   );
 }
 
-/** Quick PDF / Excel of one driver's parcels scanned today — shown next to the scanner on Scan & Assign. */
-export function DriverScanExport({ driverName, refreshKey }: { driverName: string; refreshKey?: number }) {
+/**
+ * Quick PDF / Excel of today's assigned + moved parcels — one driver's, or every
+ * driver's when driverName is "". "header" shows a driver picker + both buttons,
+ * "buttons" shows just the two buttons (used inside the This session card).
+ */
+export function DriverScanExport({
+  driverName,
+  refreshKey,
+  variant = "buttons",
+}: {
+  driverName: string;
+  refreshKey?: number;
+  variant?: "header" | "buttons";
+}) {
   const [rows, setRows] = useState<ScanRow[]>([]);
   const [making, setMaking] = useState<"" | "pdf" | "xl">("");
+  const [pick, setPick] = useState(""); // header picker starts on All drivers
   const day = todayStr();
 
   const load = useCallback(async () => {
@@ -595,15 +613,22 @@ export function DriverScanExport({ driverName, refreshKey }: { driverName: strin
   }, [load, refreshKey]);
   useSocketEvent("order:changed", () => load());
 
+  const who = variant === "header" ? pick : driverName;
+  const okRows = useMemo(() => latestPerCn(rows).filter(isOk), [rows]);
+  const names = useMemo(() => uniq(okRows.map((r) => r.driverName)), [okRows]);
   const mine = useMemo(
-    () => latestPerCn(rows).filter((r) => isOk(r) && r.driverName === driverName).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    [rows, driverName]
+    () => okRows.filter((r) => !who || r.driverName === who).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [okRows, who]
   );
-  const cod = mine.reduce((s, r) => s + (r.total ?? 0), 0);
 
   async function run(kind: "pdf" | "xl") {
     setMaking(kind);
-    const o: ExportOpts = { day, filterText: `Driver: ${driverName}`, note: "Assigned + moved today · one row per CN", fileTag: driverName };
+    const o: ExportOpts = {
+      day,
+      filterText: who ? `Driver: ${who}` : "All drivers",
+      note: "Assigned + moved today · one row per CN",
+      fileTag: who,
+    };
     try {
       await (kind === "pdf" ? makeScanPdf(mine, o) : makeScanExcel(mine, o));
     } catch (err) {
@@ -613,29 +638,39 @@ export function DriverScanExport({ driverName, refreshKey }: { driverName: strin
     }
   }
 
-  if (!driverName) return null;
+  const pdfBtn = "rounded border border-brass px-3 py-2 font-mono text-xs font-bold uppercase text-brass hover:bg-paper-2 disabled:opacity-50";
+  const xlBtn = "rounded border border-delivered bg-delivered-bg px-3 py-2 font-mono text-xs font-bold uppercase text-delivered hover:opacity-90 disabled:opacity-50";
+
+  if (variant === "buttons") {
+    if (!driverName) return null;
+    return (
+      <div className="mt-2 flex gap-2">
+        <button onClick={() => run("pdf")} disabled={!!making || mine.length === 0} className={`flex-1 ${pdfBtn}`}>
+          {making === "pdf" ? "Making…" : "PDF sheet"}
+        </button>
+        <button onClick={() => run("xl")} disabled={!!making || mine.length === 0} className={`flex-1 ${xlBtn}`}>
+          {making === "xl" ? "Making…" : "Excel"}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-line bg-white px-3 py-2.5">
-      <div className="text-sm">
-        <span className="font-semibold text-navy">{driverName}</span>
-        <span className="text-ink-soft"> today · {mine.length} parcels · AED {fmtNumber(cod)}</span>
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={() => run("pdf")}
-          disabled={!!making || mine.length === 0}
-          className="rounded border border-navy bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-navy hover:bg-paper-2 disabled:opacity-50"
-        >
-          {making === "pdf" ? "Making PDF…" : `⬇ PDF (${mine.length})`}
-        </button>
-        <button
-          onClick={() => run("xl")}
-          disabled={!!making || mine.length === 0}
-          className="rounded border border-green-700 bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-green-800 hover:bg-green-50 disabled:opacity-50"
-        >
-          {making === "xl" ? "Making Excel…" : `⬇ Excel (${mine.length})`}
-        </button>
-      </div>
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line bg-white p-1">
+      <select value={pick} onChange={(e) => setPick(e.target.value)} className="rounded border border-line bg-paper-2 px-2 py-2 text-sm font-semibold" aria-label="Export driver">
+        <option value="">Today · All drivers</option>
+        {Array.from(new Set([...names, ...(driverName ? [driverName] : [])])).sort().map((n) => (
+          <option key={n} value={n}>
+            Today · {n}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => run("pdf")} disabled={!!making || mine.length === 0} className={pdfBtn}>
+        {making === "pdf" ? "Making PDF…" : `⬇ PDF · ${mine.length}`}
+      </button>
+      <button onClick={() => run("xl")} disabled={!!making || mine.length === 0} className={xlBtn}>
+        {making === "xl" ? "Making Excel…" : `⬇ Excel · ${mine.length}`}
+      </button>
     </div>
   );
 }
