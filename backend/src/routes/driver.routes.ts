@@ -282,20 +282,21 @@ function raceCode(name: string) {
   const first = name.trim().split(/\s+/)[0].toUpperCase();
   return RACE_CODES[first] ?? (first.slice(0, 1) + first.slice(-1));
 }
-async function raceDay(day: Date) {
+async function raceDay(day: Date, alwaysId?: string) {
   const from = new Date(day.getTime() - 4 * 60 * 60 * 1000);
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const [drivers, delivered, assigned] = await Promise.all([
     prisma.user.findMany({ where: { role: "DRIVER", active: true, isAgent: false }, select: { id: true, name: true } }),
     prisma.order.groupBy({ by: ["employeeId"], where: { status: "DELIVERED", resolvedAt: { gte: from, lt: to } }, _count: { _all: true }, _max: { resolvedAt: true } }),
-    prisma.order.groupBy({ by: ["employeeId"], where: { date: day }, _count: { _all: true } }),
+    // Working today = parcels dated today, or still in hand (pending / transfer) from earlier days.
+    prisma.order.groupBy({ by: ["employeeId"], where: { OR: [{ date: day }, { status: { in: ["PENDING", "TRANSFER"] }, date: { lte: day } }] }, _count: { _all: true } }),
   ]);
   const count = new Map(delivered.map((d) => [d.employeeId, d._count._all]));
   // When each driver reached their current count — on a tie, whoever got there first stays ahead.
   const reached = new Map(delivered.map((d) => [d.employeeId, d._max.resolvedAt?.getTime() ?? Infinity]));
   const working = new Set(assigned.map((a) => a.employeeId));
   return drivers
-    .filter((d) => count.has(d.id) || working.has(d.id))
+    .filter((d) => count.has(d.id) || working.has(d.id) || d.id === alwaysId)
     .map((d) => ({ id: d.id, name: d.name, code: raceCode(d.name), n: count.get(d.id) ?? 0, at: reached.get(d.id) ?? Infinity }))
     .sort((a, b) => b.n - a.n || a.at - b.at || a.name.localeCompare(b.name));
 }
@@ -303,7 +304,7 @@ router.get(
   "/race",
   asyncHandler(async (req, res) => {
     const { date } = dayRange();
-    const list = await raceDay(date);
+    const list = await raceDay(date, req.user!.sub);
     const me = req.user!.sub;
     const lead = Math.max(1, list[0]?.n ?? 0);
     const mine = list.find((d) => d.id === me);
