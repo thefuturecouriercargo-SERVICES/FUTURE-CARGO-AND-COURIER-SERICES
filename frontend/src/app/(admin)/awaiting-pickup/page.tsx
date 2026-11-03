@@ -396,9 +396,6 @@ export default function AwaitingPickupPage() {
             {q ? ` · search “${q}” (all days)` : ""}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <WebsiteSyncPanels compact onSynced={load} />
-        </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button aria-label="Previous day" onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="h-10 w-10 rounded-lg border border-line text-lg hover:border-brass">
             ‹
@@ -496,7 +493,7 @@ export default function AwaitingPickupPage() {
 
       <div className="flex flex-wrap items-start gap-4">
         {/* Vendor boxes */}
-        <nav aria-label="Vendors" className={`${box} flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto p-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-150px)] lg:w-[250px] lg:flex-none`}>
+        <nav aria-label="Vendors" className={`${box} flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto p-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-210px)] lg:w-[250px] lg:flex-none`}>
           <span className="px-1 pb-0.5 text-xs text-ink-soft">Vendors · most orders first</span>
           {[{ id: "", name: "All vendors", web: statusList.filter(isWebsite), manual: statusList.filter((b) => !isWebsite(b)) }, ...vendorBoxes].map((v) => {
             const count = v.web.length + v.manual.length;
@@ -648,7 +645,7 @@ export default function AwaitingPickupPage() {
               )}
             </div>
 
-            <div className="max-h-[calc(100vh-300px)] min-h-[320px] overflow-auto rounded-[10px]">
+            <div className="max-h-[calc(100vh-330px)] min-h-[300px] overflow-auto rounded-[10px]">
               <div className="flex min-w-[760px] flex-col gap-1.5">
                 <div className={`${ROW_GRID} sticky top-0 z-10 bg-[rgb(var(--c-surface))] px-3 py-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft`}>
                   <span />
@@ -812,59 +809,64 @@ export default function AwaitingPickupPage() {
             </div>
           </div>
 
-          {/* Action bar */}
-          <div className={`${box} sticky bottom-3 z-20 flex flex-wrap items-center gap-2.5 px-4 py-2.5 ${selected.size ? "border-brass/60" : ""}`}>
-            <span className="mr-auto text-sm">
-              <span key={`sel-${selected.size}`} className="ap-bump inline-block font-semibold">{selected.size}</span> selected
-              <span className="text-ink-soft"> · AED {fmtNumber(selectedCod)}</span>
-              {selected.size > 0 && (
-                <button onClick={() => setSelected(new Set())} className="ml-3 text-xs text-ink-soft hover:underline">
-                  Clear
-                </button>
-              )}
-            </span>
-            <button
-              onClick={() => printLabels(Array.from(selected))}
-              disabled={selected.size === 0}
-              className="flex h-10 items-center gap-2 rounded-lg border border-line px-3.5 text-sm hover:border-brass disabled:opacity-40"
-            >
-              {printerIcon} {printing ? "Printing…" : "Print labels"}
-            </button>
-            {canEdit && (
-              <>
-                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Driver" className="h-10 rounded-lg border border-line px-3 text-sm">
-                  <option value="">Driver…</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                      {d.isAgent ? " (agent)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <select value={emirate} onChange={(e) => setEmirate(e.target.value)} aria-label="Emirate" className="h-10 rounded-lg border border-line px-3 text-sm" title="Leave as-is to keep each booking's emirate">
-                  <option value="">Keep emirate</option>
-                  {EMIRATES.map((e) => (
-                    <option key={e} value={e}>
-                      {e}
-                    </option>
-                  ))}
-                </select>
-                <input type="date" value={date} aria-label="Daily Entry date" onChange={(e) => setDate(e.target.value)} className="h-10 rounded-lg border border-line px-3 text-sm" />
-                <button
-                  onClick={accept}
-                  disabled={accepting || selectedAwaiting.length === 0}
-                  className="h-10 rounded-lg bg-navy px-5 text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-40"
-                >
-                  {accepting ? "Adding…" : `Accept${selectedAwaiting.length ? ` ${selectedAwaiting.length}` : ""}`}
-                </button>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
+      {/* Action bar — stays at the bottom; website connections on the left */}
+      <div className={`${box} sticky bottom-2 z-20 flex flex-wrap items-center gap-2.5 px-4 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] lg:pr-20 ${selected.size ? "border-brass/60" : ""}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <WebsiteSyncPanels compact up onSynced={load} />
+        </div>
+        <span className="hidden h-7 w-px bg-line sm:block" aria-hidden="true" />
+        <span className="mr-auto text-sm">
+          <span key={`sel-${selected.size}`} className="ap-bump inline-block font-semibold">{selected.size}</span> selected
+          <span className="text-ink-soft"> · AED {fmtNumber(selectedCod)}</span>
+          {selected.size > 0 && (
+            <button onClick={() => setSelected(new Set())} className="ml-3 text-xs text-ink-soft hover:underline">
+              Clear
+            </button>
+          )}
+        </span>
+        <button
+          onClick={() => printLabels(Array.from(selected))}
+          disabled={selected.size === 0}
+          className="flex h-10 items-center gap-2 rounded-lg border border-line px-3.5 text-sm hover:border-brass disabled:opacity-40"
+        >
+          {printerIcon} {printing ? "Printing…" : "Print labels"}
+        </button>
+        {canEdit && (
+          <>
+            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Driver" className="h-10 rounded-lg border border-line px-3 text-sm">
+              <option value="">Driver…</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.isAgent ? " (agent)" : ""}
+                </option>
+              ))}
+            </select>
+            <select value={emirate} onChange={(e) => setEmirate(e.target.value)} aria-label="Emirate" className="h-10 rounded-lg border border-line px-3 text-sm" title="Leave as-is to keep each booking's emirate">
+              <option value="">Keep emirate</option>
+              {EMIRATES.map((e) => (
+                <option key={e} value={e}>
+                  {e}
+                </option>
+              ))}
+            </select>
+            <input type="date" value={date} aria-label="Daily Entry date" onChange={(e) => setDate(e.target.value)} className="h-10 rounded-lg border border-line px-3 text-sm" />
+            <button
+              onClick={accept}
+              disabled={accepting || selectedAwaiting.length === 0}
+              className="h-10 rounded-lg bg-navy px-5 text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-40"
+            >
+              {accepting ? "Adding…" : `Accept${selectedAwaiting.length ? ` ${selectedAwaiting.length}` : ""}`}
+            </button>
+          </>
+        )}
+      </div>
+
       {toast && (
-        <div role="status" className="ap-toast fixed bottom-8 left-1/2 z-[90] flex items-center gap-2.5 rounded-xl bg-[#d4af5a] px-5 py-3.5 font-semibold text-[#14100a] shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+        <div role="status" className="ap-toast fixed bottom-24 left-1/2 z-[90] flex items-center gap-2.5 rounded-xl bg-[#d4af5a] px-5 py-3.5 font-semibold text-[#14100a] shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
             <path d="M5 12.5l4 4L19 7" />
           </svg>

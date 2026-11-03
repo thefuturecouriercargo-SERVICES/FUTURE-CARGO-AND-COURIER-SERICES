@@ -23,7 +23,7 @@ interface TestOrder {
 }
 
 /** Inspired website connection: status, Sync now, and a Test that shows what the website sends. */
-export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact = false }: { onSynced?: () => void; conn?: string; compact?: boolean }) {
+export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact = false, up = false }: { onSynced?: () => void; conn?: string; compact?: boolean; up?: boolean }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState<"" | "sync" | "test">("");
@@ -186,7 +186,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact
         )}
       </div>
       {open && (
-        <div className="absolute left-0 top-11 z-40 w-[min(560px,90vw)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] [&>div]:bg-[rgb(var(--c-surface))]">
+        <div className={`absolute left-0 z-40 ${up ? "bottom-11" : "top-11"} w-[min(560px,90vw)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] [&>div]:bg-[rgb(var(--c-surface))]`}>
           {full}
         </div>
       )}
@@ -195,7 +195,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact
 }
 
 /** One box per connected vendor website (Inspired, Escalo, …). */
-export function WebsiteSyncPanels({ onSynced, compact = false }: { onSynced?: () => void; compact?: boolean }) {
+export function WebsiteSyncPanels({ onSynced, compact = false, up = false }: { onSynced?: () => void; compact?: boolean; up?: boolean }) {
   const [conns, setConns] = useState<string[]>([]);
   useEffect(() => {
     apiFetch<{ conn: string }[]>("/integrations")
@@ -205,7 +205,7 @@ export function WebsiteSyncPanels({ onSynced, compact = false }: { onSynced?: ()
   return (
     <>
       {conns.map((c) => (
-        <InspiredSyncPanel key={c} conn={c} onSynced={onSynced} compact={compact} />
+        <InspiredSyncPanel key={c} conn={c} onSynced={onSynced} compact={compact} up={up} />
       ))}
     </>
   );
