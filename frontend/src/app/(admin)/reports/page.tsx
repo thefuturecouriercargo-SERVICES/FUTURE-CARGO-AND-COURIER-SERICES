@@ -136,9 +136,17 @@ export default function ReportsPage() {
     apiFetch<Vendor[]>("/vendors").then(setVendors);
   }, []);
 
-  // Live preview: refresh shortly after any filter change.
+  // Live preview: refresh shortly after any filter change — only once something
+  // is selected, so the page never lists every CN in the system.
+  const hasSelection = Object.values(filters).some(Boolean) || statuses.length > 0;
   useEffect(() => {
     const id = ++reqId.current;
+    if (!hasSelection) {
+      setPreview(null);
+      setPreviewError(null);
+      setLoadingPreview(false);
+      return;
+    }
     setLoadingPreview(true);
     const t = setTimeout(async () => {
       try {
@@ -154,7 +162,7 @@ export default function ReportsPage() {
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [filters, statuses]);
+  }, [filters, statuses, hasSelection]);
 
   function loadHistory(vendorId: string) {
     if (!vendorId) {
@@ -489,7 +497,7 @@ export default function ReportsPage() {
               {preview && <span className="ml-2 text-xs font-normal text-ink-soft">{preview.filterSummary}</span>}
             </h2>
             <span className="font-mono text-xs text-ink-soft">
-              {preview ? `${preview.totalRows} row${preview.totalRows === 1 ? "" : "s"}` : "…"}
+              {preview ? `${preview.totalRows} row${preview.totalRows === 1 ? "" : "s"}` : hasSelection ? "…" : "—"}
               {preview && preview.carriedCount > 0 && ` (${preview.rangeCount} in range + ${preview.carriedCount} carried forward)`}
             </span>
           </div>
@@ -514,6 +522,14 @@ export default function ReportsPage() {
             <p className="px-5 pt-3 text-xs text-ink-soft">Showing the first 500 of {preview.totalRows} rows — the export includes all of them.</p>
           )}
 
+          {!hasSelection && (
+            <div className="rb-fade-up px-5 py-14 text-center">
+              <p className="text-sm font-semibold text-ink">Pick a vendor, date or filter to see its CNs</p>
+              <p className="mt-1 text-xs text-ink-soft">Only the consignments matching your selection are shown here.</p>
+            </div>
+          )}
+
+          {hasSelection && (
           <div className={`table-scroll transition-opacity ${loadingPreview ? "opacity-60" : ""}`}>
             <table className="data-table">
               <thead>
@@ -550,6 +566,7 @@ export default function ReportsPage() {
               </tbody>
             </table>
           </div>
+          )}
           {preview && preview.rows.length === 0 && <div className="rb-fade-up px-5 py-12 text-center text-sm text-ink-soft">No consignments match these filters.</div>}
         </section>
 
