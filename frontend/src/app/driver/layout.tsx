@@ -5,6 +5,7 @@ import Link from "next/link";
 import AuthGate from "@/components/AuthGate";
 import LiveBridge from "@/components/LiveBridge";
 import PrayerReminder from "@/components/PrayerReminder";
+import DriverRace from "@/components/DriverRace";
 import { useAuth } from "@/context/AuthContext";
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ function DriverTopbar() {
         <PrayerReminder />
         <span className="ml-auto font-mono text-xs text-brass-light">{user?.name}</span>
       </div>
+      <DriverRace />
     </div>
   );
 }

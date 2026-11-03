@@ -145,8 +145,8 @@ export default function DriverRace() {
   const line = event?.text ?? pool[tickN % Math.max(1, pool.length)] ?? "";
 
   return (
-    <div className="mb-5">
-      <div className="flex h-[60px] items-center gap-3 rounded-2xl border border-[#24335F] bg-[#0E1A38] px-3.5 shadow-md">
+    <div className="mt-2.5">
+      <div className="flex h-[60px] items-center gap-3 rounded-2xl border border-white/15 bg-[#0A1226] px-3.5 shadow-md">
         <span className="min-w-[34px] text-center font-display text-2xl font-extrabold text-[#F3D58E]">
           {data.me ? `P${data.me.rank}` : "—"}
         </span>
@@ -180,11 +180,11 @@ export default function DriverRace() {
       <div className="mt-1.5 flex items-center gap-2 pl-1 text-[13px]">
         <span
           key={line}
-          className={`race-comment min-w-0 flex-1 truncate font-semibold ${event?.tone === "good" ? "text-delivered" : event?.tone === "bad" ? "text-cancelled" : "text-ink"}`}
+          className={`race-comment min-w-0 flex-1 truncate font-semibold ${event?.tone === "good" ? "text-[#4ADE80]" : event?.tone === "bad" ? "text-[#FF8A8A]" : "text-[#E9ECF5]"}`}
         >
           {line}
         </span>
-        {data.me && <span className="shrink-0 font-mono text-[11px] text-ink-soft">You · {data.me.delivered} today</span>}
+        {data.me && <span className="shrink-0 font-mono text-[11px] text-[#B7C0DA]">You · {data.me.delivered} today</span>}
       </div>
       <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}@media (prefers-reduced-motion:reduce){.race-comment{animation:none}}`}</style>
     </div>
