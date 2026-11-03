@@ -176,7 +176,12 @@ export default function DriverRace() {
           <span className="race-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
           <span className="text-[#FF8A8A]">Live race</span>
           <span className="text-paper/50">· to 12 midnight</span>
-          {data.me && <span className="ml-auto text-[#F3D58E]">P{data.me.rank} · {data.me.delivered} today</span>}
+          <span className="ml-auto flex items-center gap-2">
+            {data.me && <span className="text-[#F3D58E]">{data.me.delivered} today</span>}
+            <span className="race-arrow flex text-[13px] leading-none text-[#F3D58E]" aria-label="Race direction">
+              <i>›</i><i>›</i><i>›</i>
+            </span>
+          </span>
         </div>
         <div className="race-road mt-2.5 flex h-[38px] items-center rounded-xl bg-black/25 px-[17px]">
           <div ref={trackRef} className="race-lane relative h-[3px] min-w-0 flex-1 rounded">
@@ -251,8 +256,10 @@ export default function DriverRace() {
 @keyframes raceBob{to{transform:translateY(-1.5px)}}
 .race-trail{animation:raceTrail .45s ease-in-out infinite alternate}
 @keyframes raceTrail{from{opacity:.35;width:12px}to{opacity:.8;width:20px}}
+.race-arrow i{font-style:normal;animation:raceArrow 1.1s infinite}.race-arrow i:nth-child(2){animation-delay:.18s}.race-arrow i:nth-child(3){animation-delay:.36s}
+@keyframes raceArrow{0%,100%{opacity:.25}40%{opacity:1}}
 .race-live{animation:raceLive 1.2s infinite}@keyframes raceLive{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-bob,.race-trail,.race-live{animation:none}}`}</style>
+@media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-bob,.race-trail,.race-live,.race-arrow i{animation:none}}`}</style>
     </div>
   );
 }
