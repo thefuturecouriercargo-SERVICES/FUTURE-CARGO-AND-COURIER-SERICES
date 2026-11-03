@@ -1247,7 +1247,6 @@ export default function DriverPortalPage() {
         const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
         const nDel = orders.filter((o) => o.status === "DELIVERED").length;
         const nCan = orders.filter((o) => o.status === "CANCELLED").length;
-        const toCollect = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").reduce((t, o) => t + o.total, 0);
         const pct = orders.length ? Math.round((nDel / orders.length) * 100) : 0;
         const tiles = [
           ["ALL", "Total", orders.length, "text-paper"],
@@ -1256,24 +1255,8 @@ export default function DriverPortalPage() {
           ["CANCELLED", "Cancelled", nCan, "text-[#F4A29A]"],
         ] as const;
         return (
-          <div className="mb-3 rounded-2xl bg-navy p-4 text-paper shadow-md">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <div className="font-mono text-[10.5px] uppercase tracking-widest text-brass-light">{fmtDate(date)}</div>
-                <div className="font-display text-xl font-semibold leading-tight">Today&apos;s deliveries</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xl font-extrabold leading-none">{fmtNumber(toCollect)}</div>
-                <div className="mt-1 font-mono text-[9.5px] uppercase tracking-wide text-paper/60">AED to collect</div>
-              </div>
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-[#7FD3A5] transition-all" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="mt-1 font-mono text-[10px] uppercase text-paper/60">
-              {nDel} of {orders.length} delivered · {pct}%
-            </div>
-            <div className="mt-3 grid grid-cols-4 gap-1.5">
+          <div className="mb-3 rounded-2xl bg-navy p-3 text-paper shadow-md">
+            <div className="grid grid-cols-4 gap-1.5">
               {tiles.map(([k, label, n, color]) => (
                 <button
                   key={k}
@@ -1284,6 +1267,9 @@ export default function DriverPortalPage() {
                   <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-paper/70">{label}</div>
                 </button>
               ))}
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15" aria-label={`${pct}% delivered`}>
+              <div className="h-full rounded-full bg-[#7FD3A5] transition-all" style={{ width: `${pct}%` }} />
             </div>
           </div>
         );
