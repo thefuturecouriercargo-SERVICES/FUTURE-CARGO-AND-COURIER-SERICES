@@ -366,6 +366,39 @@ export default function AwaitingPickupPage() {
     }, 650);
   }
 
+  // On a laptop/desktop the page fits the screen exactly: no page scroll,
+  // only the vendor list and the CN list scroll. Forms/photos open → normal scroll.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [fitH, setFitH] = useState<number | null>(null);
+  useEffect(() => {
+    function fit() {
+      const el = rootRef.current;
+      if (!el || window.innerWidth < 1024) return setFitH(null);
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setFitH(Math.max(460, Math.floor(window.innerHeight - top - 14)));
+    }
+    fit();
+    // Measure again after the page's entry animation settles.
+    const t = window.setTimeout(fit, 500);
+    window.addEventListener("resize", fit);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
+  const fixed = fitH !== null && !showForm && !showPhotos && !editing;
+  useEffect(() => {
+    if (!fixed) return;
+    // Hide the outer page scrollbar while the page fits the screen.
+    const html = document.documentElement;
+    const prev = html.style.overflow;
+    html.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+    return () => {
+      html.style.overflow = prev;
+    };
+  }, [fixed]);
+
   const allShownSelected = shown.length > 0 && shown.every((b) => selected.has(b.id));
   const unprinted = shown.filter((b) => !b.labelPrintedAt);
 
@@ -386,9 +419,9 @@ export default function AwaitingPickupPage() {
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div ref={rootRef} className={`flex flex-col ${fixed ? "gap-3 overflow-hidden" : "gap-5"}`} style={fixed ? { height: fitH! } : undefined}>
       {/* Header: title, website chips, date, buttons */}
-      <div className={`${box} flex flex-wrap items-center gap-x-4 gap-y-2.5 px-5 py-3`}>
+      <div className={`${box} flex flex-none flex-wrap items-center gap-x-4 gap-y-2.5 px-5 py-3`}>
         <div className="flex items-baseline gap-3">
           <h1 className="font-display text-[22px] font-semibold tracking-tight text-navy">Awaiting Pickup</h1>
           <span className="whitespace-nowrap text-sm text-ink-soft">
@@ -452,7 +485,7 @@ export default function AwaitingPickupPage() {
       </div>
 
       {justSaved && (
-        <div className={`${box} flex flex-wrap items-center justify-between gap-4 border-delivered p-4`}>
+        <div className={`${box} flex flex-none flex-wrap items-center justify-between gap-4 border-delivered p-4`}>
           <div>
             <div className="text-sm text-delivered">
               ✓ Saved for <b>{justSaved.vendor.name}</b> — {justSaved.customerName}
@@ -491,9 +524,9 @@ export default function AwaitingPickupPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-start gap-4">
+      <div className={`flex gap-4 ${fixed ? "min-h-0 flex-1 flex-nowrap items-stretch" : "flex-wrap items-start"}`}>
         {/* Vendor boxes */}
-        <nav aria-label="Vendors" className={`${box} flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto p-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-210px)] lg:w-[250px] lg:flex-none`}>
+        <nav aria-label="Vendors" className={`${box} flex w-full flex-col gap-2 overflow-y-auto p-3 lg:w-[250px] lg:flex-none ${fixed ? "min-h-0" : "max-h-[45vh] lg:max-h-[calc(100vh-210px)]"}`}>
           <span className="px-1 pb-0.5 text-xs text-ink-soft">Vendors · most orders first</span>
           {[{ id: "", name: "All vendors", web: statusList.filter(isWebsite), manual: statusList.filter((b) => !isWebsite(b)) }, ...vendorBoxes].map((v) => {
             const count = v.web.length + v.manual.length;
@@ -528,9 +561,9 @@ export default function AwaitingPickupPage() {
           })}
         </nav>
 
-        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
+        <div className={`flex min-w-0 flex-[999_1_560px] flex-col ${fixed ? "min-h-0 gap-3" : "gap-4"}`}>
           {/* Website / Manual / Total + scan, one compact row */}
-          <div className={`${box} flex flex-col gap-2.5 p-3`}>
+          <div className={`${box} flex flex-none flex-col gap-2.5 p-3`}>
             <div className="grid gap-2.5 sm:grid-cols-3 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(280px,1.5fr)]">
               {([
                 { key: "WEBSITE" as Source, label: "Website", list: webAll },
@@ -587,7 +620,7 @@ export default function AwaitingPickupPage() {
           </div>
 
           {/* Orders */}
-          <div className={`${box} flex flex-col gap-2.5 p-3`}>
+          <div className={`${box} flex flex-col gap-2.5 p-3 ${fixed ? "min-h-0 flex-1" : ""}`}>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="mr-1 font-display text-lg font-semibold text-navy">{selectedVendorName}</h2>
               <div className="flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
@@ -645,7 +678,7 @@ export default function AwaitingPickupPage() {
               )}
             </div>
 
-            <div className="max-h-[calc(100vh-330px)] min-h-[300px] overflow-auto rounded-[10px]">
+            <div className={`overflow-auto rounded-[10px] ${fixed ? "min-h-0 flex-1" : "max-h-[calc(100vh-330px)] min-h-[300px]"}`}>
               <div className="flex min-w-[760px] flex-col gap-1.5">
                 <div className={`${ROW_GRID} sticky top-0 z-10 bg-[rgb(var(--c-surface))] px-3 py-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft`}>
                   <span />
@@ -813,7 +846,7 @@ export default function AwaitingPickupPage() {
       </div>
 
       {/* Action bar — stays at the bottom; website connections on the left */}
-      <div className={`${box} sticky bottom-2 z-20 flex flex-wrap items-center gap-2.5 px-4 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] lg:pr-20 ${selected.size ? "border-brass/60" : ""}`}>
+      <div className={`${box} ${fixed ? "flex-none" : "sticky bottom-2"} z-20 flex flex-wrap items-center gap-2.5 px-4 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.35)] lg:pr-20 ${selected.size ? "border-brass/60" : ""}`}>
         <div className="flex flex-wrap items-center gap-2">
           <WebsiteSyncPanels compact up onSynced={load} />
         </div>
