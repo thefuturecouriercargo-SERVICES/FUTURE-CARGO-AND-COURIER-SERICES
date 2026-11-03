@@ -129,16 +129,26 @@ export default function DriverRace() {
 
   if (!data || data.drivers.length === 0) return null;
 
-  // One clean row, no overlaps: drivers in race order; anyone close or tied lines up
-  // one pin-width behind the driver in front (ties: who reached the count first is in front).
+  // One row, race order. Tied drivers share one spot: the latest to reach that count sits
+  // on top, the others peek out underneath as stacked circles. Separate spots never overlap.
   const PIN = 26;
   const ordered = [...data.drivers].sort((a, b) => a.rank - b.rank);
-  const step = Math.min(PIN + 4, width / Math.max(1, ordered.length - 1));
-  const xs = ordered.map((p) => p.pos * 0.94 * width);
+  const groups: RacePin[][] = [];
+  for (const p of ordered) {
+    const g = groups[groups.length - 1];
+    if (g && g[0].pos === p.pos) g.push(p);
+    else groups.push([p]);
+  }
+  const step = Math.min(PIN + 8, width / Math.max(1, groups.length - 1));
+  const xs = groups.map((g) => g[0].pos * 0.94 * width);
   for (let k = 1; k < xs.length; k++) xs[k] = Math.min(xs[k], xs[k - 1] - step);
-  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], 0);
+  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], 8);
   for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step);
-  const placed = ordered.map((p, k) => ({ ...p, x: Math.min(xs[k], width) }));
+  const placed = groups.flatMap((g, k) => {
+    const x = Math.min(xs[k], width);
+    // last in the group (latest to reach) is on top; the rest stack behind it
+    return g.map((p, j) => ({ ...p, x, under: g.length - 1 - j, top: j === g.length - 1 }));
+  });
   const noOneYet = !data.drivers.some((p) => p.pos > 0);
   const pool = noOneYet && data.yesterdayWinner
     ? [`Yesterday's winner: ${data.yesterdayWinner.name} 🏆`, "New race — first delivery takes the lead"]
@@ -155,30 +165,46 @@ export default function DriverRace() {
   const commentCls = event?.tone === "good" ? "text-[#4ADE80]" : event?.tone === "bad" ? "text-[#FF8A8A]" : "text-[#E9ECF5]";
 
   return (
-    <div className="mt-2.5">
+    <div className="mb-3">
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open today's race"
-        className="flex h-[42px] w-full items-center rounded-xl border border-white/15 bg-[#0A1226] px-[13px] active:scale-[0.99]"
+        className="block w-full rounded-2xl bg-navy p-3 text-left text-paper shadow-md active:scale-[0.99]"
       >
-        <div ref={trackRef} className="relative h-[3px] min-w-0 flex-1 rounded bg-white/15">
-          {width > 0 &&
-            placed.map((p) => (
-              <span
-                key={p.code}
-                className="absolute top-1/2 grid h-[26px] w-[26px] place-items-center rounded-full text-[10px] font-extrabold text-[#0A1226]"
-                style={{ left: p.x, transform: "translate(-50%, -50%)", transition: "left 1s cubic-bezier(.3,.7,.3,1)", zIndex: p.me ? 9 : 8 - p.rank, ...pinStyle(p) }}
-              >
-                {p.code}
-              </span>
-            ))}
+        <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">
+          <span className="race-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
+          <span className="text-[#FF8A8A]">Live race</span>
+          <span className="text-paper/50">· to 12 midnight</span>
+          {data.me && <span className="ml-auto text-[#F3D58E]">P{data.me.rank} · {data.me.delivered} today</span>}
         </div>
+        <div className="race-road mt-2.5 flex h-[38px] items-center rounded-xl bg-black/25 px-[17px]">
+          <div ref={trackRef} className="race-lane relative h-[3px] min-w-0 flex-1 rounded">
+            {width > 0 &&
+              placed.map((p, i) => (
+                <span
+                  key={p.code}
+                  className="absolute top-1/2"
+                  style={{
+                    left: p.x,
+                    transition: "left 1.2s cubic-bezier(.3,.7,.3,1)",
+                    zIndex: p.top ? 20 : 10 - p.under,
+                    transform: `translate(calc(-50% - ${p.under * 4}px), calc(-50% + ${p.under * 2}px))`,
+                  }}
+                >
+                  {p.top && <span className="race-trail absolute right-[18px] top-1/2 h-[3px] w-[18px] -translate-y-1/2 rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${colorOf(p.code)})` }} />}
+                  <span
+                    className="race-bob relative grid h-[26px] w-[26px] place-items-center rounded-full border-2 border-navy text-[10px] font-extrabold text-[#0A1226]"
+                    style={{ animationDelay: `${(i % 5) * 0.17}s`, ...pinStyle(p) }}
+                  >
+                    {p.top ? p.code : ""}
+                  </span>
+                </span>
+              ))}
+          </div>
+        </div>
+        <div key={line} className={`race-comment mt-2 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>
       </button>
-      <div className="mt-1.5 flex items-center gap-2 px-1 text-[12.5px]">
-        <span key={line} className={`race-comment min-w-0 flex-1 truncate font-semibold ${commentCls}`}>{line}</span>
-        {data.me && <span className="shrink-0 font-mono text-[11px] text-[#B7C0DA]">P{data.me.rank} · {data.me.delivered} today</span>}
-      </div>
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={() => setOpen(false)}>
@@ -213,12 +239,20 @@ export default function DriverRace() {
                 </div>
               ))}
             </div>
-            <div className={`mt-3 rounded-lg bg-white/[0.06] px-3 py-2 text-[13px] font-semibold ${commentCls}`}>{line}</div>
+            <div className={`mt-3 rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>
             <div className="mt-2 text-center font-mono text-[10.5px] text-[#B7C0DA]">Ties: whoever reached the count first stays ahead</div>
           </div>
         </div>
       )}
-      <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}@media (prefers-reduced-motion:reduce){.race-comment{animation:none}}`}</style>
+      <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}
+.race-lane{background:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 10px,transparent 10px 20px);background-size:20px 3px;animation:raceRoad .6s linear infinite}
+@keyframes raceRoad{to{background-position:-20px 0}}
+.race-bob{animation:raceBob .5s ease-in-out infinite alternate}
+@keyframes raceBob{to{transform:translateY(-1.5px)}}
+.race-trail{animation:raceTrail .45s ease-in-out infinite alternate}
+@keyframes raceTrail{from{opacity:.35;width:12px}to{opacity:.8;width:20px}}
+.race-live{animation:raceLive 1.2s infinite}@keyframes raceLive{50%{opacity:.2}}
+@media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-bob,.race-trail,.race-live{animation:none}}`}</style>
     </div>
   );
 }

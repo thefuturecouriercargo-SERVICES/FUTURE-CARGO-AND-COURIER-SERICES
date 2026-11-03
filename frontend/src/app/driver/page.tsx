@@ -1191,7 +1191,7 @@ export default function DriverPortalPage() {
 
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-0">
       {awaitingBankConfirm ? (
         <div className="fixed bottom-24 right-4 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
           <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
