@@ -570,25 +570,41 @@ interface PickupOrder {
   vendor: string;
   customer: string | null;
   holder: string | null;
-  cancelledAt: string | null;
+}
+type PickupType = "CANCEL" | "PICKUP";
+interface PickupPending {
+  cn: string;
+  on: string;
+  order: PickupOrder;
+}
+interface PickupReceived extends PickupPending {
+  receivedAt: string;
+  by: string | null;
+}
+interface PickupList {
+  pending: PickupPending[];
+  received: PickupReceived[];
 }
 interface PickupData {
   start: string;
-  pending: { cn: string; rtoOn: string; file: string | null; order: PickupOrder }[];
-  pendingTotal: number;
-  received: { cn: string; rtoOn: string; receivedAt: string; by: string | null; order: PickupOrder | null }[];
+  cancel: PickupList;
+  pickup: PickupList;
 }
 
+const PICK_INFO: Record<PickupType, { title: string; on: string; note: string }> = {
+  CANCEL: { title: "Cancelled (RTO)", on: "RTO on", note: "RTO in the agent's Excel and cancelled in Daily Entry." },
+  PICKUP: { title: "Pickup delivery", on: "Picked up", note: "Label says PICKUP — the agent collected it from the customer (Excel or PDF shows done)." },
+};
+
 /**
- * Cancelled & pickup: every RTO from the agent's Excel that we cancelled — the parcel is still
- * with the agent until admin scans its CN here, which marks it Received back.
+ * Parcels to collect back from the agent. One scan bar — the server decides whether the CN
+ * is a Cancelled (RTO) parcel or a Pickup delivery, and it lands in that box as Received back.
  */
 function PickupTable({ refreshKey }: { refreshKey: number }) {
   const [data, setData] = useState<PickupData | null>(null);
   const [error, setError] = useState("");
   const [scan, setScan] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [view, setView] = useState<"pending" | "received">("pending");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -608,8 +624,11 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
     if (!cn || busy) return;
     setBusy(true);
     try {
-      const r = await apiFetch<{ cn: string; order: PickupOrder | null }>("/agent-report/pickup/receive", { method: "POST", body: { cn } });
-      setMsg({ ok: true, text: `✓ CN ${r.cn} received back${r.order ? ` · ${r.order.vendor}${r.order.customer ? " · " + r.order.customer : ""}` : ""}` });
+      const r = await apiFetch<{ cn: string; type: PickupType; order: PickupOrder | null }>("/agent-report/pickup/receive", { method: "POST", body: { cn } });
+      setMsg({
+        ok: true,
+        text: `✓ CN ${r.cn} received back — ${r.type === "CANCEL" ? "CANCELLED" : "PICKUP"}${r.order ? ` · ${r.order.vendor}${r.order.customer ? " · " + r.order.customer : ""}` : ""}`,
+      });
       load();
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Could not mark received" });
@@ -619,50 +638,27 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
     }
   }
 
-  async function undo(cn: string) {
-    if (!(await confirmDialog(`Undo "received back" for CN ${cn}? It goes back on the pickup list.`))) return;
+  async function undo(cn: string, type: PickupType) {
+    if (!(await confirmDialog(`Undo "received back" for CN ${cn}? It goes back on the list to receive.`))) return;
     try {
-      await apiFetch("/agent-report/pickup/undo", { method: "POST", body: { cn } });
-      setMsg({ ok: true, text: `CN ${cn} back on the pickup list` });
+      await apiFetch("/agent-report/pickup/undo", { method: "POST", body: { cn, type } });
+      setMsg({ ok: true, text: `CN ${cn} back on the list to receive` });
       load();
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Undo failed" });
     }
   }
 
-  function downloadCsv() {
-    if (!data) return;
-    const head = ["CN", "RTO on", "Order date", "Vendor", "Customer", "With", "Amount"];
-    const lines = data.pending.map((r) =>
-      [r.cn, fmtDate(r.rtoOn), fmtDate(r.order.date), r.order.vendor, r.order.customer ?? "", r.order.holder ?? "", r.order.total]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    );
-    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `cancelled-to-pickup-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  const pending = data?.pending ?? [];
-  const received = data?.received ?? [];
+  const nCancel = data?.cancel.pending.length ?? 0;
+  const nPickup = data?.pickup.pending.length ?? 0;
 
   return (
     <section className="mb-6 border border-brass bg-white p-3 md:p-4">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-navy">Cancelled &amp; pickup — to collect from agent ({pending.length})</h2>
-          <p className="text-xs text-ink-soft">
-            RTO from the agent&apos;s Excel, cancelled in Daily Entry. Scan the CN when the parcel is back to mark it <b>Received back</b>. Counting from {data ? fmtDate(data.start) : "…"}.
-          </p>
-        </div>
-        {pending.length > 0 && (
-          <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">
-            ⬇ Download CSV
-          </button>
-        )}
+      <div className="mb-3">
+        <h2 className="font-display text-lg font-semibold text-navy">Collect from agent — pending to receive ({nCancel + nPickup})</h2>
+        <p className="text-xs text-ink-soft">
+          Scan the CN when the parcel is back — it goes to <b>Cancelled</b> or <b>Pickup</b> on its own. Counting from {data ? fmtDate(data.start) : "…"}.
+        </p>
       </div>
 
       <form
@@ -689,10 +685,56 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
       )}
       {error && <p className="mb-2 text-sm text-cancelled">{error}</p>}
 
+      <div className="grid gap-3 xl:grid-cols-2">
+        <PickupBox type="CANCEL" list={data?.cancel} onUndo={undo} />
+        <PickupBox type="PICKUP" list={data?.pickup} onUndo={undo} />
+      </div>
+    </section>
+  );
+}
+
+function PickupBox({ type, list, onUndo }: { type: PickupType; list?: PickupList; onUndo: (cn: string, type: PickupType) => void }) {
+  const [view, setView] = useState<"pending" | "received">("pending");
+  const info = PICK_INFO[type];
+  const pending = list?.pending ?? [];
+  const received = list?.received ?? [];
+  const total = pending.reduce((s, r) => s + r.order.total, 0);
+
+  function downloadCsv() {
+    const head = ["CN", info.on, "Order date", "Vendor", "Customer", "With", "Amount"];
+    const lines = pending.map((r) =>
+      [r.cn, fmtDate(r.on), fmtDate(r.order.date), r.order.vendor, r.order.customer ?? "", r.order.holder ?? "", r.order.total]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${type === "CANCEL" ? "cancelled" : "pickup"}-to-receive-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  return (
+    <div className="border border-line p-3">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className={`font-display text-base font-semibold ${type === "CANCEL" ? "text-cancelled" : "text-navy"}`}>
+            {type === "PICKUP" ? "⇄ " : ""}
+            {info.title}
+          </h3>
+          <p className="text-[11px] text-ink-soft">{info.note}</p>
+        </div>
+        {view === "pending" && pending.length > 0 && (
+          <button onClick={downloadCsv} className="rounded border border-line bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-navy">
+            ⬇ CSV
+          </button>
+        )}
+      </div>
       <div className="mb-2 flex flex-wrap gap-1">
         {(
           [
-            ["pending", `To pick up (${pending.length})`],
+            ["pending", `Pending to receive (${pending.length})`],
             ["received", `Received back (${received.length})`],
           ] as const
         ).map(([k, l]) => (
@@ -708,15 +750,14 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
 
       {view === "pending" &&
         (pending.length === 0 ? (
-          <p className="border border-line bg-paper p-3 text-sm text-delivered">✓ No cancelled parcels waiting with the agent.</p>
+          <p className="border border-line bg-paper p-3 text-sm text-delivered">✓ Nothing pending to receive.</p>
         ) : (
           <div className="table-wrap border border-line">
-            <table className="data-table min-w-[680px]">
+            <table className="data-table min-w-[560px]">
               <thead>
                 <tr>
                   <th>CN</th>
-                  <th>RTO on</th>
-                  <th>Order date</th>
+                  <th>{info.on}</th>
                   <th>Vendor / Customer</th>
                   <th>With</th>
                   <th className="text-right">Amount</th>
@@ -725,9 +766,11 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
               <tbody>
                 {pending.map((r) => (
                   <tr key={r.cn}>
-                    <td className="font-mono font-bold text-navy">{r.cn}</td>
-                    <td className="font-mono text-xs">{fmtDate(r.rtoOn)}</td>
-                    <td className="font-mono text-xs">{fmtDate(r.order.date)}</td>
+                    <td className="font-mono font-bold text-navy">
+                      {r.cn}
+                      <span className="block text-[10px] font-normal text-ink-soft">{fmtDate(r.order.date)}</span>
+                    </td>
+                    <td className="font-mono text-xs">{fmtDate(r.on)}</td>
                     <td>
                       <span className="block">{r.order.vendor}</span>
                       {r.order.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
@@ -739,8 +782,8 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={5}>Total to collect ({pending.length} parcels)</td>
-                  <td className="text-right font-mono">{fmtNumber(data?.pendingTotal ?? 0)}</td>
+                  <td colSpan={4}>Pending to receive ({pending.length})</td>
+                  <td className="text-right font-mono">{fmtNumber(total)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -752,11 +795,10 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
           <p className="border border-line bg-paper p-3 text-sm text-ink-soft">Nothing received back yet.</p>
         ) : (
           <div className="table-wrap border border-line">
-            <table className="data-table min-w-[680px]">
+            <table className="data-table min-w-[560px]">
               <thead>
                 <tr>
                   <th>CN</th>
-                  <th>RTO on</th>
                   <th>Received back</th>
                   <th>Vendor / Customer</th>
                   <th>By</th>
@@ -766,16 +808,20 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
               <tbody>
                 {received.map((r) => (
                   <tr key={r.cn}>
-                    <td className="font-mono font-bold text-navy">{r.cn}</td>
-                    <td className="font-mono text-xs">{fmtDate(r.rtoOn)}</td>
+                    <td className="font-mono font-bold text-navy">
+                      {r.cn}
+                      <span className="block text-[10px] font-normal text-ink-soft">
+                        {info.on} {fmtDate(r.on)}
+                      </span>
+                    </td>
                     <td className="font-mono text-xs">{fmtDateTime(r.receivedAt)}</td>
                     <td>
-                      <span className="block">{r.order?.vendor ?? "—"}</span>
-                      {r.order?.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
+                      <span className="block">{r.order.vendor}</span>
+                      {r.order.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
                     </td>
                     <td className="text-xs">{r.by ?? ""}</td>
                     <td className="text-right">
-                      <button onClick={() => undo(r.cn)} className="font-mono text-[11px] uppercase text-cancelled underline">
+                      <button onClick={() => onUndo(r.cn, type)} className="font-mono text-[11px] uppercase text-cancelled underline">
                         Undo
                       </button>
                     </td>
@@ -785,6 +831,6 @@ function PickupTable({ refreshKey }: { refreshKey: number }) {
             </table>
           </div>
         ))}
-    </section>
+    </div>
   );
 }
