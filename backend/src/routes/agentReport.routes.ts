@@ -473,7 +473,7 @@ router.get(
 );
 
 /**
- * ── Cancelled & pickup: parcels to collect back from the agent ────────────────
+ * ── Returns page (Cancel & Pickup): parcels to receive back at the office ─────
  * Two lists, one scan bar:
  *  - CANCELLED: RTO in the agent's Excel and cancelled in Daily Entry → parcel comes back to us.
  *  - PICKUP: a pickup delivery (label says PICKUP — the agent collects from the customer) that the
@@ -519,36 +519,51 @@ const orderOut = (o: PickupOrderRow) => ({
   vendor: o.vendor.name,
   customer: o.booking?.customerName ?? null,
   holder: o.employee?.name ?? null,
+  isAgent: !!o.employee?.isAgent,
   resolvedAt: o.resolvedAt?.toISOString() ?? null,
 });
 
-/** CNs that may be waiting with the agent, with the date they first showed and which list. */
+/**
+ * Everything that has to come back to the office, from the agent AND our own drivers:
+ *  - CANCEL: order Cancelled since the start (or RTO on the agent's Excel), not a pickup delivery.
+ *  - PICKUP: pickup delivery done — Delivered since the start, or the agent's Excel/PDF shows it done.
+ */
 async function collectList() {
   const since = pickupStartTs();
   const rto = await prisma.agentRecon.findMany({ where: { kind: "RTO_PICKUP", firstSeenAt: { gte: since } } });
   const done = await prisma.agentRecon.findMany({ where: { kind: { in: ["EXCEL_DELIVERED", "PDF_PAID"] }, firstSeenAt: { gte: since } } });
-  const cns = [...new Set([...rto, ...done].map((r) => r.cn))];
+  const resolved = await prisma.order.findMany({
+    where: { resolvedAt: { gte: since }, status: { in: ["CANCELLED", "DELIVERED"] } },
+    select: { cnNo: true },
+  });
+  const rtoAt = new Map(rto.map((r) => [r.cn, r.firstSeenAt]));
+  const doneAt = new Map<string, Date>();
+  for (const d of done) if (!doneAt.has(d.cn) || d.firstSeenAt < doneAt.get(d.cn)!) doneAt.set(d.cn, d.firstSeenAt);
+
+  const cns = [...new Set([...rto.map((r) => r.cn), ...done.map((d) => d.cn), ...resolved.map((o) => String(o.cnNo))])];
   const byCn = await pickupOrders(cns);
   const got = await prisma.agentRecon.findMany({ where: { kind: { in: ["RTO_RECEIVED", "PICKUP_RECEIVED"] }, cn: { in: cns } } });
   const gotKey = new Map(got.map((g) => [`${g.kind}:${g.cn}`, g]));
 
   type Entry = { cn: string; type: "CANCEL" | "PICKUP"; since: Date; order: PickupOrderRow; received: (typeof got)[number] | undefined };
-  const out = new Map<string, Entry>();
-  for (const r of rto) {
-    const o = byCn.get(Number(r.cn));
-    // A pickup that went RTO was never collected — nothing comes back.
-    if (!o || !o.employee?.isAgent || isPickupBooking(o.booking)) continue;
-    out.set(`CANCEL:${r.cn}`, { cn: r.cn, type: "CANCEL", since: r.firstSeenAt, order: o, received: gotKey.get(`RTO_RECEIVED:${r.cn}`) });
+  const out: Entry[] = [];
+  for (const cn of cns) {
+    const o = byCn.get(Number(cn));
+    if (!o) continue;
+    const resolvedSince = !!o.resolvedAt && o.resolvedAt >= since;
+    if (isPickupBooking(o.booking)) {
+      // A pickup that went RTO was never collected — nothing comes back.
+      const agentDone = !!o.employee?.isAgent && doneAt.has(cn) && o.status !== "CANCELLED";
+      if ((o.status === "DELIVERED" && resolvedSince) || agentDone) {
+        const at = doneAt.get(cn) ?? o.resolvedAt ?? new Date();
+        out.push({ cn, type: "PICKUP", since: at, order: o, received: gotKey.get(`PICKUP_RECEIVED:${cn}`) });
+      }
+    } else if (o.status === "CANCELLED" && (resolvedSince || rtoAt.has(cn))) {
+      const at = rtoAt.get(cn) ?? o.resolvedAt ?? new Date();
+      out.push({ cn, type: "CANCEL", since: at, order: o, received: gotKey.get(`RTO_RECEIVED:${cn}`) });
+    }
   }
-  for (const r of done) {
-    const o = byCn.get(Number(r.cn));
-    if (!o || !o.employee?.isAgent || !isPickupBooking(o.booking)) continue;
-    const key = `PICKUP:${r.cn}`;
-    const cur = out.get(key);
-    if (cur && cur.since <= r.firstSeenAt) continue;
-    out.set(key, { cn: r.cn, type: "PICKUP", since: r.firstSeenAt, order: o, received: gotKey.get(`PICKUP_RECEIVED:${r.cn}`) });
-  }
-  return [...out.values()];
+  return out;
 }
 
 router.get(
@@ -557,7 +572,7 @@ router.get(
     const list = await collectList();
     const toReceive = (t: "CANCEL" | "PICKUP") =>
       list
-        .filter((e) => e.type === t && !e.received && (t === "CANCEL" ? e.order.status === "CANCELLED" : e.order.status !== "CANCELLED"))
+        .filter((e) => e.type === t && !e.received)
         .sort((a, b) => a.since.getTime() - b.since.getTime())
         .map((e) => ({ cn: e.cn, on: dubaiDateStr(e.since), order: orderOut(e.order) }));
     const received = (t: "CANCEL" | "PICKUP") =>
@@ -582,7 +597,12 @@ router.post(
     const cn = cnSchema.parse(req.body).cn.replace(/\D/g, "");
     if (!cn) return res.status(400).json({ error: "Not a CN number" });
     const entries = (await collectList()).filter((e) => e.cn === cn);
-    if (entries.length === 0) return res.status(404).json({ error: `CN ${cn} is not on the cancelled or pickup list` });
+    if (entries.length === 0) {
+      const o = (await pickupOrders([cn])).get(Number(cn));
+      return res.status(404).json({
+        error: o ? `CN ${cn} is ${o.status} (${o.employee?.name ?? "—"}) — not on the cancelled or pickup list` : `CN ${cn} not found`,
+      });
+    }
     const open = entries.find((e) => !e.received);
     if (!open) return res.status(409).json({ error: `CN ${cn} already received back (${dubaiDateStr(entries[0].received!.firstSeenAt)})` });
     if (open.type === "CANCEL" && open.order.status !== "CANCELLED")
