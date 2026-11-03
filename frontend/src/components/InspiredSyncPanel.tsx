@@ -23,7 +23,8 @@ interface TestOrder {
 }
 
 /** Inspired website connection: status, Sync now, and a Test that shows what the website sends. */
-export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onSynced?: () => void; conn?: string }) {
+export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact = false }: { onSynced?: () => void; conn?: string; compact?: boolean }) {
+  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState<"" | "sync" | "test">("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -55,9 +56,11 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
           r.errors.length ? ` Problems: ${r.errors.join("; ")}` : ""
         }`,
       });
+      if (r.errors.length) setOpen(true);
       onSynced?.();
     } catch (err) {
       setMsg({ ok: false, text: err instanceof Error ? err.message : "Sync failed" });
+      setOpen(true);
     } finally {
       setBusy("");
       loadStatus();
@@ -68,6 +71,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
     setBusy("test");
     setMsg(null);
     setSample(null);
+    setOpen(true);
     try {
       const r = await apiFetch<{ orders: TestOrder[] }>(`/integrations/${conn}/test`, { method: "POST" });
       setSample(r.orders);
@@ -81,7 +85,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
 
   if (!status) return null;
 
-  return (
+  const full = (
     <div className="h-full rounded-[10px] border border-line bg-paper-2/40 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -139,11 +143,59 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
       )}
     </div>
   );
+  if (!compact) return full;
+
+  // Small chip for page headers: status dot, name, last check, sync button.
+  // Click the name for the full panel (test connection, messages, samples).
+  const last = status.lastSync;
+  return (
+    <div className="relative">
+      <div className={`flex h-9 items-center gap-2 rounded-lg border pl-2.5 pr-1 text-xs ${status.configured ? "border-line" : "border-cancelled/60"}`}>
+        <span
+          className={`inline-block h-2 w-2 flex-none rounded-full ${status.configured ? "ap-pulse bg-delivered" : "bg-cancelled"}`}
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="whitespace-nowrap text-left hover:text-brass"
+          title={status.configured ? "Connected — checks every 5 min. Click for details." : "Not connected. Click for details."}
+        >
+          <b className="font-semibold">{status.vendorName}</b>
+          <span className="text-ink-soft">
+            {status.configured
+              ? last
+                ? ` · ${new Date(last.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · ${last.imported} added`
+                : " · connected"
+              : " · not connected"}
+          </span>
+          {last && last.errors.length > 0 && <span className="text-cancelled"> · ⚠</span>}
+        </button>
+        {status.configured && (
+          <button
+            type="button"
+            onClick={sync}
+            disabled={!!busy}
+            aria-label={`Sync ${status.vendorName} website now`}
+            title="Sync now"
+            className="grid h-7 w-7 place-items-center rounded-md text-brass hover:bg-brass/10 disabled:opacity-60"
+          >
+            <span className={`inline-block ${busy === "sync" ? "ap-spin" : ""}`} aria-hidden="true">⟳</span>
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute left-0 top-11 z-40 w-[min(560px,90vw)] rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] [&>div]:bg-[rgb(var(--c-surface))]">
+          {full}
+        </div>
+      )}
+    </div>
+  );
 }
 
-
 /** One box per connected vendor website (Inspired, Escalo, …). */
-export function WebsiteSyncPanels({ onSynced }: { onSynced?: () => void }) {
+export function WebsiteSyncPanels({ onSynced, compact = false }: { onSynced?: () => void; compact?: boolean }) {
   const [conns, setConns] = useState<string[]>([]);
   useEffect(() => {
     apiFetch<{ conn: string }[]>("/integrations")
@@ -153,7 +205,7 @@ export function WebsiteSyncPanels({ onSynced }: { onSynced?: () => void }) {
   return (
     <>
       {conns.map((c) => (
-        <InspiredSyncPanel key={c} conn={c} onSynced={onSynced} />
+        <InspiredSyncPanel key={c} conn={c} onSynced={onSynced} compact={compact} />
       ))}
     </>
   );

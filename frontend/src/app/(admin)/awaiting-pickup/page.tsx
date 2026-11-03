@@ -43,7 +43,7 @@ const fmtTime = (v: string) =>
 
 // One grid for the header line and every consignment row.
 const ROW_GRID =
-  "grid grid-cols-[22px_32px_128px_minmax(150px,1fr)_96px_78px_84px_40px_36px] items-center gap-3";
+  "grid grid-cols-[20px_28px_minmax(170px,1.1fr)_minmax(150px,1fr)_72px_72px_36px_32px] items-center gap-3";
 
 type Fx = "flash" | "dup";
 
@@ -207,8 +207,7 @@ export default function AwaitingPickupPage() {
 
   const webAll = vendorList.filter(isWebsite);
   const manualAll = vendorList.filter((b) => !isWebsite(b));
-  const dayWeb = statusList.filter(isWebsite).length;
-  const olderAwaiting = viewDay && !q ? awaitingDays.filter((d) => d.day < viewDay) : [];
+    const olderAwaiting = viewDay && !q ? awaitingDays.filter((d) => d.day < viewDay) : [];
   const olderCount = olderAwaiting.reduce((s2, d) => s2 + d.count, 0);
   const selectedVendorName = vendorFilter ? vendorBoxes.find((v) => v.id === vendorFilter)?.name ?? "Vendor" : "All vendors";
 
@@ -388,22 +387,24 @@ export default function AwaitingPickupPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className={`${box} flex flex-wrap items-center justify-between gap-4 px-6 py-5`}>
-        <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Vendor bookings</p>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy">Awaiting Pickup</h1>
-          <p className="text-sm text-ink-soft">
+      {/* Header: title, website chips, date, buttons */}
+      <div className={`${box} flex flex-wrap items-center gap-x-4 gap-y-2.5 px-5 py-3`}>
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-navy">Awaiting Pickup</h1>
+          <span className="whitespace-nowrap text-sm text-ink-soft">
             <span key={`dc-${statusList.length}`} className="ap-bump inline-block">{statusList.length}</span> orders · AED {fmtNumber(sumCod(statusList))}
             {q ? ` · search “${q}” (all days)` : ""}
-          </p>
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button aria-label="Previous day" onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="h-11 w-11 rounded-lg border border-line text-lg hover:border-brass">
+        <div className="flex flex-wrap items-center gap-2">
+          <WebsiteSyncPanels compact onSynced={load} />
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <button aria-label="Previous day" onClick={() => setViewDay(addDays(viewDay || todayStr(), -1))} className="h-10 w-10 rounded-lg border border-line text-lg hover:border-brass">
             ‹
           </button>
-          <label className="relative flex h-11 items-center gap-2 rounded-lg border border-line px-3 text-sm hover:border-brass">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af5a" strokeWidth="2" aria-hidden="true">
+          <label className="relative flex h-10 items-center gap-2 rounded-lg border border-line px-3 text-sm hover:border-brass">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d4af5a" strokeWidth="2" aria-hidden="true">
               <rect x="3" y="5" width="18" height="16" rx="2" />
               <path d="M3 10h18M8 3v4M16 3v4" />
             </svg>
@@ -416,17 +417,17 @@ export default function AwaitingPickupPage() {
               className="absolute inset-0 cursor-pointer opacity-0"
             />
           </label>
-          <button aria-label="Next day" onClick={() => setViewDay(addDays(viewDay || todayStr(), 1))} className="h-11 w-11 rounded-lg border border-line text-lg hover:border-brass">
+          <button aria-label="Next day" onClick={() => setViewDay(addDays(viewDay || todayStr(), 1))} className="h-10 w-10 rounded-lg border border-line text-lg hover:border-brass">
             ›
           </button>
           {viewDay !== todayStr() && (
-            <button onClick={() => setViewDay(todayStr())} className="h-11 rounded-lg px-3 text-sm font-medium text-brass hover:underline">
+            <button onClick={() => setViewDay(todayStr())} className="h-10 rounded-lg px-2.5 text-sm font-medium text-brass hover:underline">
               Today
             </button>
           )}
           <button
             onClick={() => setViewDay("")}
-            className={`h-11 rounded-lg px-3 text-sm font-medium ${viewDay === "" ? "bg-brass/15 text-brass" : "text-brass hover:underline"}`}
+            className={`h-10 rounded-lg px-2.5 text-sm font-medium ${viewDay === "" ? "bg-brass/15 text-brass" : "text-brass hover:underline"}`}
             title="Every day (latest 500)"
           >
             All days
@@ -436,7 +437,7 @@ export default function AwaitingPickupPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowPhotos(!showPhotos)}
-              className={`h-11 rounded-lg border px-4 text-sm font-medium ${showPhotos ? "border-brass text-brass" : "border-line text-navy hover:border-brass"}`}
+              className={`h-10 rounded-lg border px-3.5 text-sm font-medium ${showPhotos ? "border-brass text-brass" : "border-line text-navy hover:border-brass"}`}
             >
               {showPhotos ? "✕ Close photos" : "Read order photos"}
             </button>
@@ -445,7 +446,7 @@ export default function AwaitingPickupPage() {
                 setEditing(null);
                 setShowForm(!showForm);
               }}
-              className={`h-11 rounded-lg px-4 text-sm font-semibold ${showForm && !editing ? "border border-brass text-brass" : "bg-navy text-paper hover:bg-navy-2"}`}
+              className={`h-10 rounded-lg px-3.5 text-sm font-semibold ${showForm && !editing ? "border border-brass text-brass" : "bg-navy text-paper hover:bg-navy-2"}`}
             >
               {showForm && !editing ? "✕ Close form" : "+ Enter order"}
             </button>
@@ -493,10 +494,10 @@ export default function AwaitingPickupPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-stretch gap-5">
+      <div className="flex flex-wrap items-start gap-4">
         {/* Vendor boxes */}
-        <nav aria-label="Vendors" className={`${box} flex w-full flex-col gap-2.5 p-4 lg:w-[270px] lg:flex-none`}>
-          <span className="px-0.5 pb-1 text-xs text-ink-soft">Vendors · most orders first</span>
+        <nav aria-label="Vendors" className={`${box} flex max-h-[45vh] w-full flex-col gap-2 overflow-y-auto p-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-150px)] lg:w-[250px] lg:flex-none`}>
+          <span className="px-1 pb-0.5 text-xs text-ink-soft">Vendors · most orders first</span>
           {[{ id: "", name: "All vendors", web: statusList.filter(isWebsite), manual: statusList.filter((b) => !isWebsite(b)) }, ...vendorBoxes].map((v) => {
             const count = v.web.length + v.manual.length;
             const on = vendorFilter === v.id;
@@ -508,7 +509,7 @@ export default function AwaitingPickupPage() {
                   setVendorFilter(v.id);
                   setSelected(new Set());
                 }}
-                className={`ap-vbox flex flex-col gap-1 rounded-[10px] border px-4 py-3 text-left transition ${
+                className={`ap-vbox flex flex-none flex-col gap-0.5 rounded-[10px] border px-3.5 py-2 text-left transition ${
                   on ? "border-brass bg-brass/10" : zero ? "border-line bg-transparent text-ink-soft" : "border-line bg-paper-2/40 hover:border-brass/60"
                 }`}
               >
@@ -518,7 +519,7 @@ export default function AwaitingPickupPage() {
                     {count}
                   </span>
                 </span>
-                <span className="text-xs text-ink-soft">
+                <span className="truncate text-[11px] text-ink-soft">
                   {zero
                     ? "AED 0"
                     : [v.web.length ? `${v.web.length} website` : "", v.manual.length ? `${v.manual.length} manual` : "", `AED ${fmtNumber(sumCod([...v.web, ...v.manual]))}`]
@@ -530,16 +531,10 @@ export default function AwaitingPickupPage() {
           })}
         </nav>
 
-        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
-          {/* Selected vendor summary + scan */}
-          <div className={`${box} flex flex-col gap-4 p-5`}>
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="font-display text-xl font-semibold text-navy">{selectedVendorName}</h2>
-              <span className="text-sm text-ink-soft">
-                {vendorList.length} orders · AED {fmtNumber(sumCod(vendorList))}
-              </span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
+          {/* Website / Manual / Total + scan, one compact row */}
+          <div className={`${box} flex flex-col gap-2.5 p-3`}>
+            <div className="grid gap-2.5 sm:grid-cols-3 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(280px,1.5fr)]">
               {([
                 { key: "WEBSITE" as Source, label: "Website", list: webAll },
                 { key: "MANUAL" as Source, label: "Manual", list: manualAll },
@@ -554,34 +549,34 @@ export default function AwaitingPickupPage() {
                       setSource(t.key);
                       setSelected(new Set());
                     }}
-                    className={`flex flex-col gap-1 rounded-[10px] border px-4 py-3 text-left transition ${
+                    className={`flex h-12 items-center gap-2 rounded-[10px] border px-3.5 text-left transition ${
                       on ? "border-brass bg-brass/10" : "border-line bg-paper-2/40 hover:border-brass/60"
                     }`}
                   >
                     <span className={`text-xs ${gold || on ? "text-brass" : "text-ink-soft"}`}>{t.label}</span>
-                    <span key={`${t.label}-${t.list.length}`} className={`ap-bump inline-block self-start font-display text-2xl font-semibold ${gold ? "text-brass" : "text-navy"}`}>
+                    <span key={`${t.label}-${t.list.length}`} className={`ap-bump inline-block font-display text-xl font-semibold ${gold ? "text-brass" : "text-navy"}`}>
                       {t.list.length}
                     </span>
-                    <span className={`text-xs ${gold ? "text-brass" : "text-ink-soft"}`}>AED {fmtNumber(sumCod(t.list))}</span>
+                    <span className={`ml-auto whitespace-nowrap text-xs ${gold ? "text-brass" : "text-ink-soft"}`}>AED {fmtNumber(sumCod(t.list))}</span>
                   </button>
                 );
               })}
+              <form onSubmit={onScan} className={`flex h-12 gap-2 rounded-[10px] border border-line bg-paper p-1 sm:col-span-3 xl:col-span-1 ${shake ? "ap-shake" : ""}`}>
+                <input
+                  ref={scanRef}
+                  value={scan}
+                  onChange={(e) => setScan(e.target.value)}
+                  inputMode="numeric"
+                  aria-label="Scan or type CN"
+                  placeholder="Scan or type CN…"
+                  className="min-w-0 flex-1 !border-0 !bg-transparent px-3 font-mono text-[15px] !shadow-none"
+                />
+                <button type="submit" className="rounded-lg bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
+                  Find
+                </button>
+              </form>
             </div>
-            <form onSubmit={onScan} className={`flex gap-2 rounded-[10px] border border-line bg-paper p-1 ${shake ? "ap-shake" : ""}`}>
-              <input
-                ref={scanRef}
-                value={scan}
-                onChange={(e) => setScan(e.target.value)}
-                inputMode="numeric"
-                aria-label="Scan or type CN"
-                placeholder="Scan or type CN…"
-                className="min-w-0 flex-1 !border-0 !bg-transparent px-3 py-2 font-mono text-[15px] !shadow-none"
-              />
-              <button type="submit" className="h-10 rounded-lg bg-navy px-4 text-sm font-semibold text-paper hover:bg-navy-2">
-                Find
-              </button>
-            </form>
-            {msg && <p className={`-mt-1 text-sm ${msg.ok ? "text-brass" : "text-cancelled"}`}>{msg.text}</p>}
+            {msg && <p className={`px-1 text-sm ${msg.ok ? "text-brass" : "text-cancelled"}`}>{msg.text}</p>}
             {olderCount > 0 && filter === "AWAITING_PICKUP" && (
               <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-pending bg-pending-bg px-3 py-2 text-sm text-pending">
                 <b>⚠ {olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
@@ -595,8 +590,9 @@ export default function AwaitingPickupPage() {
           </div>
 
           {/* Orders */}
-          <div className={`${box} flex flex-col gap-3 p-4`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className={`${box} flex flex-col gap-2.5 p-3`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="mr-1 font-display text-lg font-semibold text-navy">{selectedVendorName}</h2>
               <div className="flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
                 {FILTERS.map((f) => (
                   <button
@@ -611,7 +607,7 @@ export default function AwaitingPickupPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
+              <div className="ml-auto flex flex-wrap gap-1 rounded-[10px] bg-paper p-1">
                 <span className={`flex h-9 items-center gap-2 rounded-lg pl-3 text-[13px] ${source === "" ? segOn : segOff}`}>
                   <input
                     type="checkbox"
@@ -652,17 +648,16 @@ export default function AwaitingPickupPage() {
               )}
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="flex min-w-[820px] flex-col gap-2">
-                <div className={`${ROW_GRID} px-4 py-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft`}>
+            <div className="max-h-[calc(100vh-300px)] min-h-[320px] overflow-auto rounded-[10px]">
+              <div className="flex min-w-[760px] flex-col gap-1.5">
+                <div className={`${ROW_GRID} sticky top-0 z-10 bg-[rgb(var(--c-surface))] px-3 py-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-soft`}>
                   <span />
                   <span>SL</span>
-                  <span>CN No</span>
+                  <span>CN No · Type · Emirate</span>
                   <span>Name / Phone</span>
-                  <span>Emirate</span>
                   <span className="text-right">Amount</span>
                   <span>Entered</span>
-                  <span>Actions</span>
+                  <span className="text-center">Act</span>
                   <span className="text-center">Label</span>
                 </div>
 
@@ -687,22 +682,28 @@ export default function AwaitingPickupPage() {
                     ].join(" ");
                     return (
                       <div key={b.id} id={`ap-row-${b.id}`} className={`${cls} rounded-[10px] border`}>
-                        <div className={`${ROW_GRID} px-4 py-3`}>
+                        <div className={`${ROW_GRID} px-3 py-2`}>
                           <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} aria-label={`Select CN ${b.cnNo}`} />
                           <span className="text-sm text-ink-soft">{idx + 1}</span>
-                          <span className="flex min-w-0 flex-col gap-0.5">
-                            <span className="font-mono font-semibold text-navy">{b.cnNo}</span>
-                            <span className="flex flex-wrap items-center gap-1 text-[11px]">
-                              <span className={isWebsite(b) ? "text-brass" : "text-ink-soft"} title={b.vendorRef ? `Website order #${b.vendorRef}` : undefined}>
+                          <span className="flex min-w-0 flex-col">
+                            <span className="flex items-center gap-1.5">
+                              <span className="font-mono font-semibold text-navy">{b.cnNo}</span>
+                              {newIds.has(b.id) && <span className="ap-newtag rounded bg-brass px-1 text-[10px] font-bold text-[#14100a]">NEW</span>}
+                              {b.status !== "AWAITING_PICKUP" && <BookingStatusBadge booking={b} />}
+                            </span>
+                            <span className="truncate text-[11px] text-ink-soft" title={b.vendorRef ? `Website order #${b.vendorRef}` : undefined}>
+                              <span className={isWebsite(b) ? "text-brass" : ""}>
                                 {isWebsite(b) ? `Website${b.vendorRef ? ` #${b.vendorRef}` : ""}` : b.createdBy === "ADMIN" ? "Manual · office" : "Manual"}
                               </span>
-                              {newIds.has(b.id) && <span className="ap-newtag rounded bg-brass px-1 text-[10px] font-bold text-[#14100a]">NEW</span>}
+                              {" · "}
+                              <span className="uppercase text-navy/80">{b.emirate}</span>
+                              {!vendorFilter && ` · ${b.vendor.name}`}
+                              {b.status === "ACCEPTED" && b.order ? ` · ${b.order.employee.name}` : ""}
                             </span>
-                            {!vendorFilter && <span className="truncate text-[11px] text-ink-soft">{b.vendor.name}</span>}
                           </span>
                           <button onClick={() => setExpanded(expanded === b.id ? null : b.id)} className="min-w-0 text-left hover:underline">
                             <div className="truncate font-medium">{b.customerName}</div>
-                            <div className="text-xs text-ink-soft">{b.customerPhone}</div>
+                            <div className="text-[11px] text-ink-soft">{b.customerPhone}</div>
                             {r && b.status === "AWAITING_PICKUP" && (
                               <div
                                 className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.level === "high" ? "bg-cancelled-bg text-cancelled" : "bg-pending-bg text-pending"}`}
@@ -712,17 +713,8 @@ export default function AwaitingPickupPage() {
                               </div>
                             )}
                           </button>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm">{b.emirate}</span>
-                            {b.status !== "AWAITING_PICKUP" && (
-                              <span className="mt-0.5 block">
-                                <BookingStatusBadge booking={b} />
-                                {b.status === "ACCEPTED" && b.order && <span className="block text-[11px] text-ink-soft">{b.order.employee.name}</span>}
-                              </span>
-                            )}
-                          </span>
                           <span className="text-right font-mono font-semibold">{fmtNumber(b.codAmount)}</span>
-                          <span className="text-[13px] text-ink-soft">
+                          <span className="text-xs text-ink-soft">
                             {(!viewDay || q) && <span className="block text-[11px]">{fmtDate(b.createdAt)}</span>}
                             {fmtTime(b.createdAt)}
                           </span>
@@ -777,7 +769,7 @@ export default function AwaitingPickupPage() {
                           </span>
                         </div>
                         {expanded === b.id && (
-                          <div className="grid gap-x-6 gap-y-1 border-t border-line px-4 py-3 pl-[90px] text-sm sm:grid-cols-2">
+                          <div className="grid gap-x-6 gap-y-1 border-t border-line px-3 py-2.5 pl-[72px] text-sm sm:grid-cols-2">
                             <div>
                               <span className="font-mono text-[10px] uppercase text-ink-soft">Address </span>
                               <span className="whitespace-pre-wrap">{b.address}</span>
@@ -821,7 +813,7 @@ export default function AwaitingPickupPage() {
           </div>
 
           {/* Action bar */}
-          <div className={`${box} flex flex-wrap items-center gap-2.5 px-5 py-4 ${selected.size ? "border-brass/60" : ""}`}>
+          <div className={`${box} sticky bottom-3 z-20 flex flex-wrap items-center gap-2.5 px-4 py-2.5 ${selected.size ? "border-brass/60" : ""}`}>
             <span className="mr-auto text-sm">
               <span key={`sel-${selected.size}`} className="ap-bump inline-block font-semibold">{selected.size}</span> selected
               <span className="text-ink-soft"> · AED {fmtNumber(selectedCod)}</span>
@@ -834,13 +826,13 @@ export default function AwaitingPickupPage() {
             <button
               onClick={() => printLabels(Array.from(selected))}
               disabled={selected.size === 0}
-              className="flex h-11 items-center gap-2 rounded-lg border border-line px-4 text-sm hover:border-brass disabled:opacity-40"
+              className="flex h-10 items-center gap-2 rounded-lg border border-line px-3.5 text-sm hover:border-brass disabled:opacity-40"
             >
               {printerIcon} {printing ? "Printing…" : "Print labels"}
             </button>
             {canEdit && (
               <>
-                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Driver" className="h-11 rounded-lg border border-line px-3 text-sm">
+                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Driver" className="h-10 rounded-lg border border-line px-3 text-sm">
                   <option value="">Driver…</option>
                   {drivers.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -849,7 +841,7 @@ export default function AwaitingPickupPage() {
                     </option>
                   ))}
                 </select>
-                <select value={emirate} onChange={(e) => setEmirate(e.target.value)} aria-label="Emirate" className="h-11 rounded-lg border border-line px-3 text-sm" title="Leave as-is to keep each booking's emirate">
+                <select value={emirate} onChange={(e) => setEmirate(e.target.value)} aria-label="Emirate" className="h-10 rounded-lg border border-line px-3 text-sm" title="Leave as-is to keep each booking's emirate">
                   <option value="">Keep emirate</option>
                   {EMIRATES.map((e) => (
                     <option key={e} value={e}>
@@ -857,25 +849,17 @@ export default function AwaitingPickupPage() {
                     </option>
                   ))}
                 </select>
-                <input type="date" value={date} aria-label="Daily Entry date" onChange={(e) => setDate(e.target.value)} className="h-11 rounded-lg border border-line px-3 text-sm" />
+                <input type="date" value={date} aria-label="Daily Entry date" onChange={(e) => setDate(e.target.value)} className="h-10 rounded-lg border border-line px-3 text-sm" />
                 <button
                   onClick={accept}
                   disabled={accepting || selectedAwaiting.length === 0}
-                  className="h-11 rounded-lg bg-navy px-5 text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-40"
+                  className="h-10 rounded-lg bg-navy px-5 text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-40"
                 >
                   {accepting ? "Adding…" : `Accept${selectedAwaiting.length ? ` ${selectedAwaiting.length}` : ""}`}
                 </button>
               </>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Website connections */}
-      <div className={`${box} flex flex-col gap-3 p-5`}>
-        <span className="text-[13px] text-ink-soft">Website connections · {dayWeb} website order{dayWeb === 1 ? "" : "s"} on this day</span>
-        <div className="grid gap-4 md:grid-cols-2">
-          <WebsiteSyncPanels onSynced={load} />
         </div>
       </div>
 
