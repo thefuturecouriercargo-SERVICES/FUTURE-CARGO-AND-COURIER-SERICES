@@ -21,28 +21,29 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
 function DriverTopbar() {
   const { user, logout } = useAuth();
   return (
-    <div className="border-b-[3px] border-brass bg-navy px-4 py-3 text-paper">
-      <div className="flex flex-wrap items-center justify-between gap-y-2">
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-lg font-bold">Future Courier</span>
-          <span className="hidden font-mono text-[10px] uppercase tracking-widest text-brass-light sm:inline">Driver Portal</span>
+    <div className="border-b-[3px] border-brass bg-navy px-4 pb-3 pt-2.5 text-paper">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="font-display text-lg font-bold">Future Courier</div>
+          <div className="truncate font-mono text-[10.5px] uppercase tracking-wide text-brass-light">{user?.name}</div>
         </div>
         <button
           onClick={logout}
-          className="rounded border border-white/25 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
+          className="shrink-0 rounded-full border border-white/25 px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
         >
           Sign out
         </button>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-white/10 pt-2">
-        <Link href="/driver/history" className="font-mono text-[11px] uppercase tracking-wide text-line hover:text-brass-light">
+      <div className="mt-2 flex items-center gap-x-3.5 overflow-hidden whitespace-nowrap border-t border-white/10 pt-2">
+        <Link href="/driver/history" className="shrink-0 font-mono text-[10.5px] uppercase tracking-wide text-line hover:text-brass-light">
           My History
         </Link>
-        <Link href="/driver/payroll" className="font-mono text-[11px] uppercase tracking-wide text-line hover:text-brass-light">
+        <Link href="/driver/payroll" className="shrink-0 font-mono text-[10.5px] uppercase tracking-wide text-line hover:text-brass-light">
           My Payroll
         </Link>
-        <PrayerReminder />
-        <span className="ml-auto font-mono text-xs text-brass-light">{user?.name}</span>
+        <span className="ml-auto min-w-0 truncate text-[11px]">
+          <PrayerReminder />
+        </span>
       </div>
       <DriverRace />
     </div>
