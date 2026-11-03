@@ -62,6 +62,210 @@ function itemsText(items?: string | null) {
 }
 const uniq = (list: (string | null | undefined)[]) => Array.from(new Set(list.filter(Boolean) as string[])).sort();
 
+/** Keep one row per CN (its latest real scan) plus every failed scan. "Already" never replaces a real assignment. */
+function latestPerCn(rows: ScanRow[]): ScanRow[] {
+  const latest = new Map<string, ScanRow>();
+  const failed: ScanRow[] = [];
+  for (const r of rows) {
+    if (r.result === "FAILED" || r.cnNo == null) {
+      failed.push(r);
+      continue;
+    }
+    const k = String(r.cnNo);
+    const prev = latest.get(k);
+    if (!prev || r.result !== "ALREADY" || prev.result === "ALREADY") latest.set(k, r);
+  }
+  return [...latest.values(), ...failed];
+}
+const isOk = (r: ScanRow) => r.result === "ACCEPTED" || r.result === "REASSIGNED";
+function perDriverOf(list: ScanRow[]) {
+  const m = new Map<string, { name: string; count: number; cod: number; office: number; self: number }>();
+  for (const r of list) {
+    if (!isOk(r)) continue;
+    const k = r.driverName ?? "?";
+    const v = m.get(k) ?? { name: k, count: 0, cod: 0, office: 0, self: 0 };
+    v.count++;
+    v.cod += r.total ?? 0;
+    if (r.byRole === "OFFICE") v.office++;
+    else v.self++;
+    m.set(k, v);
+  }
+  return Array.from(m.values()).sort((a, b) => b.count - a.count);
+}
+
+interface ExportOpts {
+  day: string;
+  filterText: string;
+  note: string;
+  /** Added to the file name, e.g. the driver's name. */
+  fileTag: string;
+}
+
+async function makeScanPdf(shown: ScanRow[], o: ExportOpts) {
+  const ok = shown.filter(isOk);
+  const cod = ok.reduce((s, r) => s + (r.total ?? 0), 0);
+  const perDriver = perDriverOf(shown);
+    const [{ jsPDF }, autoTableMod] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+    const autoTable = autoTableMod.default;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const nice = new Date(`${o.day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    doc.setFontSize(15);
+    doc.text(`Future Courier — Scan report · ${nice}`, 12, 14);
+    doc.setFontSize(9);
+    doc.text(`${shown.length} scans · ${ok.length} assigned/moved · COD AED ${fmtNumber(cod)}${o.filterText ? ` · ${o.filterText}` : ""}`, 12, 20);
+    doc.text(o.note, 12, 25);
+
+    autoTable(doc, {
+      startY: 29,
+      head: [["Driver", "Parcels", "COD (AED)", "By office", "By driver"]],
+      body: perDriver.map((d) => [d.name, d.count, fmtNumber(d.cod), d.office, d.self]),
+      // With one driver the total row would just repeat his row — only show it for 2+ drivers.
+      foot: perDriver.length > 1 ? [["Total", ok.length, fmtNumber(cod), perDriver.reduce((s, d) => s + d.office, 0), perDriver.reduce((s, d) => s + d.self, 0)]] : undefined,
+      styles: { fontSize: 8, cellPadding: 1.5 },
+      headStyles: { fillColor: [20, 31, 51] },
+      footStyles: { fillColor: [236, 231, 216], textColor: 20 },
+      tableWidth: 140,
+    });
+
+    autoTable(doc, {
+      startY: ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 40) + 6,
+      head: [["#", "Time", "CN", "Vendor", "Customer", "Phone", "Address / Area", "Items", "COD", "Driver", "Scanned by", "Result / Note"]],
+      body: shown.map((r, i) => [
+        i + 1,
+        timeOf(r.createdAt),
+        r.cnNo ?? r.code,
+        r.vendorName ?? "",
+        r.customerName ?? "",
+        r.customerPhone ?? "",
+        [r.address, [areaOfRow(r), r.emirate].filter(Boolean).join(" · ")].filter(Boolean).join("\n"),
+        [itemsText(r.items), r.notes ? `Note: ${r.notes}` : ""].filter(Boolean).join("\n"),
+        r.total != null ? fmtNumber(r.total) : "",
+        r.driverName ?? "",
+        `${r.byName} (${r.byRole === "OFFICE" ? "office" : "driver"})`,
+        [RESULT_LABEL[r.result], r.result === "REASSIGNED" && r.fromDriver ? `from ${r.fromDriver}` : r.result === "FAILED" ? r.message : "", r.orderStatus ? `Now: ${r.orderStatus}` : ""]
+          .filter(Boolean)
+          .join("\n"),
+      ]),
+      styles: { fontSize: 7, cellPadding: 1.2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [20, 31, 51] },
+      columnStyles: {
+        0: { cellWidth: 7 },
+        1: { cellWidth: 14 },
+        2: { cellWidth: 17 },
+        3: { cellWidth: 17 },
+        4: { cellWidth: 26 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 52 },
+        7: { cellWidth: 46 },
+        8: { halign: "right", cellWidth: 12 },
+        9: { cellWidth: 17 },
+        10: { cellWidth: 22 },
+        11: { cellWidth: 21 },
+      },
+      margin: { left: 8, right: 8 },
+      didDrawPage: () => {
+        const page = doc.getNumberOfPages();
+        doc.setFontSize(7);
+        doc.text(`Page ${page}`, 285, 205, { align: "right" });
+      },
+    });
+    doc.save(`scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.pdf`);
+}
+
+async function makeScanExcel(shown: ScanRow[], o: ExportOpts) {
+  const ok = shown.filter(isOk);
+  const cod = ok.reduce((s, r) => s + (r.total ?? 0), 0);
+  const perDriver = perDriverOf(shown);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "Future Courier";
+    const head = (ws: import("exceljs").Worksheet) => {
+      const r = ws.getRow(1);
+      r.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      r.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF141F33" } };
+      r.alignment = { vertical: "middle" };
+      ws.views = [{ state: "frozen", ySplit: 1 }];
+    };
+
+    const ws = wb.addWorksheet("Scans");
+    ws.columns = [
+      { header: "#", key: "n", width: 5 },
+      { header: "Date", key: "date", width: 11 },
+      { header: "Time", key: "time", width: 9 },
+      { header: "CN", key: "cn", width: 11 },
+      { header: "Vendor", key: "vendor", width: 16 },
+      { header: "Customer", key: "customer", width: 22 },
+      { header: "Phone", key: "phone", width: 15 },
+      { header: "Address", key: "address", width: 40 },
+      { header: "Area", key: "area", width: 18 },
+      { header: "Emirate", key: "emirate", width: 13 },
+      { header: "Items", key: "items", width: 36 },
+      { header: "Notes", key: "notes", width: 24 },
+      { header: "COD (AED)", key: "cod", width: 11 },
+      { header: "Driver", key: "driver", width: 16 },
+      { header: "Scanned by", key: "by", width: 16 },
+      { header: "By", key: "role", width: 8 },
+      { header: "Result", key: "result", width: 14 },
+      { header: "From driver / error", key: "msg", width: 22 },
+      { header: "Status now", key: "status", width: 14 },
+    ];
+    shown.forEach((r, i) =>
+      ws.addRow({
+        n: i + 1,
+        date: o.day,
+        time: timeOf(r.createdAt),
+        cn: r.cnNo ?? r.code,
+        vendor: r.vendorName ?? "",
+        customer: r.customerName ?? "",
+        phone: r.customerPhone ?? "",
+        address: r.address ?? "",
+        area: areaOfRow(r) ?? "",
+        emirate: r.emirate ?? "",
+        items: itemsText(r.items),
+        notes: r.notes ?? "",
+        cod: r.total ?? null,
+        driver: r.driverName ?? "",
+        by: r.byName,
+        role: r.byRole === "OFFICE" ? "office" : "driver",
+        result: RESULT_LABEL[r.result],
+        msg: r.result === "REASSIGNED" && r.fromDriver ? r.fromDriver : r.result === "FAILED" ? r.message ?? "" : "",
+        status: r.orderStatus ?? "",
+      })
+    );
+    head(ws);
+    ws.getColumn("cod").numFmt = "#,##0";
+    ws.getColumn("items").alignment = { wrapText: true, vertical: "top" };
+    ws.getColumn("address").alignment = { wrapText: true, vertical: "top" };
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+
+    const ds = wb.addWorksheet("By driver");
+    ds.columns = [
+      { header: "Driver", key: "name", width: 20 },
+      { header: "Parcels", key: "count", width: 10 },
+      { header: "COD (AED)", key: "cod", width: 12 },
+      { header: "By office", key: "office", width: 10 },
+      { header: "By driver", key: "self", width: 10 },
+    ];
+    perDriver.forEach((d) => ds.addRow({ name: d.name, count: d.count, cod: d.cod, office: d.office, self: d.self }));
+    if (perDriver.length > 1) {
+      const t = ds.addRow({ name: "Total", count: ok.length, cod, office: perDriver.reduce((s, d) => s + d.office, 0), self: perDriver.reduce((s, d) => s + d.self, 0) });
+      t.font = { bold: true };
+    }
+    head(ds);
+    ds.getColumn("cod").numFmt = "#,##0";
+    if (o.filterText) ds.addRow([]).getCell(1).value = `Filters: ${o.filterText}`;
+
+    const buf = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 export default function ScanHistory() {
   const [day, setDay] = useState(todayStr());
   const [rows, setRows] = useState<ScanRow[]>([]);
@@ -99,22 +303,7 @@ export default function ScanHistory() {
     const qq = q.trim().toLowerCase();
     // A parcel scanned twice (e.g. driver took it, office moved it, or scanned again)
     // counts once: keep only its latest successful scan unless "every scan" is on.
-    let base = rows;
-    if (!everyScan) {
-      const latest = new Map<string, ScanRow>();
-      const failed: ScanRow[] = [];
-      for (const r of rows) {
-        if (r.result === "FAILED" || r.cnNo == null) {
-          failed.push(r);
-          continue;
-        }
-        const k = String(r.cnNo);
-        const prev = latest.get(k);
-        // "Already" never replaces a real assignment.
-        if (!prev || r.result !== "ALREADY" || prev.result === "ALREADY") latest.set(k, r);
-      }
-      base = [...latest.values(), ...failed];
-    }
+    const base = everyScan ? rows : latestPerCn(rows);
     const list = base.filter((r) => {
       if (by && r.byRole !== by) return false;
       if (driver && r.driverName !== driver) return false;
@@ -150,22 +339,9 @@ export default function ScanHistory() {
     });
   }, [rows, by, driver, result, vendor, emirate, area, q, sort, everyScan]);
 
-  const ok = shown.filter((r) => r.result === "ACCEPTED" || r.result === "REASSIGNED");
+  const ok = shown.filter(isOk);
   const cod = ok.reduce((s, r) => s + (r.total ?? 0), 0);
-  const perDriver = useMemo(() => {
-    const m = new Map<string, { name: string; count: number; cod: number; office: number; self: number }>();
-    for (const r of shown) {
-      if (r.result !== "ACCEPTED" && r.result !== "REASSIGNED") continue;
-      const k = r.driverName ?? "?";
-      const v = m.get(k) ?? { name: k, count: 0, cod: 0, office: 0, self: 0 };
-      v.count++;
-      v.cod += r.total ?? 0;
-      if (r.byRole === "OFFICE") v.office++;
-      else v.self++;
-      m.set(k, v);
-    }
-    return Array.from(m.values()).sort((a, b) => b.count - a.count);
-  }, [shown]);
+  const perDriver = useMemo(() => perDriverOf(shown), [shown]);
 
   const filterText = [
     by && `Scanned by: ${by === "OFFICE" ? "Office" : "Driver"}`,
@@ -179,74 +355,17 @@ export default function ScanHistory() {
     .filter(Boolean)
     .join(" · ");
 
+  const exportOpts = (): ExportOpts => ({
+    day,
+    filterText,
+    note: `Sorted by: ${sort} · ${everyScan ? "every scan" : "one row per CN (latest scan)"}`,
+    fileTag: driver,
+  });
+
   async function downloadPdf() {
     setMaking(true);
     try {
-      const [{ jsPDF }, autoTableMod] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
-      const autoTable = autoTableMod.default;
-      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const nice = new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-      doc.setFontSize(15);
-      doc.text(`Future Courier — Scan report · ${nice}`, 12, 14);
-      doc.setFontSize(9);
-      doc.text(`${shown.length} scans · ${ok.length} assigned/moved · COD AED ${fmtNumber(cod)}${filterText ? ` · ${filterText}` : ""}`, 12, 20);
-      doc.text(`Sorted by: ${sort} · ${everyScan ? "every scan" : "one row per CN (latest scan)"}`, 12, 25);
-
-      autoTable(doc, {
-        startY: 29,
-        head: [["Driver", "Parcels", "COD (AED)", "By office", "By driver"]],
-        body: perDriver.map((d) => [d.name, d.count, fmtNumber(d.cod), d.office, d.self]),
-        // With one driver the total row would just repeat his row — only show it for 2+ drivers.
-        foot: perDriver.length > 1 ? [["Total", ok.length, fmtNumber(cod), perDriver.reduce((s, d) => s + d.office, 0), perDriver.reduce((s, d) => s + d.self, 0)]] : undefined,
-        styles: { fontSize: 8, cellPadding: 1.5 },
-        headStyles: { fillColor: [20, 31, 51] },
-        footStyles: { fillColor: [236, 231, 216], textColor: 20 },
-        tableWidth: 140,
-      });
-
-      autoTable(doc, {
-        startY: ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 40) + 6,
-        head: [["#", "Time", "CN", "Vendor", "Customer", "Phone", "Address / Area", "Items", "COD", "Driver", "Scanned by", "Result / Note"]],
-        body: shown.map((r, i) => [
-          i + 1,
-          timeOf(r.createdAt),
-          r.cnNo ?? r.code,
-          r.vendorName ?? "",
-          r.customerName ?? "",
-          r.customerPhone ?? "",
-          [r.address, [areaOfRow(r), r.emirate].filter(Boolean).join(" · ")].filter(Boolean).join("\n"),
-          [itemsText(r.items), r.notes ? `Note: ${r.notes}` : ""].filter(Boolean).join("\n"),
-          r.total != null ? fmtNumber(r.total) : "",
-          r.driverName ?? "",
-          `${r.byName} (${r.byRole === "OFFICE" ? "office" : "driver"})`,
-          [RESULT_LABEL[r.result], r.result === "REASSIGNED" && r.fromDriver ? `from ${r.fromDriver}` : r.result === "FAILED" ? r.message : "", r.orderStatus ? `Now: ${r.orderStatus}` : ""]
-            .filter(Boolean)
-            .join("\n"),
-        ]),
-        styles: { fontSize: 7, cellPadding: 1.2, overflow: "linebreak", valign: "top" },
-        headStyles: { fillColor: [20, 31, 51] },
-        columnStyles: {
-          0: { cellWidth: 7 },
-          1: { cellWidth: 14 },
-          2: { cellWidth: 17 },
-          3: { cellWidth: 17 },
-          4: { cellWidth: 26 },
-          5: { cellWidth: 22 },
-          6: { cellWidth: 52 },
-          7: { cellWidth: 46 },
-          8: { halign: "right", cellWidth: 12 },
-          9: { cellWidth: 17 },
-          10: { cellWidth: 22 },
-          11: { cellWidth: 21 },
-        },
-        margin: { left: 8, right: 8 },
-        didDrawPage: () => {
-          const page = doc.getNumberOfPages();
-          doc.setFontSize(7);
-          doc.text(`Page ${page}`, 285, 205, { align: "right" });
-        },
-      });
-      doc.save(`scan-report-${day}${driver ? `-${driver.replace(/\s+/g, "_")}` : ""}.pdf`);
+      await makeScanPdf(shown, exportOpts());
     } catch (err) {
       alert(`Could not make the PDF: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -257,94 +376,7 @@ export default function ScanHistory() {
   async function downloadExcel() {
     setMakingXl(true);
     try {
-      const ExcelJS = (await import("exceljs")).default;
-      const wb = new ExcelJS.Workbook();
-      wb.creator = "Future Courier";
-      const head = (ws: import("exceljs").Worksheet) => {
-        const r = ws.getRow(1);
-        r.font = { bold: true, color: { argb: "FFFFFFFF" } };
-        r.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF141F33" } };
-        r.alignment = { vertical: "middle" };
-        ws.views = [{ state: "frozen", ySplit: 1 }];
-      };
-
-      const ws = wb.addWorksheet("Scans");
-      ws.columns = [
-        { header: "#", key: "n", width: 5 },
-        { header: "Date", key: "date", width: 11 },
-        { header: "Time", key: "time", width: 9 },
-        { header: "CN", key: "cn", width: 11 },
-        { header: "Vendor", key: "vendor", width: 16 },
-        { header: "Customer", key: "customer", width: 22 },
-        { header: "Phone", key: "phone", width: 15 },
-        { header: "Address", key: "address", width: 40 },
-        { header: "Area", key: "area", width: 18 },
-        { header: "Emirate", key: "emirate", width: 13 },
-        { header: "Items", key: "items", width: 36 },
-        { header: "Notes", key: "notes", width: 24 },
-        { header: "COD (AED)", key: "cod", width: 11 },
-        { header: "Driver", key: "driver", width: 16 },
-        { header: "Scanned by", key: "by", width: 16 },
-        { header: "By", key: "role", width: 8 },
-        { header: "Result", key: "result", width: 14 },
-        { header: "From driver / error", key: "msg", width: 22 },
-        { header: "Status now", key: "status", width: 14 },
-      ];
-      shown.forEach((r, i) =>
-        ws.addRow({
-          n: i + 1,
-          date: day,
-          time: timeOf(r.createdAt),
-          cn: r.cnNo ?? r.code,
-          vendor: r.vendorName ?? "",
-          customer: r.customerName ?? "",
-          phone: r.customerPhone ?? "",
-          address: r.address ?? "",
-          area: areaOfRow(r) ?? "",
-          emirate: r.emirate ?? "",
-          items: itemsText(r.items),
-          notes: r.notes ?? "",
-          cod: r.total ?? null,
-          driver: r.driverName ?? "",
-          by: r.byName,
-          role: r.byRole === "OFFICE" ? "office" : "driver",
-          result: RESULT_LABEL[r.result],
-          msg: r.result === "REASSIGNED" && r.fromDriver ? r.fromDriver : r.result === "FAILED" ? r.message ?? "" : "",
-          status: r.orderStatus ?? "",
-        })
-      );
-      head(ws);
-      ws.getColumn("cod").numFmt = "#,##0";
-      ws.getColumn("items").alignment = { wrapText: true, vertical: "top" };
-      ws.getColumn("address").alignment = { wrapText: true, vertical: "top" };
-      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
-
-      const ds = wb.addWorksheet("By driver");
-      ds.columns = [
-        { header: "Driver", key: "name", width: 20 },
-        { header: "Parcels", key: "count", width: 10 },
-        { header: "COD (AED)", key: "cod", width: 12 },
-        { header: "By office", key: "office", width: 10 },
-        { header: "By driver", key: "self", width: 10 },
-      ];
-      perDriver.forEach((d) => ds.addRow({ name: d.name, count: d.count, cod: d.cod, office: d.office, self: d.self }));
-      if (perDriver.length > 1) {
-        const t = ds.addRow({ name: "Total", count: ok.length, cod, office: perDriver.reduce((s, d) => s + d.office, 0), self: perDriver.reduce((s, d) => s + d.self, 0) });
-        t.font = { bold: true };
-      }
-      head(ds);
-      ds.getColumn("cod").numFmt = "#,##0";
-      if (filterText) ds.addRow([]).getCell(1).value = `Filters: ${filterText}`;
-
-      const buf = await wb.xlsx.writeBuffer();
-      const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `scan-report-${day}${driver ? `-${driver.replace(/\s+/g, "_")}` : ""}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      await makeScanExcel(shown, exportOpts());
     } catch (err) {
       alert(`Could not make the Excel file: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -539,6 +571,71 @@ export default function ScanHistory() {
         </table>
       </div>
       <p className="mt-2 text-xs text-ink-soft">Scans are recorded from today onwards. Click a driver in the table above to filter.</p>
+    </div>
+  );
+}
+
+/** Quick PDF / Excel of one driver's parcels scanned today — shown next to the scanner on Scan & Assign. */
+export function DriverScanExport({ driverName, refreshKey }: { driverName: string; refreshKey?: number }) {
+  const [rows, setRows] = useState<ScanRow[]>([]);
+  const [making, setMaking] = useState<"" | "pdf" | "xl">("");
+  const day = todayStr();
+
+  const load = useCallback(async () => {
+    try {
+      const r = await apiFetch<{ scans: ScanRow[] }>("/bookings/scan-log", { query: { day } });
+      setRows(r.scans);
+    } catch {
+      /* ignore */
+    }
+  }, [day]);
+
+  useEffect(() => {
+    load();
+  }, [load, refreshKey]);
+  useSocketEvent("order:changed", () => load());
+
+  const mine = useMemo(
+    () => latestPerCn(rows).filter((r) => isOk(r) && r.driverName === driverName).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [rows, driverName]
+  );
+  const cod = mine.reduce((s, r) => s + (r.total ?? 0), 0);
+
+  async function run(kind: "pdf" | "xl") {
+    setMaking(kind);
+    const o: ExportOpts = { day, filterText: `Driver: ${driverName}`, note: "Assigned + moved today · one row per CN", fileTag: driverName };
+    try {
+      await (kind === "pdf" ? makeScanPdf(mine, o) : makeScanExcel(mine, o));
+    } catch (err) {
+      alert(`Could not make the file: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setMaking("");
+    }
+  }
+
+  if (!driverName) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-line bg-white px-3 py-2.5">
+      <div className="text-sm">
+        <span className="font-semibold text-navy">{driverName}</span>
+        <span className="text-ink-soft"> today · {mine.length} parcels · AED {fmtNumber(cod)}</span>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => run("pdf")}
+          disabled={!!making || mine.length === 0}
+          className="rounded border border-navy bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-navy hover:bg-paper-2 disabled:opacity-50"
+        >
+          {making === "pdf" ? "Making PDF…" : `⬇ PDF (${mine.length})`}
+        </button>
+        <button
+          onClick={() => run("xl")}
+          disabled={!!making || mine.length === 0}
+          className="rounded border border-green-700 bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-green-800 hover:bg-green-50 disabled:opacity-50"
+        >
+          {making === "xl" ? "Making Excel…" : `⬇ Excel (${mine.length})`}
+        </button>
+      </div>
     </div>
   );
 }

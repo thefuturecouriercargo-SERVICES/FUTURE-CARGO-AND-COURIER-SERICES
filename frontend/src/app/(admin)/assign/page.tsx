@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
-import ScanHistory from "@/components/ScanHistory";
+import ScanHistory, { DriverScanExport } from "@/components/ScanHistory";
 import ScanProgressPanel from "@/components/ScanProgressPanel";
 import { Employee } from "@/types";
 
@@ -139,6 +139,8 @@ export default function AssignPage() {
         onCode={(c) => onCode(c)}
         lastResult={log[0] ? { text: `${log[0].kind === "ERROR" ? "" : `CN ${log[0].code} · `}${log[0].message}`, tone: log[0].kind === "ERROR" ? "bad" : log[0].kind === "ACCEPTED" ? "ok" : "warn", id: log[0].at.getTime() } : null}
         disabled={!driverId} placeholder={driverId ? "Scan barcode or type CN, then Enter" : "Choose a driver first"} />
+
+      <DriverScanExport driverName={driverName} refreshKey={log.length} />
 
       {log.length > 0 && (
         <>
