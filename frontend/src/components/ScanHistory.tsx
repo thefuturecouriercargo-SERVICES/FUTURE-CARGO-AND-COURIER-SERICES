@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, todayStr } from "@/lib/format";
+import { fmtNumber, todayStr, fmtDate, fmtDateLong } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
 import { splitItems } from "@/components/ShippingLabel";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -108,7 +108,7 @@ async function makeScanPdf(shown: ScanRow[], o: ExportOpts) {
     const [{ jsPDF }, autoTableMod] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
     const autoTable = autoTableMod.default;
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const nice = new Date(`${o.day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    const nice = fmtDateLong(o.day);
     doc.setFontSize(15);
     doc.text(`Future Courier — Scan report · ${nice}`, 12, 14);
     doc.setFontSize(9);
@@ -212,7 +212,7 @@ async function makeScanExcel(shown: ScanRow[], o: ExportOpts) {
     shown.forEach((r, i) =>
       ws.addRow({
         n: i + 1,
-        date: o.day,
+        date: fmtDate(o.day),
         time: timeOf(r.createdAt),
         cn: r.cnNo ?? r.code,
         vendor: r.vendorName ?? "",

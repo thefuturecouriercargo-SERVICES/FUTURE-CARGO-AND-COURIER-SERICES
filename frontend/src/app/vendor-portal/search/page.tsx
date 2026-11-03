@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorShell from "@/components/VendorShell";
 import VendorOrderStatus from "@/components/VendorOrderStatus";
@@ -105,7 +105,7 @@ function Search() {
                 <b className="font-mono text-base text-navy">CN {h.cnNo}</b>
                 {h.booking && <span className="ml-2">{h.booking.customerName}</span>}
                 <span className="ml-2 text-xs text-ink-soft">
-                  {new Date(h.date).toLocaleDateString("en-GB")} · {h.area ? `${h.area} · ` : ""}{h.emirate} · {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
+                  {fmtDate(h.date)} · {h.area ? `${h.area} · ` : ""}{h.emirate} · {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
                 </span>
               </span>
               <VendorOrderStatus status={h.status} />

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { parseDateParam, formatDate } from "../utils/dates";
+import { parseDateParam, formatDate, displayDate } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 
@@ -306,7 +306,7 @@ router.post(
     if ((data.type === "PAYMENT" || data.type === "RECEIPT") && data.amount < 0) throw new ApiError(400, "Payments and receipts are positive amounts");
     const date = parseDateParam(data.date);
     const start = await getStart();
-    if (date < start) throw new ApiError(400, `Date is before the trial start (${formatDate(start)}) — it wouldn't count`);
+    if (date < start) throw new ApiError(400, `Date is before the trial start (${displayDate(start)}) — it wouldn't count`);
 
     let id: string;
     if (data.type === "PAYMENT") {

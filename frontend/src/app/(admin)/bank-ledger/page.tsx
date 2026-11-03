@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch } from "@/lib/api";
-import { addDays, fmtNumber, todayStr } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, fmtDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { Employee, EMIRATES, Order, STATUSES, Vendor } from "@/types";
 
@@ -80,7 +80,7 @@ export default function BankLedgerPage() {
   }
 
   async function bulkConfirmBeforeToday() {
-    if (!(await confirmDialog(`Mark every BANK payment dated before ${date} as confirmed? This is meant as a one-time cleanup — use carefully.`))) return;
+    if (!(await confirmDialog(`Mark every BANK payment dated before ${fmtDate(date)} as confirmed? This is meant as a one-time cleanup — use carefully.`))) return;
     setBulkConfirmBusy(true);
     try {
       const res = await apiFetch<{ updated: number }>("/orders/bulk-confirm-bank", { method: "PATCH", body: { beforeDate: date } });
@@ -260,7 +260,7 @@ export default function BankLedgerPage() {
 
         <div className="mb-6 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
           <div className="bg-white p-4">
-            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Bank Orders — {date}</div>
+            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-soft">Bank Orders — {fmtDate(date)}</div>
             <div className="font-display text-xl font-semibold text-navy">{totals.count}</div>
           </div>
           <div className="bg-white p-4">
@@ -375,7 +375,7 @@ export default function BankLedgerPage() {
 
         <div className="border border-line bg-white p-5">
           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
-            {sorted.length} bank consignment{sorted.length === 1 ? "" : "s"} on {date}
+            {sorted.length} bank consignment{sorted.length === 1 ? "" : "s"} on {fmtDate(date)}
           </h2>
 
           {loading ? (

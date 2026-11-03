@@ -3,7 +3,7 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch, employeePerformancePdfUrl } from "@/lib/api";
-import { addDays, fmtNumber, todayStr, fmtDayDate } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, fmtDayDate, fmtDate, fmtDateTime } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
@@ -712,11 +712,11 @@ return (
                           <StatusStamp status={o.status} date={o.date} />
                         </td>
                         <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                          {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          {fmtDate(o.createdAt)}
                         </td>
                         <td
                           className={`whitespace-nowrap font-mono text-xs ${o.status === "CANCELLED" ? "text-cancelled" : o.status === "DELIVERED" ? "text-delivered" : "text-ink-soft"}`}
-                          title={o.resolvedAt ? new Date(o.resolvedAt).toLocaleString("en-GB") : ""}
+                          title={o.resolvedAt ? fmtDateTime(o.resolvedAt) : ""}
                         >
                           {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
                         </td>
@@ -764,7 +764,7 @@ return (
                   <tbody>
                     {newEntriesRows.map((r) => (
                       <tr key={`${r.date}-${r.vendorId}`}>
-                        <td>{r.date}</td>
+                        <td>{fmtDate(r.date)}</td>
                         <td>{r.vendorName}</td>
                         <td className="text-right font-mono">{r.count}</td>
                         <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>

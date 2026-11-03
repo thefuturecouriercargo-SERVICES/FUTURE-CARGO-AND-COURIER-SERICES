@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, reportExportUrl } from "@/lib/api";
 import { Employee, EMIRATES, PAYMENTS, STATUSES, Vendor } from "@/types";
+import { fmtDate } from "@/lib/format";
 
 interface PreviewRow {
   date: string;
@@ -532,7 +533,7 @@ export default function ReportsPage() {
               <tbody>
                 {preview?.rows.map((r, i) => (
                   <tr key={`${r.cnNo}-${i}`}>
-                    <td>{r.date}</td>
+                    <td>{fmtDate(r.date)}</td>
                     <td className="font-mono">{r.cnNo}</td>
                     <td>{r.brand}</td>
                     <td className="text-right font-mono">{fmtNumber(r.total)}</td>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Order, OrderStatus } from "@/types";
-import { agingDays, fmtNumber } from "@/lib/format";
+import { agingDays, fmtNumber, fmtDate } from "@/lib/format";
 import OrderDetails from "@/components/OrderDetails";
 
 function fmtWhen(v?: string | null) {
@@ -113,7 +113,7 @@ export default function OrderDrawer({
     { label: "DL charge", value: `${fmtNumber(order.deliveryCharge)} AED` },
     { label: "Emirate", value: order.area ? `${order.emirate} · ${order.area}` : order.emirate },
     { label: "With", value: order.employee?.name ?? "—" },
-    { label: "Entry date", value: new Date(order.date).toLocaleDateString("en-GB") },
+    { label: "Entry date", value: fmtDate(order.date) },
   ];
 
   return (

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, currentMonthStr } from "@/lib/format";
+import { fmtNumber, currentMonthStr, fmtDate } from "@/lib/format";
 import { Order } from "@/types";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
@@ -127,7 +127,7 @@ export default function DriverHistoryPage() {
                     onClick={() => toggleDay(d.date)}
                     className={`cursor-pointer hover:bg-paper-2 ${expandedDate === d.date ? "bg-paper-2" : ""}`}
                   >
-                    <td className="font-mono text-brass">{expandedDate === d.date ? "▾ " : "▸ "}{d.date}</td>
+                    <td className="font-mono text-brass">{expandedDate === d.date ? "▾ " : "▸ "}{fmtDate(d.date)}</td>
                     <td className="text-right font-mono">{d.delivered}</td>
                     <td className="text-right font-mono">{d.pending}</td>
                     <td className="text-right font-mono">{d.transferred}</td>

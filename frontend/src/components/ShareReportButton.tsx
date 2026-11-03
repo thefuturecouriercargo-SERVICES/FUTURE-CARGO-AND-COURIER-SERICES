@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "@/components/ui/Feedback";
+import { fmtDateLong } from "@/lib/format";
 
 interface Props {
   date: string;
@@ -18,8 +19,7 @@ interface Props {
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 function prettyDate(d: string) {
-  const dt = new Date(`${d}T00:00:00`);
-  return isNaN(dt.getTime()) ? d : dt.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? fmtDateLong(d) : d;
 }
 
 /**

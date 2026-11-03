@@ -53,3 +53,15 @@ export function formatDate(date: Date): string {
 export function dubaiDateStr(date: Date): string {
   return new Date(date.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The app's display format for a calendar date: "11 Oct 2026". Use only for text people read (reports, PDFs, messages). */
+export function displayDate(date: Date): string {
+  return `${String(date.getUTCDate()).padStart(2, "0")} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/** A timestamp shown as its Dubai calendar day, "11 Oct 2026". */
+export function displayDubaiDate(ts: Date): string {
+  return displayDate(new Date(ts.getTime() + DUBAI_OFFSET_MS));
+}

@@ -8,6 +8,7 @@ import CashInHandPanel from "@/components/CashInHandPanel";
 import PnlInsightsPanel from "@/components/PnlInsightsPanel";
 import DriverDailyProfitPanel from "@/components/DriverDailyProfitPanel";
 import MonthlyStatement from "@/components/MonthlyStatement";
+import { fmtDate } from "@/lib/format";
 interface PnlData {
   revenue: number;
   totalExpenses: number;
@@ -239,7 +240,7 @@ export default function PnlPage() {
                               <tbody>
                                 {expenseDetails.map((d) => (
                                   <tr key={d.id}>
-                                    <td>{d.date}</td>
+                                    <td>{fmtDate(d.date)}</td>
                                     <td className="text-right font-mono">{d.amount}</td>
                                     <td>{d.employeeName ?? "—"}</td>
                                     <td className="font-mono text-xs">{d.source}</td>

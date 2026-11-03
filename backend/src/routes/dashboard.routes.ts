@@ -3,7 +3,7 @@ import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { dayRange, monthRange, formatDate } from "../utils/dates";
+import { dayRange, monthRange, formatDate, displayDate } from "../utils/dates";
 import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
 import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
 import { Order } from "@prisma/client";
@@ -49,11 +49,11 @@ function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
       const { start: fromStart } = dayRange(req.query.from as string | undefined);
       const { start: toStart } = dayRange(req.query.to as string | undefined);
       where = { date: { gte: fromStart, lte: toStart } };
-      label = `${formatDate(fromStart)} to ${formatDate(toStart)}`;
+      label = `${displayDate(fromStart)} to ${displayDate(toStart)}`;
     } else {
       const { start, date } = dayRange(req.query.date as string | undefined);
       where = { date: start };
-      label = formatDate(date);
+      label = displayDate(date);
     }
 
     const rawOrders = await prisma.order.findMany({

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { vendorTabToken, apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate, fmtDateLong } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorNav from "@/components/VendorNav";
 import BookingForm from "@/components/BookingForm";
@@ -206,7 +206,7 @@ function ConsignmentsContent() {
         <div className="border border-line bg-white p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-2xl font-semibold text-navy">
-              {q ? "Search results (all days)" : new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
+              {q ? "Search results (all days)" : fmtDateLong(date)}
             </h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
@@ -375,7 +375,7 @@ function ConsignmentsContent() {
                         )}
                       </td>
                       <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                        {new Date(b.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        {fmtDate(b.createdAt)}
                       </td>
                       <td className="whitespace-nowrap">
                         {b.hasPhoto && (

@@ -5,7 +5,7 @@ import EntriesExport, { EntryRow } from "@/components/EntriesExport";
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError, vendorCreditExportUrl } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -244,7 +244,7 @@ export default function VendorCreditPage() {
           </div>
         </div>
         <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-          Shown as a ledger for <b>{date}</b>: <b>Opening Amount</b> is everything up to the day before, <b>Today</b>{" "}
+          Shown as a ledger for <b>{fmtDate(date)}</b>: <b>Opening Amount</b> is everything up to the day before, <b>Today</b>{" "}
           columns are just this date's activity, and <b>Total Amount</b> is the running total through this date.
           Balance = Total Amount − Cancelled − Delivery Charge (on Delivered only) − Paid.
         </p>

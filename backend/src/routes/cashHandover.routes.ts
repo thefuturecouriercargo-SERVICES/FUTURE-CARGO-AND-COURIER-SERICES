@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
-import { parseDateParam, formatDate } from "../utils/dates";
+import { parseDateParam, formatDate, displayDate } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 
 /**
@@ -197,7 +197,7 @@ router.put(
     const driver = await prisma.user.findUnique({ where: { id: data.employeeId }, select: { id: true, name: true, role: true, isAgent: true } });
     if (!driver || driver.role !== "DRIVER" || driver.isAgent) throw new ApiError(400, "Not one of our drivers");
     if (isExcluded(driver.name)) throw new ApiError(400, `${driver.name} is not on cash handover`);
-    if (date < START_DATE) throw new ApiError(400, `Cash handover starts from ${formatDate(START_DATE)}`);
+    if (date < START_DATE) throw new ApiError(400, `Cash handover starts from ${displayDate(START_DATE)}`);
     if (data.lessAmount > 0 && !data.lessReason) throw new ApiError(400, "Pick a reason for the less amount");
     const lessAmount = data.lessAmount;
     const lessReason = lessAmount > 0 ? data.lessReason ?? null : null;

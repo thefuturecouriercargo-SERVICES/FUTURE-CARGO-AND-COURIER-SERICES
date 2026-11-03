@@ -6,7 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { revealEditForm } from "@/lib/editForm";
-import { fmtNumber, todayStr } from "@/lib/format";
+import { fmtNumber, todayStr, fmtDateLong, fmtDateTime } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useAuth } from "@/context/AuthContext";
 import BookingForm from "@/components/BookingForm";
@@ -37,7 +37,7 @@ function addDays(d: string, n: number) {
   return x.toISOString().slice(0, 10);
 }
 const niceDay = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  fmtDateLong(d);
 const sumCod = (list: Booking[]) => list.reduce((s, b) => s + b.codAmount, 0);
 
 export default function AwaitingPickupPage() {
@@ -638,7 +638,7 @@ export default function AwaitingPickupPage() {
                         {b.status === "ACCEPTED" && b.order && <div className="mt-0.5 text-xs text-ink-soft">{b.order.employee.name}</div>}
                       </td>
                       <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                        {new Date(b.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                        {fmtDateTime(b.createdAt)}
                         {b.createdBy === "ADMIN" && <div className="text-[9px] uppercase">by office</div>}
                         {b.createdBy === "WEBSITE" && (
                           <div className="text-[9px] font-bold uppercase text-transferred" title={b.vendorRef ? `Website order #${b.vendorRef}` : "Website order"}>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDateTime } from "@/lib/format";
 
 interface Status {
   configured: boolean;
@@ -126,7 +126,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired" }: { onS
             <div key={o.id} className="rounded border border-line bg-paper p-2.5 text-sm">
               <div>
                 <b className="font-mono">Order #{o.number}</b>
-                {String(o.id) !== o.number && <span className="text-ink-soft"> (id {o.id})</span>} · {o.status} · {new Date(o.date).toLocaleString("en-GB")} ·
+                {String(o.id) !== o.number && <span className="text-ink-soft"> (id {o.id})</span>} · {o.status} · {fmtDateTime(o.date)} ·
                 AED {o.total} · {o.paymentMethod}
               </div>
               <div className="text-ink-soft">

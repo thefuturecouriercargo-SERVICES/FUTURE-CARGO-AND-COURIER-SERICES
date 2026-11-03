@@ -59,8 +59,48 @@ export function agingBadgeClass(days: number): string {
   return "!rounded-full border border-pending/50 bg-pending-bg text-pending";
 }
 
-/** dd/mm/yyyy for a timestamp, or "—" when empty. */
-export function fmtDayDate(value?: string | null): string {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Calendar parts of a date: a "YYYY-MM-DD" string is taken as that day; a timestamp as its Dubai day. */
+function dayParts(value: string | Date): { y: number; m: number; d: number; wd: number } | null {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    return { y, m: m - 1, d, wd: new Date(Date.UTC(y, m - 1, d)).getUTCDay() };
+  }
+  if (typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)) return null; // already formatted text — leave as is
+  const t = new Date(value);
+  if (isNaN(t.getTime())) return null;
+  const dubai = new Date(t.getTime() + 4 * 60 * 60 * 1000);
+  return { y: dubai.getUTCFullYear(), m: dubai.getUTCMonth(), d: dubai.getUTCDate(), wd: dubai.getUTCDay() };
+}
+
+/** The app's one date format: "11 Oct 2026" (or "—" when empty). */
+export function fmtDate(value?: string | Date | null): string {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const p = dayParts(value);
+  if (!p) return String(value);
+  return `${String(p.d).padStart(2, "0")} ${MONTHS[p.m]} ${p.y}`;
+}
+
+/** "Tue, 11 Oct 2026" — for page headings and report titles. */
+export function fmtDateLong(value?: string | Date | null): string {
+  if (!value) return "—";
+  const p = dayParts(value);
+  if (!p) return String(value);
+  return `${DAYS[p.wd]}, ${fmtDate(value)}`;
+}
+
+/** "11 Oct 2026, 14:20" (Dubai time) for timestamps. */
+export function fmtDateTime(value?: string | Date | null): string {
+  if (!value) return "—";
+  const t = new Date(value);
+  if (isNaN(t.getTime())) return String(value);
+  const time = t.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" });
+  return `${fmtDate(t)}, ${time}`;
+}
+
+/** Kept for existing callers — same as fmtDate. */
+export function fmtDayDate(value?: string | null): string {
+  return fmtDate(value);
 }

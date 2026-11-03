@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
 import OrderDetails from "@/components/OrderDetails";
 import { OrderBookingDetails } from "@/types";
@@ -222,7 +222,7 @@ export default function AdminSearch() {
                         {h.vendorRef ? ` · Order #${h.vendorRef}` : ""}
                         {h.billNo ? ` · Bill ${h.billNo}` : ""}
                         {" · "}
-                        {new Date(h.date).toLocaleDateString("en-GB")}
+                        {fmtDate(h.date)}
                         {area ? ` · ${area}` : ""} · {h.emirate}
                         {" · "}
                         {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
@@ -250,7 +250,7 @@ export default function AdminSearch() {
                           <p className="font-mono text-xs font-semibold text-navy">{fmtDT(h.enteredAt)}</p>
                           {h.orderDate && (
                             <p className="font-mono text-[10px] text-ink-soft">
-                              Sheet day {new Date(h.orderDate + "T00:00:00").toLocaleDateString("en-GB")}
+                              Sheet day {fmtDate(h.orderDate)}
                             </p>
                           )}
                         </div>

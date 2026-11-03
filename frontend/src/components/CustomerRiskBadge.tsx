@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { fmtDate } from "@/lib/format";
 
 type Risk = {
   cancelled: number;
@@ -94,7 +95,7 @@ export default function CustomerRiskBadge({
         <ul className="mt-2 space-y-0.5 border-t border-current/20 pt-2 font-mono text-[11px]">
           {list.slice(0, 8).map((o) => (
             <li key={o.cnNo}>
-              CN {o.cnNo} · {o.vendor} · {o.date}
+              CN {o.cnNo} · {o.vendor} · {fmtDate(o.date)}
               {o.reason ? ` · ${o.reason}` : ""}
             </li>
           ))}

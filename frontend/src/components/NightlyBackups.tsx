@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/components/ui/Feedback";
+import { fmtDateLong, fmtDateTime } from "@/lib/format";
 
 interface NightlyStatus {
   configured: boolean;
@@ -12,7 +13,7 @@ interface NightlyStatus {
 }
 
 function fmtDay(d: string) {
-  return d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }) : "—";
+  return d ? fmtDateLong(d) : "—";
 }
 
 /** Settings → list of the automatic nightly backups kept in the storage bucket. */
@@ -65,7 +66,7 @@ export default function NightlyBackups() {
           </p>
           {st.lastFailure && (
             <p className="mt-2 rounded bg-cancelled-bg px-3 py-2 text-xs text-cancelled">
-              Last attempt failed ({new Date(st.lastFailure.at).toLocaleString("en-GB")}): {st.lastFailure.meta?.error ?? "unknown error"}
+              Last attempt failed ({fmtDateTime(st.lastFailure.at)}): {st.lastFailure.meta?.error ?? "unknown error"}
             </p>
           )}
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 import { readAgentReport, ReportRow } from "@/lib/agentReport";
 import AgentReportHistory from "@/components/AgentReportHistory";
 
@@ -305,7 +305,7 @@ export default function AgentReportPage() {
                       </td>
                       <td className="p-2">
                         {i.order ? <Pill s={i.order.status} /> : <span className="text-xs text-cancelled">{i.action === "awaiting" ? "Still in Awaiting Pickup" : "Not found"}</span>}
-                        {i.order && <span className="block text-[10px] text-ink-soft">{new Date(i.order.date).toLocaleDateString("en-GB")}</span>}
+                        {i.order && <span className="block text-[10px] text-ink-soft">{fmtDate(i.order.date)}</span>}
                       </td>
                       <td className="p-2">
                         {i.order?.customer && <span className="block">{i.order.customer}</span>}
@@ -351,7 +351,7 @@ function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string 
   function downloadCsv() {
     const head = ["CN", "Date", "Vendor", "Customer", "With", "Report status", "Our status", "Agent amount", "Our amount", "Difference"];
     const lines = rows.map(({ i, diff }) =>
-      [i.order!.cnNo, new Date(i.order!.date).toLocaleDateString("en-GB"), i.order!.vendor, i.order!.customer ?? "", i.order!.holder ?? "", i.reportStatus, i.order!.status, i.cod, i.order!.total, diff]
+      [i.order!.cnNo, fmtDate(i.order!.date), i.order!.vendor, i.order!.customer ?? "", i.order!.holder ?? "", i.reportStatus, i.order!.status, i.cod, i.order!.total, diff]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
     );
@@ -397,7 +397,7 @@ function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string 
               {rows.map(({ i, diff }) => (
                 <tr key={i.tracking}>
                   <td className="font-mono font-bold text-navy">{i.order!.cnNo}</td>
-                  <td className="font-mono text-xs">{new Date(i.order!.date).toLocaleDateString("en-GB")}</td>
+                  <td className="font-mono text-xs">{fmtDate(i.order!.date)}</td>
                   <td>
                     <span className="block">{i.order!.vendor}</span>
                     {i.order!.customer && <span className="text-xs text-ink-soft">{i.order!.customer}</span>}
@@ -448,7 +448,7 @@ interface UnpaidData {
   total: number;
 }
 
-const dmy = (d: string) => d.split("-").reverse().join("/");
+const dmy = (d: string) => fmtDate(d);
 
 /**
  * Delivered but not paid: CNs the agent's Excel shows Delivered (on or before the latest

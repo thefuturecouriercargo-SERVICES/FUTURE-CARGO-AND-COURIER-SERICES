@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorNav from "@/components/VendorNav";
 import { EMIRATES, OrderBookingDetails } from "@/types";
@@ -464,7 +464,7 @@ function VendorPortalContent() {
                         ) : (
                           monthly.dailyBreakdown.map((d) => (
                             <tr key={d.date}>
-                              <td>{d.date}</td>
+                              <td>{fmtDate(d.date)}</td>
                               <td className="text-right font-mono">{d.delivered}</td>
                               <td className="text-right font-mono">{d.pending}</td>
                               <td className="text-right font-mono">{d.transferred}</td>

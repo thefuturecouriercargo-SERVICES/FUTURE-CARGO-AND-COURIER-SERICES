@@ -5,6 +5,7 @@ import { apiFetch, settingsBackupUrl } from "@/lib/api";
 
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import NightlyBackups from "@/components/NightlyBackups";
+import { fmtDateTime } from "@/lib/format";
 interface BackupStatus {
   configured: boolean;
   hasApiKey: boolean;
@@ -129,7 +130,7 @@ export default function SettingsPage() {
                 <span className="text-delivered">● Active</span> — {backup.schedule}, sent to <b>{backup.to.join(", ")}</b>
               </p>
               <p className="mt-1 text-ink-soft">
-                Last sent: {backup.lastSentAt ? new Date(backup.lastSentAt).toLocaleString("en-GB") : "not yet"}
+                Last sent: {backup.lastSentAt ? fmtDateTime(backup.lastSentAt) : "not yet"}
               </p>
             </div>
           ) : (

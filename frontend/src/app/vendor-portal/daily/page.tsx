@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDateLong } from "@/lib/format";
 import { VendorAuthProvider, useVendorAuth } from "@/context/VendorAuthContext";
 import VendorShell from "@/components/VendorShell";
 import VendorOrderStatus from "@/components/VendorOrderStatus";
@@ -87,7 +87,7 @@ function Daily() {
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Daily</p>
           <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
-            {new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}
+            {fmtDateLong(date)}
           </h1>
         </div>
         <div className="flex items-center gap-2">

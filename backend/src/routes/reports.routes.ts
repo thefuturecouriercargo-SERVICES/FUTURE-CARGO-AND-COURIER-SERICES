@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate } from "../middleware/auth";
-import { parseDateParam, formatDate, dubaiDateStr } from "../utils/dates";
+import { parseDateParam, formatDate, dubaiDateStr, displayDate } from "../utils/dates";
 import { drawLetterheadHeader, drawLetterheadFooter } from "../utils/letterhead";
 import { drawPdfRow, PDF_COLORS } from "../utils/pdfTable";
 import { writeAuditLog } from "../services/audit.service";
@@ -38,7 +38,7 @@ function fmtAed(n: number): string {
 }
 
 function fmtDayMonthYear(d: Date): string {
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return displayDate(d);
 }
 
 // Shared by both /export (PDF/Excel download) and /preview (JSON, shown on-screen
@@ -113,7 +113,7 @@ async function computeConsignmentReport(q: Record<string, unknown>) {
   // order's actual entry-page slNo, which would look arbitrary once rows from
   // multiple dates/vendors are combined into a single report.
   const rows = orders.map((o, i) => ({
-    date: formatDate(o.date),
+    date: displayDate(o.date),
     slNo: i + 1,
     cnNo: o.cnNo,
     brand: o.brandName,
@@ -429,8 +429,8 @@ router.get(
     const netProfit = revenue - totalExpenses;
     const period =
       req.query.from || req.query.to
-        ? `${req.query.from ? formatDate(parseDateParam(req.query.from as string)) : "…"} to ${
-            req.query.to ? formatDate(parseDateParam(req.query.to as string)) : "…"
+        ? `${req.query.from ? displayDate(parseDateParam(req.query.from as string)) : "…"} to ${
+            req.query.to ? displayDate(parseDateParam(req.query.to as string)) : "…"
           }`
         : "All time";
 
@@ -551,7 +551,7 @@ router.get(
     });
 
     const rows = entries.map((e) => ({
-      date: formatDate(e.date),
+      date: displayDate(e.date),
       category: e.category,
       amount: e.amount,
       remarks: e.remarks ?? "",
@@ -650,11 +650,11 @@ router.get(
       const fromStart = parseDateParam(req.query.from as string);
       const toStart = parseDateParam(req.query.to as string);
       where = { date: { gte: fromStart, lte: toStart } };
-      label = `${formatDate(fromStart)} to ${formatDate(toStart)}`;
+      label = `${displayDate(fromStart)} to ${displayDate(toStart)}`;
     } else {
       const d = req.query.date ? parseDateParam(req.query.date as string) : new Date();
       where = { date: d };
-      label = formatDate(d);
+      label = displayDate(d);
     }
 
     const orders = await prisma.order.findMany({ where });

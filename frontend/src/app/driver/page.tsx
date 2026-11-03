@@ -3,7 +3,7 @@
 import { isPickup } from "@/lib/notes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
-import { fmtNumber, todayStr, agingDays, agingBadgeClass } from "@/lib/format";
+import { fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { CashClosing, Employee, Order, OrderStatus, STATUSES, Vendor, Summary as SharedSummary } from "@/types";
 import StatusDoughnut from "@/components/charts/StatusDoughnut";
@@ -1259,7 +1259,7 @@ export default function DriverPortalPage() {
           <div className="mb-3 rounded-2xl bg-navy p-4 text-paper shadow-md">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <div className="font-mono text-[10.5px] uppercase tracking-widest text-brass-light">{date}</div>
+                <div className="font-mono text-[10.5px] uppercase tracking-widest text-brass-light">{fmtDate(date)}</div>
                 <div className="font-display text-xl font-semibold leading-tight">Today&apos;s deliveries</div>
               </div>
               <div className="text-right">
@@ -1935,7 +1935,7 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
         </p>
       )}
       <p className="mb-5 text-xs text-ink-soft">
-        Totals below are computed automatically from your delivered consignments for {date}. Enter today&apos;s expenses to
+        Totals below are computed automatically from your delivered consignments for {fmtDate(date)}. Enter today&apos;s expenses to
         calculate your balance cash.
       </p>
 

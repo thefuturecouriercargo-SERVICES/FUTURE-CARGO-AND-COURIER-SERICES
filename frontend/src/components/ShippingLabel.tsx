@@ -4,7 +4,7 @@ import { NO_AGENT, NotesText, isPickup, parseNotes, visibleParts } from "@/lib/n
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDate } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
@@ -53,7 +53,7 @@ const LABEL_VENDOR_NAMES: Record<string, string> = {
 const labelVendorName = (name: string) => LABEL_VENDOR_NAMES[name.trim().toUpperCase()] ?? name;
 
 function dubaiDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dubai" });
+  return fmtDate(iso);
 }
 
 // Cut text to N lines with an ellipsis (so a long address can't push the footer off a small label).

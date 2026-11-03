@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
 
 interface AuditLog {
   id: string;
@@ -44,7 +45,7 @@ export default function AuditLogPage() {
           <tbody>
             {logs.map((l) => (
               <tr key={l.id}>
-                <td className="font-mono text-xs">{new Date(l.createdAt).toLocaleString()}</td>
+                <td className="font-mono text-xs">{fmtDateTime(l.createdAt)}</td>
                 <td>{l.user?.name ?? "System"}</td>
                 <td className="font-mono text-xs">{l.action}</td>
                 <td>

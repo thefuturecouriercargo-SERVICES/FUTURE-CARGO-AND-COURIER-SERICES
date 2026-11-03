@@ -4,7 +4,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState 
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { revealEditForm } from "@/lib/editForm";
-import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate } from "@/lib/format";
+import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate, fmtDate, fmtDateTime } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
@@ -377,7 +377,7 @@ return (
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Daily Entry</p>
-          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Consignments — {date}</h1>
+          <h1 className="font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Consignments — {fmtDate(date)}</h1>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setDate(addDays(date, -1))} className="rounded border border-line bg-white px-3 py-2 text-sm hover:border-brass">
@@ -673,7 +673,7 @@ required
                 <tr>
                   <td colSpan={14} className="!static !shadow-none">
                     {orders.length === 0 ? (
-                      <EmptyState compact title={`No consignments yet for ${date}`} hint="Add the first one with the form above, or scan barcode labels on Scan & Assign." />
+                      <EmptyState compact title={`No consignments yet for ${fmtDate(date)}`} hint="Add the first one with the form above, or scan barcode labels on Scan & Assign." />
                     ) : (
                       <EmptyState compact icon="search" title="No consignments match these filters" hint="Clear a filter or search for a different CN." />
                     )}
@@ -746,11 +746,11 @@ required
                       </div>
                     </td>
                     <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                      {new Date(o.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                      {fmtDate(o.createdAt)}
                     </td>
                     <td
                       className={`whitespace-nowrap font-mono text-xs ${o.status === "CANCELLED" ? "text-cancelled" : o.status === "DELIVERED" ? "text-delivered" : "text-ink-soft"}`}
-                      title={o.resolvedAt ? new Date(o.resolvedAt).toLocaleString("en-GB") : ""}
+                      title={o.resolvedAt ? fmtDateTime(o.resolvedAt) : ""}
                     >
                       {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
                     </td>

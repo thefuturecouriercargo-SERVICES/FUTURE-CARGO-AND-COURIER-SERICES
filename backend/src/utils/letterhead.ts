@@ -1,3 +1,4 @@
+import { displayDubaiDate } from "./dates";
 import PDFDocument from "pdfkit";
 import path from "path";
 
@@ -31,11 +32,7 @@ export function drawLetterheadHeader(doc: PDFKit.PDFDocument, title: string): nu
   });
   y = doc.y + 4;
 
-  const exportDate = new Date().toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const exportDate = displayDubaiDate(new Date());
   doc.fontSize(9).fillColor("#555").font("Helvetica").text(`Exported on: ${exportDate}`, doc.page.margins.left, y, {
     width: pageWidth,
     align: "center",

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Order } from "@/types";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
-import { fmtNumber } from "@/lib/format";
+import { fmtNumber, fmtDateLong } from "@/lib/format";
 
 const URGENT_RE =
   /\b(urgent\w*|asap|emergency|immediate(ly)?|priority|important|vip|today\s*itself|same\s*day|must|tomorrow|tmrw|tmw|before\s*\d{1,2}\s*(am|pm|:)?|by\s*\d{1,2}\s*(am|pm))\b|ضروري|عاجل/i;
@@ -41,7 +41,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
       const big = size === "a3";
-      const nice = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+      const nice = fmtDateLong(date);
 
       // One sheet per driver.
       const byDriver = new Map<string, Order[]>();
