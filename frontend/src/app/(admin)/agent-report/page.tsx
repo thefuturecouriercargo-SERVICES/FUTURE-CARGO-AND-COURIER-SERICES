@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { fmtNumber, fmtDate } from "@/lib/format";
+import { fmtNumber, fmtDate, fmtDateTime } from "@/lib/format";
 import { readAgentReport, ReportRow } from "@/lib/agentReport";
 import AgentReportHistory from "@/components/AgentReportHistory";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
-type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
+type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver" | "waitPdf";
 
 interface Item {
   tracking: string;
@@ -43,11 +43,13 @@ interface Summary {
   pending: number;
   notFound: number;
   driver: number;
+  waitPdf: number;
 }
 
 const TABS: { key: string; label: string; match: (i: Item) => boolean }[] = [
   { key: "change", label: "Will update", match: (i) => i.action === "change" },
   { key: "conflict", label: "Conflicts", match: (i) => i.action === "conflict" },
+  { key: "waitPdf", label: "Delivered — waits for PDF", match: (i) => i.action === "waitPdf" },
   { key: "pending", label: "Still pending", match: (i) => i.action === "pending" },
   { key: "already", label: "Already done", match: (i) => i.action === "already" },
   { key: "notFound", label: "Not found", match: (i) => i.action === "notFound" || i.action === "awaiting" },
@@ -80,6 +82,7 @@ export default function AgentReportPage() {
   const [result, setResult] = useState("");
   const [historyKey, setHistoryKey] = useState(0);
   const [unpaidKey, setUnpaidKey] = useState(0);
+  const [pickupKey, setPickupKey] = useState(0);
 
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -99,6 +102,7 @@ export default function AgentReportPage() {
         body: { rows: rows.map((x) => ({ tracking: x.tracking, status: x.status, cod: x.cod, source: x.source, reportDate: x.reportDate, file: x.file })) },
       });
       setUnpaidKey((k) => k + 1);
+      setPickupKey((k) => k + 1);
       const r = await apiFetch<{ items: Item[]; summary: Summary }>("/agent-report/preview", { method: "POST", body: { rows } });
       setItems(r.items);
       setSummary(r.summary);
@@ -143,6 +147,7 @@ export default function AgentReportPage() {
         },
       });
       setHistoryKey((k) => k + 1);
+      setPickupKey((k) => k + 1);
       setResult(`✓ Updated ${r.updated} order${r.updated === 1 ? "" : "s"}${r.skipped.length ? ` · ${r.skipped.length} skipped` : ""}.`);
       // Reflect the change on screen.
       const doneIds = new Set(chosen.map((i) => i.order!.id));
@@ -165,7 +170,7 @@ export default function AgentReportPage() {
       <h1 className="mb-1 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Agent report upload</h1>
       <p className="mb-5 max-w-2xl text-sm text-ink-soft">
         Upload the agent&apos;s Excel status sheet or PDF cash-return report. Tracking number = our CN.
-        <b> Delivered</b> → Delivered, <b>RTO</b> → Cancelled — the report always wins, even over what we marked before. Anything else stays Pending. Nothing changes until you press Update.
+        <b> Payment PDF</b> → Delivered. <b>Excel</b> → only <b>RTO</b> is used (→ Cancelled); Excel &quot;Delivered&quot; waits for the payment PDF, so missing payments stay visible. Anything else stays Pending. Nothing changes until you press Update.
       </p>
 
       <label
@@ -190,6 +195,7 @@ export default function AgentReportPage() {
       </label>
 
       <UnpaidTable refreshKey={unpaidKey} />
+      <PickupTable refreshKey={pickupKey} />
 
       {error && <p className="mb-4 rounded border border-cancelled bg-cancelled-bg p-3 text-sm text-cancelled">{error}</p>}
       {result && <p className="mb-4 rounded border border-delivered bg-delivered-bg p-3 text-sm font-semibold text-delivered">{result}</p>}
@@ -199,11 +205,12 @@ export default function AgentReportPage() {
           <p className="mb-3 text-xs text-ink-soft">
             {fileName} · {summary.rows} rows · {summary.unique} unique CNs
           </p>
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
             {[
               ["To Delivered", summary.toDeliver, "text-delivered"],
               ["To Cancelled (RTO)", summary.toCancel, "text-cancelled"],
               ["Conflicts", summary.conflict, "text-pending"],
+              ["Delivered — waits for PDF", summary.waitPdf ?? 0, "text-pending"],
               ["Still pending", summary.pending, "text-ink-soft"],
               ["Already done", summary.already, "text-ink-soft"],
               ["Not found", summary.notFound, "text-cancelled"],
@@ -247,6 +254,11 @@ export default function AgentReportPage() {
           {tab === "conflict" && visible.length > 0 && (
             <p className="mb-2 text-xs text-pending">
               Report says Delivered but ours is Cancelled. Not ticked — tick only if the report is right.
+            </p>
+          )}
+          {tab === "waitPdf" && visible.length > 0 && (
+            <p className="mb-2 text-xs text-ink-soft">
+              Excel says Delivered — not marked from the Excel any more. Upload the agent&apos;s payment PDF to mark these Delivered; any not on a PDF show in &quot;Delivered but not paid&quot;.
             </p>
           )}
           {tab === "driver" && visible.length > 0 && (
@@ -547,6 +559,232 @@ function UnpaidTable({ refreshKey }: { refreshKey: number }) {
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+interface PickupOrder {
+  date: string;
+  status: string;
+  total: number;
+  vendor: string;
+  customer: string | null;
+  holder: string | null;
+  cancelledAt: string | null;
+}
+interface PickupData {
+  start: string;
+  pending: { cn: string; rtoOn: string; file: string | null; order: PickupOrder }[];
+  pendingTotal: number;
+  received: { cn: string; rtoOn: string; receivedAt: string; by: string | null; order: PickupOrder | null }[];
+}
+
+/**
+ * Cancelled & pickup: every RTO from the agent's Excel that we cancelled — the parcel is still
+ * with the agent until admin scans its CN here, which marks it Received back.
+ */
+function PickupTable({ refreshKey }: { refreshKey: number }) {
+  const [data, setData] = useState<PickupData | null>(null);
+  const [error, setError] = useState("");
+  const [scan, setScan] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [view, setView] = useState<"pending" | "received">("pending");
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function load() {
+    apiFetch<PickupData>("/agent-report/pickup")
+      .then((r) => {
+        setData(r);
+        setError("");
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Could not load pickup list"));
+  }
+  useEffect(load, [refreshKey]);
+
+  async function receive(raw: string) {
+    const cn = raw.replace(/\D/g, "");
+    setScan("");
+    if (!cn || busy) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch<{ cn: string; order: PickupOrder | null }>("/agent-report/pickup/receive", { method: "POST", body: { cn } });
+      setMsg({ ok: true, text: `✓ CN ${r.cn} received back${r.order ? ` · ${r.order.vendor}${r.order.customer ? " · " + r.order.customer : ""}` : ""}` });
+      load();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Could not mark received" });
+    } finally {
+      setBusy(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  async function undo(cn: string) {
+    if (!(await confirmDialog(`Undo "received back" for CN ${cn}? It goes back on the pickup list.`))) return;
+    try {
+      await apiFetch("/agent-report/pickup/undo", { method: "POST", body: { cn } });
+      setMsg({ ok: true, text: `CN ${cn} back on the pickup list` });
+      load();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Undo failed" });
+    }
+  }
+
+  function downloadCsv() {
+    if (!data) return;
+    const head = ["CN", "RTO on", "Order date", "Vendor", "Customer", "With", "Amount"];
+    const lines = data.pending.map((r) =>
+      [r.cn, fmtDate(r.rtoOn), fmtDate(r.order.date), r.order.vendor, r.order.customer ?? "", r.order.holder ?? "", r.order.total]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cancelled-to-pickup-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const pending = data?.pending ?? [];
+  const received = data?.received ?? [];
+
+  return (
+    <section className="mb-6 border border-brass bg-white p-3 md:p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-navy">Cancelled &amp; pickup — to collect from agent ({pending.length})</h2>
+          <p className="text-xs text-ink-soft">
+            RTO from the agent&apos;s Excel, cancelled in Daily Entry. Scan the CN when the parcel is back to mark it <b>Received back</b>. Counting from {data ? fmtDate(data.start) : "…"}.
+          </p>
+        </div>
+        {pending.length > 0 && (
+          <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">
+            ⬇ Download CSV
+          </button>
+        )}
+      </div>
+
+      <form
+        className="mb-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          receive(scan);
+        }}
+      >
+        <input
+          ref={inputRef}
+          value={scan}
+          onChange={(e) => setScan(e.target.value)}
+          inputMode="numeric"
+          placeholder="Scan or type CN — received back"
+          className="min-w-0 flex-1 rounded border border-line bg-paper px-3 py-2 font-mono text-sm text-navy"
+        />
+        <button type="submit" disabled={busy || !scan.trim()} className="rounded bg-navy px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-paper disabled:opacity-40">
+          {busy ? "…" : "Received"}
+        </button>
+      </form>
+      {msg && (
+        <p className={`mb-3 rounded border p-2 text-sm ${msg.ok ? "border-delivered bg-delivered-bg text-delivered" : "border-cancelled bg-cancelled-bg text-cancelled"}`}>{msg.text}</p>
+      )}
+      {error && <p className="mb-2 text-sm text-cancelled">{error}</p>}
+
+      <div className="mb-2 flex flex-wrap gap-1">
+        {(
+          [
+            ["pending", `To pick up (${pending.length})`],
+            ["received", `Received back (${received.length})`],
+          ] as const
+        ).map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide ${view === k ? "bg-navy text-paper" : "border border-line bg-white text-ink-soft"}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {view === "pending" &&
+        (pending.length === 0 ? (
+          <p className="border border-line bg-paper p-3 text-sm text-delivered">✓ No cancelled parcels waiting with the agent.</p>
+        ) : (
+          <div className="table-wrap border border-line">
+            <table className="data-table min-w-[680px]">
+              <thead>
+                <tr>
+                  <th>CN</th>
+                  <th>RTO on</th>
+                  <th>Order date</th>
+                  <th>Vendor / Customer</th>
+                  <th>With</th>
+                  <th className="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((r) => (
+                  <tr key={r.cn}>
+                    <td className="font-mono font-bold text-navy">{r.cn}</td>
+                    <td className="font-mono text-xs">{fmtDate(r.rtoOn)}</td>
+                    <td className="font-mono text-xs">{fmtDate(r.order.date)}</td>
+                    <td>
+                      <span className="block">{r.order.vendor}</span>
+                      {r.order.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
+                    </td>
+                    <td className="text-xs">{r.order.holder ?? ""}</td>
+                    <td className="text-right font-mono">{fmtNumber(r.order.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>Total to collect ({pending.length} parcels)</td>
+                  <td className="text-right font-mono">{fmtNumber(data?.pendingTotal ?? 0)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ))}
+
+      {view === "received" &&
+        (received.length === 0 ? (
+          <p className="border border-line bg-paper p-3 text-sm text-ink-soft">Nothing received back yet.</p>
+        ) : (
+          <div className="table-wrap border border-line">
+            <table className="data-table min-w-[680px]">
+              <thead>
+                <tr>
+                  <th>CN</th>
+                  <th>RTO on</th>
+                  <th>Received back</th>
+                  <th>Vendor / Customer</th>
+                  <th>By</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {received.map((r) => (
+                  <tr key={r.cn}>
+                    <td className="font-mono font-bold text-navy">{r.cn}</td>
+                    <td className="font-mono text-xs">{fmtDate(r.rtoOn)}</td>
+                    <td className="font-mono text-xs">{fmtDateTime(r.receivedAt)}</td>
+                    <td>
+                      <span className="block">{r.order?.vendor ?? "—"}</span>
+                      {r.order?.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
+                    </td>
+                    <td className="text-xs">{r.by ?? ""}</td>
+                    <td className="text-right">
+                      <button onClick={() => undo(r.cn)} className="font-mono text-[11px] uppercase text-cancelled underline">
+                        Undo
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
     </section>
   );
 }

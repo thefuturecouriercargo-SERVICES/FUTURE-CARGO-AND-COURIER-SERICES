@@ -12,7 +12,8 @@ import { emitGlobal } from "../lib/socket";
  * The browser reads the file and sends the rows here:
  *   POST /preview — matches each row to our order by CN and says what would change (changes nothing)
  *   POST /apply   — marks the ticked orders Delivered / Cancelled
- * Report "Delivered" → DELIVERED, "RTO" → CANCELLED, anything else = still pending (left alone).
+ * From 2026-11-04: the payment PDF marks Delivered; the Excel only marks RTO → CANCELLED.
+ * Excel "Delivered" rows are kept for the payment check but wait for the PDF.
  */
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
@@ -34,6 +35,7 @@ const rowSchema = z.object({
   emirate: z.string().max(60).nullable().optional(),
   sender: z.string().max(80).nullable().optional(),
   sheet: z.string().max(60).nullable().optional(),
+  source: z.enum(["excel", "pdf"]).optional(),
 });
 
 const previewSchema = z.object({ rows: z.array(rowSchema).max(5000) });
@@ -96,12 +98,14 @@ router.post(
       // Only the tracking number counts. Sender Name is the vendor's bill no (repeats),
       // so matching on it hit unrelated old orders — never used.
 
-      let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver";
+      let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver" | "waitPdf";
       if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
       // Never touch consignments held by our own drivers — only the agent's.
       else if (!order.employee?.isAgent) action = "driver";
       else if (target === "PENDING") action = "pending";
       else if (order.status === target) action = "already";
+      // Excel no longer marks Delivered — only the payment PDF does, so unpaid ones stay visible.
+      else if (r.source === "excel" && target === "DELIVERED") action = "waitPdf";
       // The report always wins: Delivered → Delivered, RTO → Cancelled, whatever we had before.
       else action = "change";
 
@@ -156,6 +160,7 @@ router.post(
         pending: count("pending"),
         notFound: count("notFound") + count("awaiting"),
         driver: count("driver"),
+        waitPdf: count("waitPdf"),
       },
     });
   })
@@ -379,6 +384,12 @@ router.post(
         // Later sheet says RTO — it was never delivered, so nothing is owed.
         const d = await prisma.agentRecon.deleteMany({ where: { cn, kind: "EXCEL_DELIVERED" } });
         removed += d.count;
+        // …and the parcel has to come back from the agent: put it on the pickup list (first RTO date kept).
+        await prisma.agentRecon.upsert({
+          where: { cn_kind: { cn, kind: "RTO_PICKUP" } },
+          create: { cn, kind: "RTO_PICKUP", reportDate: dayOf(null), cod: r.cod ?? null, file: r.file ?? null },
+          update: {},
+        });
       }
     }
     res.json({ excel, pdf, removed });
@@ -458,6 +469,107 @@ router.get(
       rows,
       total: rows.reduce((s, r) => s + (r.cod ?? 0), 0),
     });
+  })
+);
+
+/**
+ * ── Cancelled & pickup: RTO parcels to collect back from the agent ────────────
+ * Every RTO row in an Excel is put on the list. It shows while our order is Cancelled
+ * and with the agent. Admin scans the CN when the parcel is back → "Received back".
+ * Counting from PICKUP_START.
+ */
+const PICKUP_START = "2026-11-04";
+
+async function pickupOrders(cns: string[]) {
+  const nums = cns.map((c) => (c.length <= 9 ? Number(c) : NaN)).filter((n) => Number.isSafeInteger(n));
+  const orders = await prisma.order.findMany({
+    where: { cnNo: { in: nums } },
+    select: {
+      cnNo: true,
+      date: true,
+      status: true,
+      total: true,
+      resolvedAt: true,
+      vendor: { select: { name: true } },
+      employee: { select: { name: true, isAgent: true } },
+      booking: { select: { customerName: true } },
+    },
+    orderBy: { date: "desc" },
+  });
+  const byCn = new Map<number, (typeof orders)[number]>();
+  for (const o of orders) {
+    const cur = byCn.get(o.cnNo);
+    if (!cur || (!cur.employee?.isAgent && o.employee?.isAgent)) byCn.set(o.cnNo, o);
+  }
+  return byCn;
+}
+
+const orderOut = (o: Awaited<ReturnType<typeof pickupOrders>> extends Map<number, infer O> ? O : never) => ({
+  date: o.date.toISOString(),
+  status: o.status,
+  total: o.total,
+  vendor: o.vendor.name,
+  customer: o.booking?.customerName ?? null,
+  holder: o.employee?.name ?? null,
+  cancelledAt: o.resolvedAt?.toISOString() ?? null,
+});
+
+router.get(
+  "/pickup",
+  asyncHandler(async (_req, res) => {
+    const startTs = new Date(parseDateParam(PICKUP_START).getTime() - 4 * 3600 * 1000); // Dubai midnight
+    const list = await prisma.agentRecon.findMany({ where: { kind: "RTO_PICKUP", firstSeenAt: { gte: startTs } }, orderBy: { firstSeenAt: "asc" } });
+    const got = await prisma.agentRecon.findMany({ where: { kind: "RTO_RECEIVED", cn: { in: list.map((l) => l.cn) } } });
+    const gotByCn = new Map(got.map((g) => [g.cn, g]));
+    const byCn = await pickupOrders(list.map((l) => l.cn));
+
+    const pending: unknown[] = [];
+    const received: unknown[] = [];
+    let pendingTotal = 0;
+    for (const l of list) {
+      const o = byCn.get(Number(l.cn));
+      const g = gotByCn.get(l.cn);
+      if (g) {
+        received.push({ cn: l.cn, rtoOn: dubaiDateStr(l.firstSeenAt), receivedAt: g.firstSeenAt.toISOString(), by: g.file, order: o ? orderOut(o) : null });
+        continue;
+      }
+      // Only parcels we actually cancelled, held by the agent.
+      if (!o || !o.employee?.isAgent || o.status !== "CANCELLED") continue;
+      pendingTotal += o.total;
+      pending.push({ cn: l.cn, rtoOn: dubaiDateStr(l.firstSeenAt), file: l.file, order: orderOut(o) });
+    }
+    received.sort((a, b) => String((b as { receivedAt: string }).receivedAt).localeCompare((a as { receivedAt: string }).receivedAt));
+    res.json({ start: PICKUP_START, pending, pendingTotal, received: received.slice(0, 200) });
+  })
+);
+
+const cnSchema = z.object({ cn: z.string().min(1).max(40) });
+
+router.post(
+  "/pickup/receive",
+  asyncHandler(async (req, res) => {
+    const cn = cnSchema.parse(req.body).cn.replace(/\D/g, "");
+    if (!cn) return res.status(400).json({ error: "Not a CN number" });
+    const onList = await prisma.agentRecon.findUnique({ where: { cn_kind: { cn, kind: "RTO_PICKUP" } } });
+    if (!onList) return res.status(404).json({ error: `CN ${cn} is not on the cancelled pickup list` });
+    const already = await prisma.agentRecon.findUnique({ where: { cn_kind: { cn, kind: "RTO_RECEIVED" } } });
+    if (already) return res.status(409).json({ error: `CN ${cn} already received back (${dubaiDateStr(already.firstSeenAt)})` });
+    const o = (await pickupOrders([cn])).get(Number(cn));
+    if (o && o.status !== "CANCELLED") return res.status(409).json({ error: `CN ${cn} is ${o.status} in Daily Entry — not cancelled` });
+
+    const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { name: true } });
+    await prisma.agentRecon.create({ data: { cn, kind: "RTO_RECEIVED", reportDate: parseDateParam(dubaiDateStr(new Date())), cod: o?.total ?? null, file: user?.name ?? null } });
+    await writeAuditLog({ userId: req.user!.sub, action: "RTO_RECEIVED", entity: "Order", entityId: null, meta: { cn, vendor: o?.vendor.name, total: o?.total } });
+    res.json({ ok: true, cn, order: o ? orderOut(o) : null });
+  })
+);
+
+router.post(
+  "/pickup/undo",
+  asyncHandler(async (req, res) => {
+    const cn = cnSchema.parse(req.body).cn.replace(/\D/g, "");
+    const d = await prisma.agentRecon.deleteMany({ where: { cn, kind: "RTO_RECEIVED" } });
+    res.json({ ok: d.count > 0 });
   })
 );
 
