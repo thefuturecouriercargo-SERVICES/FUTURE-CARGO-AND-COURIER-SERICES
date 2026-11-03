@@ -13,6 +13,7 @@ import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScann
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import DriverRace from "@/components/DriverRace";
 
 interface Summary {
   assigned: number;
@@ -1224,6 +1225,7 @@ export default function DriverPortalPage() {
         areaPage
       ) : (
         <>
+      <DriverRace />
       {unconfirmedBankCarryover.length > 0 && (
         <div className="mb-6 border border-pending bg-pending-bg p-4">
           <h2 className="mb-1 font-display text-base font-semibold text-pending">

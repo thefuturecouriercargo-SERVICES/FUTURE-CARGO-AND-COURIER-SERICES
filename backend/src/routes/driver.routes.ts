@@ -275,4 +275,47 @@ router.get(
   })
 );
 
+// ---- Live race: today's delivered count per driver, 12 midnight to 12 midnight (Dubai) ----
+// Other drivers' counts are never sent — only their place and position on the line.
+const RACE_CODES: Record<string, string> = { ANAS: "AN", MASOOD: "MS", NIYAS: "NS", NOUSHAD: "ND", SAVAD: "SV", FARIS: "FS" };
+function raceCode(name: string) {
+  const first = name.trim().split(/\s+/)[0].toUpperCase();
+  return RACE_CODES[first] ?? (first.slice(0, 1) + first.slice(-1));
+}
+async function raceDay(day: Date) {
+  const from = new Date(day.getTime() - 4 * 60 * 60 * 1000);
+  const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+  const [drivers, delivered, assigned] = await Promise.all([
+    prisma.user.findMany({ where: { role: "DRIVER", active: true, isAgent: false }, select: { id: true, name: true } }),
+    prisma.order.groupBy({ by: ["employeeId"], where: { status: "DELIVERED", resolvedAt: { gte: from, lt: to } }, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["employeeId"], where: { date: day }, _count: { _all: true } }),
+  ]);
+  const count = new Map(delivered.map((d) => [d.employeeId, d._count._all]));
+  const working = new Set(assigned.map((a) => a.employeeId));
+  return drivers
+    .filter((d) => count.has(d.id) || working.has(d.id))
+    .map((d) => ({ id: d.id, name: d.name, code: raceCode(d.name), n: count.get(d.id) ?? 0 }))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+}
+router.get(
+  "/race",
+  asyncHandler(async (req, res) => {
+    const { date } = dayRange();
+    const list = await raceDay(date);
+    const me = req.user!.sub;
+    const lead = Math.max(1, list[0]?.n ?? 0);
+    const mine = list.find((d) => d.id === me);
+    let winner: { name: string; code: string } | null = null;
+    if (!list.some((d) => d.n > 0)) {
+      const y = await raceDay(new Date(date.getTime() - 24 * 60 * 60 * 1000));
+      if (y[0]?.n) winner = { name: y[0].name, code: y[0].code };
+    }
+    res.json({
+      me: mine ? { rank: list.indexOf(mine) + 1, delivered: mine.n } : null,
+      drivers: list.map((d, i) => ({ code: d.code, name: d.name.split(/\s+/)[0], rank: i + 1, pos: d.n / lead, me: d.id === me })),
+      yesterdayWinner: winner,
+    });
+  })
+);
+
 export default router;
