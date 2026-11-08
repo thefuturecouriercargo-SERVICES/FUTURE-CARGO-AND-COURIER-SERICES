@@ -50,8 +50,8 @@ function offerShareButton(file: File, blob: Blob) {
       wrap.remove();
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
-      // Last resort: open it (iOS shows its own share icon in the viewer).
-      window.location.href = URL.createObjectURL(blob);
+      // Never navigate into the PDF on iOS — the viewer has no way back.
+      label.textContent = "Couldn't open share. Tap Save / Share again.";
     }
   };
   close.onclick = () => wrap.remove();
@@ -116,7 +116,7 @@ export function installIOSDownloadFix() {
         const ext = /excel|xlsx|spreadsheet/i.test(blob.type) ? "xlsx" : "pdf";
         await saveBlob(blob, nameFrom(res, `future-courier.${ext}`));
       } catch {
-        window.location.href = href; // fall back to the old behaviour
+        alert("Could not export the file. Please try again."); // never open the PDF full-screen on iOS
       }
     },
     true

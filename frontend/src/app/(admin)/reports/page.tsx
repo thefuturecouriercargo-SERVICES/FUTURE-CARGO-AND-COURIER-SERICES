@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch, reportExportUrl } from "@/lib/api";
 import { Employee, EMIRATES, PAYMENTS, STATUSES, Vendor } from "@/types";
 import { fmtDate } from "@/lib/format";
+import { isIOS, saveBlob } from "@/lib/savePdf";
 
 interface PreviewRow {
   date: string;
@@ -221,7 +222,18 @@ export default function ReportsPage() {
   function exportReport(format: "excel" | "pdf") {
     if (exporting) return;
     const url = reportExportUrl({ ...filters, status: statuses.join(","), format });
-    window.open(url, "_blank");
+    if (isIOS()) {
+      // iPhone: never open the PDF full-screen (no way back) — fetch it and use the share sheet.
+      fetch(url, { credentials: "include" })
+        .then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.blob();
+        })
+        .then((blob) => saveBlob(blob, `consignment-report.${format === "pdf" ? "pdf" : "xlsx"}`))
+        .catch(() => alert("Could not export the report. Please try again."));
+    } else {
+      window.open(url, "_blank");
+    }
     setDoneNote(null);
     setExporting({ format, pct: 0 });
     let pct = 0;
