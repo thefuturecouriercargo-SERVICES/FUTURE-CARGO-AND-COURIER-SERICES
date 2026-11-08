@@ -80,7 +80,7 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <OutsideBox rows={data.outside ?? []} areas={data.outsideAreas ?? []} />
+      <OutsideBox rows={data.outside ?? []} />
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-white">
       <div className="border-b border-line px-4 py-3">
         <div className="flex items-center justify-between gap-2">
@@ -196,44 +196,21 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
   );
 }
 
-const SHORT: Record<string, string> = { "UMM AL QUWAIN": "UAQ", "RAS AL KHAIMAH": "RAK" };
-
-/** Inspired & Escalo parcels for outside areas in this batch — CN count per area. */
-function OutsideBox({ rows, areas }: { rows: OutsideRow[]; areas: string[] }) {
-  if (!rows.length || !areas.length) return null;
-  const total = rows.reduce((t, r) => t + r.total, 0);
+/** Inspired & Escalo parcels for outside areas in this batch — CN count per vendor. */
+function OutsideBox({ rows }: { rows: OutsideRow[]; areas?: string[] }) {
+  if (!rows.length) return null;
   const name = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
   return (
     <div className="rounded-xl border border-line bg-white px-4 py-3">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-brass">Outside areas</span>
-        <span className={`font-mono text-xs font-bold ${total ? "text-cancelled" : "text-ink-soft"}`}>{total} CN</span>
+      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-brass">Outside areas</span>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {rows.map((r, i) => (
+          <div key={r.vendor} className={`flex items-baseline justify-between ${i ? "border-l border-line pl-3" : ""}`}>
+            <span className="text-sm font-semibold text-ink">{name(r.vendor)}</span>
+            <span className={`font-mono text-2xl font-bold ${r.total ? "text-navy" : "text-ink-soft"}`}>{r.total}</span>
+          </div>
+        ))}
       </div>
-      <table className="mt-2 w-full text-xs">
-        <thead>
-          <tr className="text-[10px] uppercase tracking-[0.08em] text-ink-soft">
-            <th className="pb-1 text-left font-semibold">Area</th>
-            {rows.map((r) => (
-              <th key={r.vendor} className="pb-1 text-right font-semibold">{name(r.vendor)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {areas.map((a) => (
-            <tr key={a} className="border-t border-line">
-              <td className="py-1 font-semibold text-ink">{SHORT[a] ?? a}</td>
-              {rows.map((r) => {
-                const n = r.counts[a] ?? 0;
-                return (
-                  <td key={r.vendor} className={`py-1 text-right font-mono ${n ? "font-bold text-navy" : "text-ink-soft"}`}>
-                    {n || "—"}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
