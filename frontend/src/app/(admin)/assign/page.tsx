@@ -6,6 +6,7 @@ import { fmtNumber } from "@/lib/format";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import ScanHistory, { DriverScanExport } from "@/components/ScanHistory";
 import ScanProgressPanel from "@/components/ScanProgressPanel";
+import OutsideCountBox from "@/components/OutsideCountBox";
 import { Employee } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
@@ -167,7 +168,9 @@ export default function AssignPage() {
           }
         />
       </div>
-      <div className="hidden lg:block" aria-hidden="true" />
+      <div className="min-w-0">
+        <OutsideCountBox refreshKey={log.length} />
+      </div>
 
       {tab === "scan" ? (
         <>

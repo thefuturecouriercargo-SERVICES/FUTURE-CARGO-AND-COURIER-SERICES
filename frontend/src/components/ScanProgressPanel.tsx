@@ -27,17 +27,10 @@ interface VendorRow {
   older: Left[];
   addedToday: number;
 }
-interface OutsideRow {
-  vendor: string;
-  counts: Record<string, number>;
-  total: number;
-}
 interface Progress {
   scanDay: string;
   batchDay: string;
   vendors: VendorRow[];
-  outside?: OutsideRow[];
-  outsideAreas?: string[];
   totals: { total: number; byDriver: number; byOffice: number; byHand: number; left: number; older: number; addedToday: number };
 }
 
@@ -79,9 +72,7 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
   ];
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <OutsideBox rows={data.outside ?? []} />
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-white">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-white">
       <div className="border-b border-line px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-[17px] font-semibold text-navy">Left to scan</h2>
@@ -190,26 +181,6 @@ export default function ScanProgressPanel({ refreshKey }: { refreshKey: number }
           {showDone ? "Hide finished vendors" : `${finished} vendors complete`}
         </button>
         {t.addedToday ? <span>+{t.addedToday} booked today · due tomorrow</span> : null}
-      </div>
-    </div>
-    </div>
-  );
-}
-
-/** Inspired & Escalo parcels for outside areas in this batch — CN count per vendor. */
-function OutsideBox({ rows }: { rows: OutsideRow[]; areas?: string[] }) {
-  if (!rows.length) return null;
-  const name = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
-  return (
-    <div className="rounded-xl border border-line bg-white px-4 py-3">
-      <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-brass">Outside areas</span>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        {rows.map((r, i) => (
-          <div key={r.vendor} className={`flex items-baseline justify-between ${i ? "border-l border-line pl-3" : ""}`}>
-            <span className="text-sm font-semibold text-ink">{name(r.vendor)}</span>
-            <span className={`font-mono text-2xl font-bold ${r.total ? "text-navy" : "text-ink-soft"}`}>{r.total}</span>
-          </div>
-        ))}
       </div>
     </div>
   );
