@@ -8,7 +8,7 @@ import { dayRange, monthRange, parseDateParam, displayDate } from "../utils/date
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { lockOrderCreation } from "../services/booking.service";
-import { chargeFor } from "../lib/deliveryCharge";
+import { chargeFor, correctEmirate } from "../lib/deliveryCharge";
 import { updateOrderContact, withContact } from "../lib/orderContact";
 
 const router = Router();
@@ -208,7 +208,7 @@ const order = await prisma.$transaction(async (tx) => {
           deliveryCharge: chargeFor(vendor, data.emirate, data.remarks),
           total: data.total,
           payment: data.payment,
-          emirate: data.emirate.toUpperCase(),
+          emirate: correctEmirate(data.emirate, data.remarks),
           employeeId: data.employeeId,
           status: data.status ?? "PENDING",
           remarks: data.remarks,

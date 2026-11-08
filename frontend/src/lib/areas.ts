@@ -518,6 +518,7 @@ export const DEFAULT_AREA_ROUTE: string[] = [
 ];
 
 const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
+const OUTSIDE_EM = new Set(["UMM AL QUWAIN", "FUJAIRAH", "RAS AL KHAIMAH", "AL AIN"]);
 const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHAIMAH", "FUJAIRAH"]);
 
 /** Best-guess area name, or the first part of the address when no known area matches. */
@@ -542,6 +543,14 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   // Shop / bank / building names ("Jumaira jewelry", "Al Rawda building", "Mashreq bank")
   // name a place, not the area — look at the rest of the address first.
   const plain = stripNames(text);
+  // Outside emirates: their own areas first, else the emirate itself is the area
+  // (never a neighbour's area or a shop name like "Al Sada Cafeteria").
+  if (OUTSIDE_EM.has(em)) {
+    for (const [re, name] of own!) if (re.test(plain) || re.test(text)) return name;
+    const near = fuzzyArea(plain, em, true);
+    if (near && own!.some(([, n]) => n === near)) return near;
+    return em;
+  }
   for (const [re, name] of rules) if (re.test(plain)) return name;
   for (const [re, name] of rules) if (re.test(text)) return name;
   // Small spelling mistakes ("Sabiya", "Qusias", "Muwaileh"→"Muwailah") → closest known area.

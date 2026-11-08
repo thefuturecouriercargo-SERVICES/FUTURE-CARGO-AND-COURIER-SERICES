@@ -82,9 +82,10 @@ function cleanPhone(raw: string): string {
 const EXPLICIT_EMIRATES: [RegExp, string][] = [
   [/\bal\s*ain\b|\balain\b/i, "AL AIN"],
   [/\babu\s*dh?abi\b|\babudh?abi\b/i, "ABUDHABI"],
-  [/\bras\s*al\s*kh?aima?h?\b/i, "RAS AL KHAIMAH"],
-  [/\bumm\s*al\s*q[a-z]*\b/i, "UMM AL QUWAIN"],
-  [/\bfuj[ae]i?rah?\b/i, "FUJAIRAH"],
+  [/\bras[\s\-'’]*(?:[aeu]l+)?[\s\-'’]*kh?[aei]{1,2}ma?h?\b/i, "RAS AL KHAIMAH"],
+  // Umm Al Quwain · Ummul Kuvain · Um al Qaiwain · Ummulquwain · UAQ
+  [/\bu+m+[\s\-'’]*(?:[aeu]l+[\s\-'’]*)?[qkg][aeiouwv]{1,6}n\b|\b[qk]u[wv]+a?i?y?n\b|\bu\.?a\.?q\b/i, "UMM AL QUWAIN"],
+  [/\bf[uo]+j+[aeiy]{0,3}r+a*h?\b/i, "FUJAIRAH"],
   [/\bajm[a]+n\b/i, "AJMAN"],
   [/\bsh[a]?r[a]?j[a]?h\b|\bsharjha\b/i, "SHARJAH"],
   [/\bdub[a]?[iy]\b/i, "DUBAI"],

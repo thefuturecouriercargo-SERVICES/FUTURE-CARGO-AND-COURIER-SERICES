@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { correctEmirate } from "../lib/deliveryCharge";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticateVendor } from "../middleware/auth";
@@ -424,7 +425,7 @@ router.put(
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         address: input.address,
-        emirate: input.emirate.toUpperCase(),
+        emirate: correctEmirate(input.emirate, input.address),
         items: input.items || null,
         codAmount: input.codAmount,
         notes: input.notes || null,

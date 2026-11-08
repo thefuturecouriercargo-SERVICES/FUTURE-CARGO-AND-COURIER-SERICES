@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { correctEmirate, outsideAreaOf, OUTSIDE_AREAS } from "../lib/deliveryCharge";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
@@ -49,7 +50,7 @@ router.get(
     const [batchBookings, olderWaiting, addedToday] = await Promise.all([
       prisma.booking.findMany({
         where: { createdAt: { gte: batch.start, lt: batch.end } },
-        select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, vendor: { select: { name: true } } },
+        select: { id: true, cnNo: true, customerName: true, codAmount: true, emirate: true, address: true, status: true, orderId: true, vendorId: true, labelPrintedAt: true, vendor: { select: { name: true } } },
         orderBy: { cnNo: "asc" },
       }),
       // No carry-forward: unscanned orders from earlier days stay on their own day
@@ -119,12 +120,26 @@ router.get(
       for (const a of addedToday) row(a.vendorId, names.find((n) => n.id === a.vendorId)?.name ?? "?").addedToday = a._count._all;
     }
 
+    // Inspired & Escalo print their own labels: CN count per outside area, so those
+    // parcels can be pulled out for the outside run while scanning.
+    const outside = ["INSPIRED", "ESCALO"].map((key) => {
+      const counts = Object.fromEntries(OUTSIDE_AREAS.map((a) => [a, 0])) as Record<string, number>;
+      for (const b of batchBookings) {
+        if (b.status === "REJECTED" || !b.vendor.name.toUpperCase().includes(key)) continue;
+        const area = outsideAreaOf(b.emirate, b.address);
+        if (area) counts[area]++;
+      }
+      return { vendor: key, counts, total: Object.values(counts).reduce((t, n) => t + n, 0) };
+    });
+
     const vendors = [...rows.values()].sort((a, b) => b.left + b.older.length - (a.left + a.older.length) || a.vendor.localeCompare(b.vendor));
     const sum = (k: "total" | "byDriver" | "byOffice" | "byHand" | "left" | "addedToday") => vendors.reduce((t, v) => t + v[k], 0);
     res.json({
       scanDay,
       batchDay,
       vendors,
+      outside,
+      outsideAreas: OUTSIDE_AREAS,
       totals: {
         total: sum("total"),
         byDriver: sum("byDriver"),
@@ -285,7 +300,7 @@ router.put(
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         address: input.address,
-        emirate: input.emirate.toUpperCase(),
+        emirate: correctEmirate(input.emirate, input.address),
         items: input.items || null,
         codAmount: input.codAmount,
         notes: input.notes || null,

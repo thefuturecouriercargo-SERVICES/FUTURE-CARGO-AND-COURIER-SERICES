@@ -1,3 +1,4 @@
+import { correctEmirate } from "../lib/deliveryCharge";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/asyncHandler";
 
@@ -68,7 +69,7 @@ function fixEmirate(emirate: string | null | undefined, address: string | null, 
   const em = emirate && (EMIRATES as readonly string[]).includes(emirate) ? emirate : null;
   const text = `${rawAddress ?? ""} ${address ?? ""}`;
   if (/\bmus+a(?:l?f)+a?h?\b|\bkhalifa\s*city\b|^\s*(AD|AUH)\b/i.test(text)) return "ABUDHABI";
-  return em;
+  return em ? correctEmirate(em, text) : em;
 }
 
 const PROMPT = `You are reading a photo of an order slip for a courier company in the UAE.

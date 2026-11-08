@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { writeAuditLog } from "./audit.service";
 import { emitGlobal } from "../lib/socket";
+import { chargeFor, correctEmirate, outsidePlaceInText } from "../lib/deliveryCharge";
 import { createBooking, phoneDigits, isCnFree, CN_START } from "./booking.service";
 
 /**
@@ -152,9 +153,12 @@ function detectEmirate(addr: WooAddress): string {
 export function emirateFromText(raw: string, stateCode?: string): string {
   const text = raw.toLowerCase();
   const addr = { state: stateCode };
-  if (/\bal\s*ain\b|\balain\b/.test(text)) return "AL AIN";
+  const outside = outsidePlaceInText(raw);
+  if (outside === "AL AIN") return "AL AIN";
   const code = (addr.state ?? "").toUpperCase().trim();
   if (STATE_TO_EMIRATE[code]) return STATE_TO_EMIRATE[code];
+  // A misspelt outside emirate ("Ummul Kuvain", "Fujaira", "Ras al Kaima") beats a wrong default.
+  if (outside === "UMM AL QUWAIN" || outside === "FUJAIRAH" || outside === "RAS AL KHAIMAH") return outside;
   if (/abu\s*dhabi|abudhabi|mussafah/.test(text)) return "ABUDHABI";
   if (/ras\s*al\s*khaim|\brak\b/.test(text)) return "RAS AL KHAIMAH";
   if (/umm\s*al\s*q|\buaq\b/.test(text)) return "UMM AL QUWAIN";
@@ -617,4 +621,31 @@ export async function markWebsiteCompleted(bookingIds: string[]): Promise<{ mark
   }
   if (failed) console.error(`[woo] mark completed: ${failed} failed — ${error}`);
   return { marked, failed, error };
+}
+
+/**
+ * Parcels whose address names an outside emirate but were saved under another one
+ * ("Ummul Kuvain" saved as ABUDHABI) get the right emirate and outside charge —
+ * bookings from the last 14 days and their orders that are still pending.
+ * Safe to run on every start: only touches parcels that disagree with their address.
+ */
+export async function fixOutsideEmirates(): Promise<number> {
+  const since = new Date(Date.now() - 14 * 24 * 3600 * 1000);
+  const list = await prisma.booking.findMany({
+    where: { createdAt: { gte: since }, status: { not: "REJECTED" } },
+    select: { id: true, address: true, emirate: true, orderId: true, vendor: { select: { name: true, deliveryCharge: true } } },
+  });
+  let fixed = 0;
+  for (const b of list) {
+    const em = correctEmirate(b.emirate, b.address);
+    if (em === b.emirate) continue;
+    await prisma.booking.update({ where: { id: b.id }, data: { emirate: em } });
+    if (b.orderId)
+      await prisma.order.updateMany({
+        where: { id: b.orderId, status: "PENDING" },
+        data: { emirate: em, deliveryCharge: chargeFor(b.vendor, em, b.address) },
+      });
+    fixed++;
+  }
+  return fixed;
 }
