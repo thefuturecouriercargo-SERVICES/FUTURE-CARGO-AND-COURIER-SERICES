@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import CustomerRiskBadge from "@/components/CustomerRiskBadge";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
@@ -30,11 +30,16 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
   const [paste, setPaste] = useState("");
   const [pasteMsg, setPasteMsg] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  // Each paste gets a number. An AI answer that comes back after the order was saved,
+  // cleared or a new message pasted belongs to the OLD message and is thrown away —
+  // otherwise its notes / bill No. leaked into the next consignment.
+  const aiRun = useRef(0);
 
   function fillFromMessage() {
     const p = parseWhatsappOrder(paste);
     const filled: string[] = [];
-    const next = { ...form };
+    // A new message replaces the old one completely — nothing (notes!) carries over.
+    const next = { ...EMPTY, emirate: form.emirate, vendorRef: form.vendorRef };
     if (p.customerName) { next.customerName = p.customerName; filled.push("name"); }
     if (p.customerPhone) { next.customerPhone = p.customerPhone; filled.push("phone"); }
     if (p.address) { next.address = p.address; filled.push("address"); }
@@ -66,6 +71,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
   // Second opinion from AI: fixes what the rules got wrong (e.g. a name read as an item).
   // Only fields the user hasn't touched since the rules filled them are replaced.
   async function aiCheck(text: string, ruleForm: typeof EMPTY) {
+    const run = ++aiRun.current;
     setAiBusy(true);
     const low = text.toLowerCase();
     const products = [...ESCALO_PRODUCTS, ...INSPIRED_PRODUCTS].filter((n) => n.length > 2 && low.includes(n.toLowerCase())).slice(0, 60);
@@ -74,6 +80,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         `${vendors ? "/bookings" : "/vendor-portal"}/message-read`,
         { method: "POST", body: { text, products } }
       );
+      if (run !== aiRun.current) return; // order already saved / new message pasted
       const a = res.order;
       if (!a) throw new Error("no result");
       const changed: string[] = [];
@@ -103,13 +110,16 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
       if (a.unclear?.length) warn.push(`⚠ AI wasn't sure about: ${a.unclear.join(", ")}.`);
       setPasteMsg([`✨ AI checked the message${changed.length ? ` and corrected ${changed.join(", ")}` : " — all fields agree"}. Please check before saving.`, ...warn].join("\n"));
     } catch {
+      if (run !== aiRun.current) return;
       setPasteMsg((m) => m.replace("✨ AI is double-checking…", "Please check every field before saving. (AI check not available right now.)").replace("✨ AI is reading the message…", "Couldn't recognise anything — please type the details in."));
     } finally {
-      setAiBusy(false);
+      if (run === aiRun.current) setAiBusy(false);
     }
   }
 
   useEffect(() => {
+    aiRun.current++;
+    setAiBusy(false);
     if (editing) {
       setForm({
         vendorRef: editing.vendorRef ?? "",
@@ -167,6 +177,8 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
         }
       }
       if (!editing) {
+        aiRun.current++;
+        setAiBusy(false);
         setForm({ ...EMPTY, emirate: form.emirate });
         setPaste("");
         setPasteMsg("");

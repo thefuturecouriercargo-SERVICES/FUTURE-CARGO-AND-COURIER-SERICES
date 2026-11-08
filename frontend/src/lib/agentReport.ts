@@ -86,13 +86,21 @@ export async function readExcelReport(file: File): Promise<ReportRow[]> {
       if (!cols) {
         const low = vals.map((v) => v.toLowerCase());
         const find = (...keys: string[]) => low.findIndex((h) => keys.some((k) => h.includes(k)));
-        const tracking = find("awb", "tracking", "cn no", "consignment");
+        // Tracking column: older sheets say AWB / Tracking, the newer "Shipment Summary" says "Shipment ID".
+        const tracking = find("awb", "tracking", "cn no", "consignment", "shipment id", "shipment no", "shipment #");
         const status = find("status");
         if (tracking > 0 && status > 0) {
-          // Delivered date: prefer a delivery/status date column, else any "date" column.
+          // Delivered date: prefer a delivery/status date column, else any "date" column —
+          // but never the booking/pickup date (that is when it was sent, not delivered).
           let date = find("deliver date", "delivered date", "delivery date", "delivered on", "status date", "last update", "updated");
-          if (date <= 0 || !low[date].includes("date") && !low[date].includes("updat")) date = low.findIndex((h) => h.includes("date"));
-          cols = { tracking, status, cod: find("cod", "amount"), emirate: find("emirate", "destination"), sender: find("sender"), date };
+          if (date <= 0 || !low[date].includes("date") && !low[date].includes("updat"))
+            date = low.findIndex((h) => h.includes("date") && !/book|pick|creat|order/.test(h));
+          // Customer's emirate: "Receiver Emirate", not "Sender Emirate".
+          let emirate = find("receiver emirate", "consignee emirate", "destination");
+          if (emirate <= 0) emirate = low.findIndex((h) => h.includes("emirate") && !h.includes("sender"));
+          let sender = find("sender name", "shipper");
+          if (sender <= 0) sender = find("sender");
+          cols = { tracking, status, cod: find("cod", "amount"), emirate, sender, date };
         }
         return;
       }

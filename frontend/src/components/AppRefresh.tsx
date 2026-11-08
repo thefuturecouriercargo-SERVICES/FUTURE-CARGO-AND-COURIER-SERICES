@@ -1,38 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { triggerRefresh } from "@/lib/useLiveRefresh";
 
 const PULL_TRIGGER = 85; // px of finger travel needed to refresh
-const SOFT_AFTER_MS = 15_000; // back from background after 15s → quietly reload data
-const HARD_AFTER_MS = 60_000; // after 1 min → reload the whole page (only if nothing is being typed)
+const SOFT_AFTER_MS = 5_000; // back after 5s+ → quietly re-fetch the data (no page reload)
 
 /**
  * 1. Pull down from the top to refresh (installed app only — normal Chrome
  *    already has its own pull-to-refresh, so we don't double it there).
- * 2. Coming back to the app after switching away refreshes it automatically.
- *    If the person was typing something, the page is NOT reloaded (no lost
- *    work) — data is refreshed quietly instead.
+ * 2. Coming back to the app (other tab / other app / screen back on) quietly
+ *    re-fetches each page's data in place. The page itself is NEVER reloaded,
+ *    so turning the screen off and on doesn't flash or reset anything, and the
+ *    live connection (race, live updates) keeps running.
  */
 export default function AppRefresh() {
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const typed = useRef(false);
 
-  // Remember if anything has been typed on this page (so we never wipe a half-filled form).
-  useEffect(() => {
-    const mark = (e: Event) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
-        const type = (t as HTMLInputElement).type;
-        if (type !== "checkbox" && type !== "radio") typed.current = true;
-      }
-    };
-    document.addEventListener("input", mark, true);
-    return () => document.removeEventListener("input", mark, true);
-  }, []);
-
-  // Auto-refresh when returning to the app.
+  // Auto-refresh the data (not the page) when returning to the app.
   useEffect(() => {
     let hiddenAt = 0;
     const onVis = () => {
@@ -43,12 +29,7 @@ export default function AppRefresh() {
       if (!hiddenAt) return;
       const away = Date.now() - hiddenAt;
       hiddenAt = 0;
-      const onAuthPage = /^\/(login|vendor-login)(\/|$)/.test(location.pathname);
-      if (away >= HARD_AFTER_MS && !typed.current && !onAuthPage && !document.querySelector("video")) {
-        location.reload();
-      } else if (away >= SOFT_AFTER_MS) {
-        triggerRefresh("resume");
-      }
+      if (away >= SOFT_AFTER_MS) triggerRefresh("resume");
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);

@@ -98,7 +98,7 @@ async function tick() {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload,
-          { TTL: 20 * 60, urgency: "high" }
+          { TTL: 5 * 60, urgency: "high" } // a notification older than 5 min is dropped, never shown late
         );
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;

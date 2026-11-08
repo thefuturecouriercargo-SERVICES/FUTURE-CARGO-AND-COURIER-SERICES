@@ -13,8 +13,13 @@ type PrayerInfo = {
   nextFajr: string;
 };
 
-// The popup still shows if the driver opens the app up to 20 min after the Azan time.
+// The popup still shows if the driver opens the app up to 20 min after the Azan time…
 const SHOW_WINDOW_MS = 20 * 60_000;
+// …but the Azan SOUND only plays close to the real time. iPhones freeze the page in the
+// background and wake it late, and old notifications get tapped hours later — after this
+// the popup shows silently with a "listen" button instead.
+const SOUND_WINDOW_MS = 4 * 60_000;
+const dubaiDay = () => new Date(Date.now() + 4 * 3600_000).toISOString().slice(0, 10);
 const QUOTE_KEY = "fc-prayer-quote-idx";
 const shownKey = (date: string, name: string) => `fc-prayer-shown-${date}-${name}`;
 
@@ -98,50 +103,82 @@ export default function PrayerReminder() {
   }, [load]);
 
   // Phones block sound until the user touches the page once — unlock it on the first tap.
+  // The clip stays MUTED unless fire()/replay() deliberately starts it, and any playback
+  // we didn't start (iPhone resuming the audio after a call / unlock) is stopped at once.
+  const allowed = useRef(false);
   useEffect(() => {
     const a = new Audio("/azan.mp3");
     a.preload = "auto";
+    a.muted = true;
     audioRef.current = a;
-    const unlock = () => {
+    const onPlaying = () => {
+      if (!allowed.current) {
+        a.pause();
+        a.muted = true;
+      }
+    };
+    const onEnded = () => {
+      allowed.current = false;
       a.muted = true;
-      a.play()
-        .then(() => {
-          a.pause();
-          a.currentTime = 0;
-          a.muted = false;
-        })
-        .catch(() => {
-          a.muted = false;
-        });
+    };
+    a.addEventListener("playing", onPlaying);
+    a.addEventListener("ended", onEnded);
+    const unlock = () => {
       window.removeEventListener("pointerdown", unlock);
+      if (allowed.current) return;
+      a.muted = true;
+      const p = a.play();
+      a.pause(); // stop straight away — the tap only "unlocks" sound for later
+      p?.catch(() => undefined);
     };
     window.addEventListener("pointerdown", unlock);
-    return () => window.removeEventListener("pointerdown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      a.removeEventListener("playing", onPlaying);
+      a.removeEventListener("ended", onEnded);
+      a.pause();
+    };
+  }, []);
+
+  const startAudio = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return Promise.reject(new Error("no audio"));
+    allowed.current = true;
+    a.muted = false;
+    a.currentTime = 0;
+    return a.play().catch((e) => {
+      allowed.current = false;
+      a.muted = true;
+      throw e;
+    });
   }, []);
 
   const fire = useCallback((name: string, at: string) => {
     setActive({ name, at, quote: nextQuote() });
-    const a = audioRef.current;
-    if (a) {
-      a.currentTime = 0;
-      a.play()
-        .then(() => setAudioBlocked(false))
-        .catch(() => {
-          setAudioBlocked(true);
-          playChime();
-        });
-    } else playChime();
+    // Late (phone was asleep, old notification tapped) → popup only, no Azan sound.
+    if (Date.now() - new Date(at).getTime() > SOUND_WINDOW_MS) {
+      setAudioBlocked(true);
+      return;
+    }
+    startAudio()
+      .then(() => setAudioBlocked(false))
+      .catch(() => {
+        setAudioBlocked(true);
+        playChime();
+      });
     try {
       navigator.vibrate?.([400, 200, 400]);
     } catch {
       /* not supported */
     }
-  }, []);
+  }, [startAudio]);
 
   // Check every 15 s whether a prayer time has arrived.
   useEffect(() => {
     if (!info) return;
     const check = () => {
+      // Times from yesterday (app left open overnight) never fire — wait for today's.
+      if (info.date !== dubaiDay()) return;
       const now = Date.now();
       for (const p of info.prayers) {
         const at = new Date(p.at).getTime();
@@ -167,7 +204,10 @@ export default function PrayerReminder() {
     const qs = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
     const p = info.prayers.find((x) => x.name === name);
-    if (!p) return;
+    if (!p || info.date !== dubaiDay()) return;
+    // An old notification (earlier prayer, or tapped long after) must not start the Azan.
+    const late = Date.now() - new Date(p.at).getTime();
+    if (late < -60_000 || late > SHOW_WINDOW_MS || safeGet(shownKey(info.date, p.name))) return;
     safeSet(shownKey(info.date, p.name), "1");
     fire(p.name, p.at);
   }, [info, fire]);
@@ -204,16 +244,15 @@ export default function PrayerReminder() {
   }, [subscribe]);
 
   const replay = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.currentTime = 0;
-    a.play().then(() => setAudioBlocked(false)).catch(() => undefined);
+    startAudio().then(() => setAudioBlocked(false)).catch(() => undefined);
   };
 
   const close = () => {
     const a = audioRef.current;
+    allowed.current = false;
     if (a) {
       a.pause();
+      a.muted = true;
       a.currentTime = 0;
     }
     setActive(null);
