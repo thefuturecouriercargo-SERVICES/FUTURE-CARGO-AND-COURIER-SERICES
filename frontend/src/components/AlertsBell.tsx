@@ -6,6 +6,47 @@ import { apiFetch } from "@/lib/api";
 import { agingDays, todayStr } from "@/lib/format";
 import { openInHeaderSearch } from "@/components/CommandPalette";
 import { Order } from "@/types";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { useSocketEvent } from "@/lib/useSocketEvent";
+import { fmtDate, fmtNumber } from "@/lib/format";
+import { toast } from "@/components/ui/Feedback";
+
+interface Reminder {
+  id: string;
+  date: string;
+  category: string;
+  amount: number;
+  note: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  createdByName: string;
+  createdAt: string;
+}
+
+/** Short two-note chime made in the browser (no sound file needed). */
+function chime() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    [880, 1320].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.18;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      o.connect(g).connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.4);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 1200);
+  } catch {
+    /* sound blocked — the shaking bell still shows it */
+  }
+}
 
 interface AgingCn {
   cn: number;
@@ -49,6 +90,61 @@ export default function AlertsBell() {
   const [now, setNow] = useState(() => Date.now());
   const [showAllCns, setShowAllCns] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "SUPER_ADMIN";
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [remOpen, setRemOpen] = useState(false);
+  const [remBusy, setRemBusy] = useState<string | null>(null);
+  const knownRem = useRef<Set<string> | null>(null);
+
+  const loadReminders = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const list = await apiFetch<Reminder[]>("/reminders/pending");
+      // Sound only for reminders that just arrived (not on first load of the page).
+      if (knownRem.current && list.some((r) => !knownRem.current!.has(r.id))) chime();
+      knownRem.current = new Set(list.map((r) => r.id));
+      setReminders(list);
+      if (!list.length) setRemOpen(false);
+    } catch {
+      /* ignore */
+    }
+  }, [isAdmin]);
+  useSocketEvent("reminder:changed", () => loadReminders());
+  useEffect(() => {
+    loadReminders();
+    const t = setInterval(loadReminders, 30000);
+    return () => clearInterval(t);
+  }, [loadReminders]);
+
+  async function confirmReminder(r: Reminder) {
+    setRemBusy(r.id);
+    try {
+      await apiFetch(`/reminders/${r.id}/confirm`, { method: "POST" });
+      if (r.category === "SALARY") {
+        setRemOpen(false);
+        const q = new URLSearchParams({ remind: "1", employeeId: r.employeeId ?? "", amount: String(r.amount), date: r.date.slice(0, 10), note: r.note ?? "" });
+        router.push(`/payroll?${q.toString()}`);
+      } else {
+        toast(`${r.category.replace(/_/g, " ")} expense saved`, "success", `${fmtNumber(r.amount)} AED on ${fmtDate(r.date)}`);
+      }
+      await loadReminders();
+    } catch (e) {
+      toast("Couldn't confirm", "error", e instanceof Error ? e.message : undefined);
+    } finally {
+      setRemBusy(null);
+    }
+  }
+  async function dismissReminder(r: Reminder) {
+    setRemBusy(r.id);
+    try {
+      await apiFetch(`/reminders/${r.id}/dismiss`, { method: "POST" });
+      await loadReminders();
+    } finally {
+      setRemBusy(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,8 +233,14 @@ export default function AlertsBell() {
 
   const total = groups.reduce((s, g) => s + g.count, 0);
   const unseen = Math.max(0, total - seen);
+  const ringing = reminders.length > 0;
 
   function toggle() {
+    // A manager's reminder opens its own popup until the admin confirms it.
+    if (ringing && !open) {
+      setRemOpen(true);
+      return;
+    }
     const next = !open;
     setOpen(next);
     if (next) {
@@ -160,14 +262,19 @@ export default function AlertsBell() {
         aria-label={`Alerts${total ? `, ${total} need attention` : ""}`}
         aria-expanded={open}
         className={`relative flex h-11 w-11 items-center justify-center rounded-xl border transition ${
-          open || unseen ? "border-[#D4AF5A] bg-[#1A1F2E] text-[#F1D9A0]" : "border-[#243049] text-[#9AA5BA] hover:border-[#D4AF5A] hover:text-white"
-        } ${unseen ? "shadow-[0_0_18px_rgba(212,175,90,0.35)]" : ""}`}
+          ringing ? "border-[#EF4444] bg-[#2A1418] text-[#FCA5A5]" : open || unseen ? "border-[#D4AF5A] bg-[#1A1F2E] text-[#F1D9A0]" : "border-[#243049] text-[#9AA5BA] hover:border-[#D4AF5A] hover:text-white"
+        } ${ringing ? "shadow-[0_0_18px_rgba(239,68,68,0.45)]" : unseen ? "shadow-[0_0_18px_rgba(212,175,90,0.35)]" : ""}`}
       >
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+        <svg className={ringing ? "bell-ring" : ""} width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
           <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10 21h4" />
         </svg>
-        {total > 0 && (
+        {ringing && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-[#0A1020] bg-[#EF4444] px-1 text-[11px] font-bold text-white">
+            {reminders.length}
+          </span>
+        )}
+        {!ringing && total > 0 && (
           <span
             className={`absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-[#0A1020] px-1 text-[11px] font-bold ${
               unseen ? "bg-[#EF4444] text-white" : "bg-[#243049] text-[#C9D1E0]"
@@ -177,6 +284,73 @@ export default function AlertsBell() {
           </span>
         )}
       </button>
+
+      <style>{`.bell-ring{transform-origin:50% 2px;animation:bellRing 1.1s ease-in-out infinite}
+@keyframes bellRing{0%,55%,100%{transform:rotate(0)}5%{transform:rotate(18deg)}12%{transform:rotate(-16deg)}19%{transform:rotate(13deg)}26%{transform:rotate(-10deg)}33%{transform:rotate(6deg)}40%{transform:rotate(-3deg)}}
+@media (prefers-reduced-motion:reduce){.bell-ring{animation:none}}`}</style>
+
+      {remOpen && ringing && (
+        <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/60 p-3 pt-[80px]" onClick={() => setRemOpen(false)}>
+          <div
+            role="dialog"
+            aria-label="Reminders from manager"
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[calc(100vh-110px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#EF4444]/40 bg-[#0F1626] text-[#E8ECF4] shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+          >
+            <div className="flex items-center justify-between border-b border-[#1F2A40] bg-[#1A1220] px-4 py-3">
+              <span className="font-display text-[15px] font-semibold text-white">
+                🔔 Reminder{reminders.length > 1 ? "s" : ""} from manager
+                <span className="ml-2 rounded-full bg-[#EF4444]/20 px-2 py-0.5 text-[11px] font-bold text-[#FCA5A5]">{reminders.length}</span>
+              </span>
+              <button onClick={() => setRemOpen(false)} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full border border-[#2A3550] text-lg">
+                ×
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
+              {reminders.map((r) => (
+                <div key={r.id} className="rounded-xl border border-[#2A3550] bg-[#131C30] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold uppercase tracking-wide text-[#F1D9A0]">{r.category.replace(/_/g, " ")}</div>
+                      {r.employeeName && <div className="text-[12.5px] font-semibold text-white">{r.employeeName}</div>}
+                      <div className="mt-0.5 text-[11.5px] text-[#8C97AD]">
+                        {fmtDate(r.date)} · from {r.createdByName}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-mono text-[17px] font-bold text-white">{fmtNumber(r.amount)} AED</div>
+                  </div>
+                  {r.note && <div className="mt-2 rounded-lg bg-black/25 px-2.5 py-1.5 text-[12.5px]">{r.note}</div>}
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      disabled={remBusy === r.id}
+                      onClick={() => confirmReminder(r)}
+                      className="h-9 flex-1 rounded-lg bg-[#D4AF5A] text-[13px] font-bold text-[#0A1020] hover:brightness-110 disabled:opacity-60"
+                    >
+                      {r.category === "SALARY" ? "Confirm → Payroll" : "Confirm & save"}
+                    </button>
+                    <button
+                      disabled={remBusy === r.id}
+                      onClick={() => dismissReminder(r)}
+                      className="h-9 rounded-lg border border-[#2A3550] px-3 text-[12.5px] text-[#9AA5BA] hover:border-[#F87171] hover:text-[#F87171] disabled:opacity-60"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                setRemOpen(false);
+                setOpen(true);
+              }}
+              className="border-t border-[#1B2438] bg-[#0C1322] px-4 py-2.5 text-center text-[12px] font-medium text-[#D4AF5A] hover:underline"
+            >
+              Other alerts →
+            </button>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div

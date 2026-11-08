@@ -1,5 +1,6 @@
 "use client";
 
+import { isIOS, savePdf } from "@/lib/savePdf";
 import { useState } from "react";
 import { Order } from "@/types";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
@@ -136,12 +137,12 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
       }
 
       const name = `driver-sheet-${date}${driverLabel ? `-${driverLabel.replace(/\s+/g, "_")}` : ""}-${size.toUpperCase()}.pdf`;
-      if (mode === "download") doc.save(name);
+      if (mode === "download" || isIOS()) await savePdf(doc, name); // iPhone: share sheet (save / print / WhatsApp)
       else {
         doc.autoPrint();
         const url = doc.output("bloburl");
         const w = window.open(url, "_blank");
-        if (!w) doc.save(name); // pop-up blocked → just download
+        if (!w) await savePdf(doc, name); // pop-up blocked → just download
       }
     } catch (err) {
       alert(`Could not make the sheet: ${err instanceof Error ? err.message : String(err)}`);

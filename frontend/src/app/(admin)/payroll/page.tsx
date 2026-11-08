@@ -57,6 +57,20 @@ export default function PayrollPage() {
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
   const [workingDaysInput, setWorkingDaysInput] = useState<Record<string, string>>({});
+  // Opened from a manager's salary reminder (bell → Confirm): fill the entry form, admin saves it.
+  const [fromReminder, setFromReminder] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("remind") !== "1") return;
+    setFormEmployeeId(q.get("employeeId") ?? "");
+    setFormType("PAID");
+    setFormAmount(q.get("amount") ?? "");
+    setFormDate(q.get("date") ?? "");
+    setFormNote(q.get("note") ?? "");
+    setFromReminder(true);
+    window.history.replaceState(null, "", "/payroll");
+    setTimeout(() => document.getElementById("entry-form")?.scrollIntoView({ behavior: "smooth", block: "center" }), 600);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -211,6 +225,7 @@ export default function PayrollPage() {
         });
         setFormAmount("");
         setFormNote("");
+        setFromReminder(false);
       }
       await load();
     } finally {
@@ -384,8 +399,11 @@ export default function PayrollPage() {
       )}
 
       {!isReadOnly && (
-      <div id="entry-form" className={`mb-6 border p-5 ${editingEntryId ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
+      <div id="entry-form" className={`mb-6 border p-5 ${editingEntryId || fromReminder ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
+        {fromReminder && !editingEntryId && (
+          <p className="-mt-2 mb-3 text-xs text-brass">🔔 Filled from the manager&apos;s salary reminder — check the month and press Save.</p>
+        )}
         <form onSubmit={onSubmitEntry} className={`grid grid-cols-2 gap-3 ${editingEntryId ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>
             <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Employee</label>

@@ -202,7 +202,20 @@ const SHARJAH: AreaRule[] = [
   [/\bdibba[\s\-']*al[\s\-']*hisn\b/i, "DIBBA AL HISN"],
 ];
 
+/** Western Region (Al Dhafra) — far from Abu Dhabi city, not the Abu Dhabi driver's route. */
+export const WESTERN_AREAS = new Set(["RUWAIS", "MADINAT ZAYED", "GHAYATHI", "HABSHAN", "AL SILA", "SALAM CITY", "LIWA", "MIRFA", "JEBEL DHANNA", "DELMA"]);
+export const isWesternArea = (area?: string | null) => !!area && WESTERN_AREAS.has(area.toUpperCase());
+
 const ABUDHABI: AreaRule[] = [
+  [/\bruwais\b|\bruwayes\b|\bruwaiz\b|\bruwes\b/i, "RUWAIS"],
+  [/\bbada'?a?[\s\-']*za[iy]e?d\b|\bbadaa?[\s\-']*zayed\b|\bmadinat[\s\-']*zayed\b|\bmadina[\s\-']*zayed\b|\bmadeenat?[\s\-']*zayed\b|\bzayed[\s\-']*city[\s\-']*west\b/i, "MADINAT ZAYED"],
+  [/\bgh?a[iy]?y?a+th?i\b|\bgh?i[iy]a+th?i\b|\bghayathi\b|\bgayathi\b|\bghiyathi\b/i, "GHAYATHI"],
+  [/\bh[ae]f?b?shan\b|\bhabshan\b|\bhafshan\b|\bhabsan\b/i, "HABSHAN"],
+  [/\bsalam[\s\-']*city\b|\bmadinat[\s\-']*al[\s\-']*salam\b/i, "SALAM CITY"],
+  [/\bal[\s\-']*sila'?a?\b|\bsilaa?\b|\bsila'a\b/i, "AL SILA"],
+  [/\bjebel[\s\-']*dhanna\b|\bjabal[\s\-']*dhanna\b/i, "JEBEL DHANNA"],
+  [/\bliwa\b/i, "LIWA"],
+  [/\bmirfa\b|\bmirfah\b/i, "MIRFA"],
   [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*0?9\b)|(?:\bme\s*-?\s*0?9\b)|\bshabiya[\s\-']*9\b|\bshabhiya[\s\-']*9\b/i, "SHABIYA 9"],
   [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*10\b)|(?:\bme\s*-?\s*10\b)|\bshabiya[\s\-']*10\b|\bshabhiya[\s\-']*10\b/i, "SHABIYA 10"],
   [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*11\b)|(?:\bme\s*-?\s*11\b)|\bshabiya[\s\-']*11\b|\bshabhiya[\s\-']*11\b/i, "SHABIYA 11"],
@@ -247,11 +260,6 @@ const ABUDHABI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?zahiyah?\b|\btourist[\s\-']*club\b|\babu[\s\-']*dhabi[\s\-']*mall\b|\b(?:al[\s\-]*)?maryah\b|\bsowwah\b|\bal[\s\-]*mina[\s\-']*abu[\s\-']*dhabi\b|\bmina[\s\-']*zayed\b|\bport[\s\-']*zayed\b/i, "AL ZAHIYA"],
   [/\bal[\s\-]*reem\b|\breem[\s\-']*island\b|\bshams[\s\-']*abu[\s\-']*dhabi\b|\bcity[\s\-']*of[\s\-']*lights\b|\bnajmat[\s\-']*abu[\s\-']*dhabi\b/i, "REEM ISLAND"],
   [/\bsaadiyat\b|\bsaadiyath\b|\bsaadiyat[\s\-']*island\b/i, "SAADIYAT"],
-  [/\bruwais\b|\bruwayes\b/i, "RUWAIS"],
-  [/\bmadinat[\s\-']*zayed\b|\bmadina[\s\-']*zayed\b|\bmadinat[\s\-']*zayed[\s\-']*west\b|\bzayed[\s\-']*city[\s\-']*west\b/i, "MADINAT ZAYED"],
-  [/\bliwa\b/i, "LIWA"],
-  [/\bmirfa\b/i, "MIRFA"],
-  [/\bghayathi\b/i, "GHAYATHI"],
 ];
 
 const ALAIN: AreaRule[] = [
@@ -509,6 +517,9 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "SHARJAH|INDUSTRIAL AREA",
 ];
 
+const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
+const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHAIMAH", "FUJAIRAH"]);
+
 /** Best-guess area name, or the first part of the address when no known area matches. */
 export function detectArea(address?: string | null, emirate?: string | null): string {
   const text = (address ?? "").replace(/\s+/g, " ").trim();
@@ -519,15 +530,37 @@ export function detectArea(address?: string | null, emirate?: string | null): st
     if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
   }
   const em = (emirate ?? "").toUpperCase();
-  const rules = [...(BY_EMIRATE[em] ?? []), ...Object.entries(BY_EMIRATE).filter(([k]) => k !== em).flatMap(([, r]) => r)];
+  // Known emirate → only that emirate's areas (no "Jumeirah" for an Abu Dhabi parcel).
+  // Unknown emirate → every emirate.
+  const own = BY_EMIRATE[em];
+  // Neighbouring emirates share mistakes ("Muwaileh, Dubai"), so their areas come next —
+  // but the capital region (Abu Dhabi + Al Ain) and the north never mix.
+  const group = own ? (CAPITAL.has(em) ? CAPITAL : NORTH) : null;
+  const rules = own
+    ? [...own, ...Object.entries(BY_EMIRATE).filter(([k]) => k !== em && group!.has(k)).flatMap(([, r]) => r)]
+    : Object.values(BY_EMIRATE).flat();
+  // Shop / bank / building names ("Jumaira jewelry", "Al Rawda building", "Mashreq bank")
+  // name a place, not the area — look at the rest of the address first.
+  const plain = stripNames(text);
+  for (const [re, name] of rules) if (re.test(plain)) return name;
   for (const [re, name] of rules) if (re.test(text)) return name;
   // Small spelling mistakes ("Sabiya", "Qusias", "Muwaileh"→"Muwailah") → closest known area.
-  const near = fuzzyArea(text, em);
+  const near = fuzzyArea(plain, own ? em : "", !!own) ?? (plain !== text ? fuzzyArea(text, own ? em : "", !!own) : undefined);
   if (near) return near;
   // Fallback: first chunk of the address that has letters (e.g. "Villa 12, Al Something" → "AL SOMETHING").
   const parts = text.split(/[,\n\-–]+/).map((p) => p.trim()).filter((p) => /[a-z]{3}/i.test(p));
   const named = parts.find((p) => p.length <= 25 && !/\d/.test(p) && !/\b(villa|flat|apt|apartment|room|building|bldg|tower|floor|street|st|road|near|opp|behind|makani|plot|house|no|office|shop)\b/i.test(p));
   return named ? canonical(named) : "OTHER AREA";
+}
+
+/** Words that turn the name before them into a shop / company / building name. */
+const NAME_WORD =
+  "jewel+e?ry|jewel+ers?|jewel+ery|jewels|gold|bank|exchange|building|bldg|blg|tower|towers|residence|residences|restaurant|resturant|cafeteria|cafe|coffee|supermarket|super\\s*market|hypermarket|hyper\\s*market|grocery|groceries|baqala|trading|llc|l\\.l\\.c|est|establishment|electronics|textiles?|tailoring|tailors?|salon|saloon|pharmacy|clinic|hospital|hotel|motors?|garage|auto|furniture|perfumes?|fashion|boutique|store|stores|shop|company|co|group|services?|contracting|cargo|travels?|school|academy|institute";
+const NAME_RE = new RegExp(`\\b((?:[a-z'’]+[\\s\\-]+){1,3})(?:${NAME_WORD})\\b`, "gi");
+
+/** Drop "X jewellery", "X bank", "X building"… so the name X isn't read as the area. */
+function stripNames(text: string): string {
+  return text.replace(NAME_RE, " ").replace(/\s+/g, " ").trim();
 }
 
 /** Emirate of the first known area named in the text (e.g. "JVT" → DUBAI). */
@@ -635,7 +668,7 @@ function spellings(): Spelling[] {
 const NUMBERED = new Set(DEFAULT_AREA_ROUTE.map((r) => r.split("|")[1]));
 
 /** Closest known area to any 1–3 word piece of the address, allowing small typing mistakes. */
-function fuzzyArea(text: string, emirate: string): string | undefined {
+function fuzzyArea(text: string, emirate: string, strict = false): string | undefined {
   const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   const list = spellings();
   let best: { score: number; area: string; after: string | undefined } | undefined;
@@ -650,6 +683,7 @@ function fuzzyArea(text: string, emirate: string): string | undefined {
       if (key.length < 3) continue;
       const after = tokens[i + len];
       for (const sp of list) {
+        if (strict && (CAPITAL.has(emirate) ? !CAPITAL.has(sp.emirate) : CAPITAL.has(sp.emirate))) continue;
         if (Math.abs(sp.key.length - key.length) > 3) continue;
         const dist = editDist(key, sp.key);
         if (dist > allowed(Math.min(key.length, sp.key.length))) continue;

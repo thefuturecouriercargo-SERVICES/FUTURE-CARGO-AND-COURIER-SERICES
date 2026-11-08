@@ -1,5 +1,6 @@
 "use client";
 
+import { saveBlob } from "@/lib/savePdf";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
@@ -780,12 +781,7 @@ export default function MonthEndReport({ month }: { month: string }) {
           // fall through to a download
         }
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      await saveBlob(blob, name);
     } catch (e) {
       toast("Could not make the PDF", "error", e instanceof Error ? e.message : undefined);
     } finally {

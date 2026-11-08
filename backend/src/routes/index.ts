@@ -29,6 +29,7 @@ import driverProfitRoutes from "./driverProfit.routes";
 import cashHandoverRoutes from "./cashHandover.routes";
 import customerRiskRoutes from "./customerRisk.routes";
 import monthEndRoutes from "./monthEnd.routes";
+import reminderRoutes from "./reminder.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -38,6 +39,7 @@ router.use("/vendors", vendorRoutes);
 router.use("/employees", employeeRoutes);
 router.use("/orders", orderRoutes);
 router.use("/driver", driverRoutes);
+router.use("/reminders", reminderRoutes);
 router.use("/cash-closings", cashClosingRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/reports", reportsRoutes);

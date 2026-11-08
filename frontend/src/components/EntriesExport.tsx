@@ -1,5 +1,6 @@
 "use client";
 
+import { saveBlob, savePdf } from "@/lib/savePdf";
 import { useState } from "react";
 import { fmtNumber, fmtDate } from "@/lib/format";
 
@@ -126,7 +127,7 @@ export default function EntriesExport({
           y = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 6;
         }
       }
-      doc.save(`${fileLabel.toLowerCase().replace(/\s+/g, "-")}-${date}-${label.replace(/\s+/g, "_")}.pdf`);
+      await savePdf(doc, `${fileLabel.toLowerCase().replace(/\s+/g, "-")}-${date}-${label.replace(/\s+/g, "_")}.pdf`);
     } catch (err) {
       alert(`Could not make the PDF: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -194,14 +195,10 @@ export default function EntriesExport({
       }
       if (!onlyType) add("All", list);
       const buf = await wb.xlsx.writeBuffer();
-      const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${fileLabel.toLowerCase().replace(/\s+/g, "-")}-${date}-${label.replace(/\s+/g, "_")}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      await saveBlob(
+        new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        `${fileLabel.toLowerCase().replace(/\s+/g, "-")}-${date}-${label.replace(/\s+/g, "_")}.xlsx`
+      );
     } catch (err) {
       alert(`Could not make the Excel file: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

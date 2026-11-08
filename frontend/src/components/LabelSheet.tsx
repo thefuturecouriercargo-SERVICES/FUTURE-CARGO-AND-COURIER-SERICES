@@ -1,5 +1,6 @@
 "use client";
 
+import { savePdf } from "@/lib/savePdf";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Booking } from "@/types";
@@ -72,7 +73,7 @@ export default function LabelSheet({
         setPdfProgress(`${i + 1} / ${els.length}`);
       }
       const stamp = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Dubai" }).slice(0, 16).replace(/[: ]/g, "-");
-      doc?.save(`labels-${stamp}-${els.length}.pdf`);
+      if (doc) await savePdf(doc, `labels-${stamp}-${els.length}.pdf`);
       onPrinted?.(bookings.map((b) => b.id));
     } catch (err) {
       alert(`Could not make the PDF: ${err instanceof Error ? err.message : String(err)}`);

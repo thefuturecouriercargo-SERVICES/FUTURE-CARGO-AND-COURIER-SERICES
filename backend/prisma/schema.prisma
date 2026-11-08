@@ -610,3 +610,25 @@ model PushSubscription {
   @@index([userId])
   @@map("push_subscriptions")
 }
+
+// Manager → admin expense reminder (Dashboard "Remind" button). The admin's bell
+// shakes until each one is confirmed: a normal expense is then saved on the
+// manager's date; a SALARY reminder opens Payroll for the admin to enter it.
+model ExpenseReminder {
+  id            String          @id @default(cuid())
+  date          DateTime        @db.Date
+  category      ExpenseCategory
+  amount        Int
+  note          String?
+  employeeId    String?
+  employeeName  String?
+  createdById   String
+  createdByName String
+  status        String          @default("PENDING") // PENDING | CONFIRMED | DISMISSED
+  confirmedAt   DateTime?
+  expenseId     String?
+  createdAt     DateTime        @default(now())
+
+  @@index([status])
+  @@map("expense_reminders")
+}

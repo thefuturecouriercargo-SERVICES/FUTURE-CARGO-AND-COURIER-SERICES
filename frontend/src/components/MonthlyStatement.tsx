@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, cashStatementUrl } from "@/lib/api";
-import { fmtNumber } from "@/lib/format";
+import { fmtDate, fmtNumber } from "@/lib/format";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 interface StatementMonth {
@@ -30,6 +30,8 @@ const monthLong = (m: string) => {
   const [y, mm] = m.split("-").map(Number);
   return new Date(Date.UTC(y, mm - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 };
+interface ExpenseRow { id: string; date: string; amount: number; remarks: string | null; employeeName: string | null; source: string }
+
 const signed = (n: number) => (n < 0 ? `−${fmtNumber(Math.abs(n))}` : fmtNumber(n));
 
 /**
@@ -41,6 +43,28 @@ const signed = (n: number) => (n < 0 ? `−${fmtNumber(Math.abs(n))}` : fmtNumbe
 export default function MonthlyStatement() {
   const [data, setData] = useState<StatementData | null>(null);
   const [selected, setSelected] = useState<string>("");
+  const [openCat, setOpenCat] = useState<string | null>(null);
+  const [rows, setRows] = useState<ExpenseRow[] | null>(null);
+
+  // Click an expense line → its individual entries for that month.
+  async function toggleCat(month: string, category: string) {
+    if (openCat === category) {
+      setOpenCat(null);
+      return;
+    }
+    setOpenCat(category);
+    setRows(null);
+    const [y, mm] = month.split("-").map(Number);
+    const from = `${month}-01`;
+    const to = new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10);
+    try {
+      const r = await apiFetch<{ expenses: ExpenseRow[] }>("/reports/pnl/expenses", { query: { from, to, category } });
+      setRows(r.expenses);
+    } catch {
+      setRows([]);
+    }
+  }
+  useEffect(() => setOpenCat(null), [selected]);
 
   const load = useCallback(async () => {
     const d = await apiFetch<StatementData>("/cash-in-hand/statement");
@@ -125,7 +149,47 @@ export default function MonthlyStatement() {
         {m.expenseCategories.length === 0 ? (
           <Line label="No expenses recorded" value="0" indent tone="soft" />
         ) : (
-          m.expenseCategories.map((c) => <Line key={c.category} label={c.category} value={fmtNumber(c.amount)} indent tone="soft" />)
+          m.expenseCategories.map((c) => (
+            <div key={c.category}>
+              <button
+                type="button"
+                onClick={() => toggleCat(m.month, c.category)}
+                aria-expanded={openCat === c.category}
+                className={`flex w-full items-baseline justify-between gap-3 border-b border-line py-2.5 pl-9 pr-4 text-left text-[13px] hover:bg-paper-2 ${openCat === c.category ? "bg-brass/5" : ""}`}
+              >
+                <span className="text-ink-soft">
+                  <span className="mr-1.5 inline-block w-3 text-brass">{openCat === c.category ? "▾" : "▸"}</span>
+                  {c.category.replace(/_/g, " ")}
+                </span>
+                <span className="font-mono text-ink-soft">{fmtNumber(c.amount)}</span>
+              </button>
+              {openCat === c.category && (
+                <div className="border-b border-line bg-paper-2 px-4 py-2 pl-12">
+                  {rows === null ? (
+                    <div className="space-y-2 py-1" role="status" aria-label="Loading">
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-3 w-1/3" />
+                    </div>
+                  ) : rows.length === 0 ? (
+                    <p className="py-1 text-xs text-ink-soft">No individual entries found.</p>
+                  ) : (
+                    <table className="w-full text-[12.5px]">
+                      <tbody>
+                        {rows.map((d) => (
+                          <tr key={d.id} className="border-b border-line/60 last:border-0">
+                            <td className="whitespace-nowrap py-1.5 pr-3 text-ink-soft">{fmtDate(d.date)}</td>
+                            <td className="py-1.5 pr-3">{d.employeeName ?? "—"}</td>
+                            <td className="py-1.5 pr-3 text-ink-soft">{d.remarks ?? ""}</td>
+                            <td className="whitespace-nowrap py-1.5 text-right font-mono">{fmtNumber(d.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
         )}
         <Line label="Gross profit" value={signed(m.profit)} strong />
         <Line

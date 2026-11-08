@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { ApiError } from "../utils/asyncHandler";
 import { dayRange } from "../utils/dates";
+import { chargeFor } from "../lib/deliveryCharge";
 
 /**
  * System-generated CNs live in their own range so they can never clash with
@@ -308,7 +309,7 @@ export async function acceptBooking(
         cnNo,
         vendorId: booking.vendorId,
         brandName: booking.vendor.name,
-        deliveryCharge: booking.vendor.deliveryCharge,
+        deliveryCharge: chargeFor(booking.vendor, opts.emirate || booking.emirate, booking.address),
         total: booking.codAmount,
         payment: "CASH",
         emirate: (opts.emirate || booking.emirate).toUpperCase(),

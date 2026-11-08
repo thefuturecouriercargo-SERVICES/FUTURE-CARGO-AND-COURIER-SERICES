@@ -4,10 +4,30 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import { detectArea } from "@/lib/areas";
+import type { Order } from "@/types";
 
 interface RacePin { code: string; name: string; rank: number; pos: number; me: boolean }
 interface RaceMe { rank: number; delivered: number; total: number; ahead: { name: string; need: number } | null; behind: { name: string; gap: number } | null }
 interface RaceData { me: RaceMe | null; drivers: RacePin[]; yesterdayWinner: { name: string; code: string } | null }
+interface RaceStats {
+  month: string;
+  monthDelivered: number;
+  target: number;
+  left: number;
+  extra: number;
+  bonusPer: number;
+  bonus: number;
+  daysLeft: number;
+  salary: { month: string; earned: number; received: number; pending: number; hasSalary: boolean };
+  nextPrayer: { name: string; at: string };
+}
+interface Today { inHand: number; untouched: string[] }
+
+const MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const monName = (ym: string) => MON[Number(ym.slice(5, 7)) - 1] ?? ym;
+const PRAYER: Record<string, string> = { fajr: "FAJR", dhuhr: "DHUHR", asr: "ASR", maghrib: "MAGHRIB", isha: "ISHA" };
+const aed = (n: number) => `AED ${n.toLocaleString("en-US")}`;
 
 const COLORS = ["#4FD1C5", "#F2836B", "#E2B453", "#A78BFA", "#60A5FA", "#F472B6", "#34D399", "#FB923C"];
 const FIXED: Record<string, string> = { AN: "#4FD1C5", MS: "#F2836B", NS: "#E2B453", ND: "#A78BFA", SV: "#60A5FA", FS: "#F472B6" };
@@ -21,8 +41,33 @@ function colorOf(code: string) {
 const SAFE = ["Every delivery moves you forward", "Safe ride first — the race is long", "Bismillah, keep going", "One good hour can change everything"];
 
 /** Comments that fit the driver's situation right now (shown in rotation). */
-function ambient(me: RaceMe, now: Date): string[] {
+function ambient(me: RaceMe, now: Date, st: RaceStats | null, today: Today | null): string[] {
   const out: string[] = [];
+  // Next round number today: 28 → "2 more to hit 30".
+  const nextTen = Math.ceil((me.delivered + 1) / 10) * 10;
+  if (me.delivered > 0 && nextTen - me.delivered <= 3) out.push(`Just ${nextTen - me.delivered} more to hit ${nextTen} today! 🔥`);
+  if (st) {
+    out.push(`${monName(st.month)}: ${st.monthDelivered} delivered so far`);
+    if (st.left > 0) {
+      const perDay = Math.ceil(st.left / Math.max(1, st.daysLeft));
+      out.push(`${st.left} more to hit the ${st.target} target · ~${perDay} a day`);
+    } else {
+      out.push(`Target ${st.target} done! +${st.extra} extra = ${aed(st.bonus)} bonus 💰`);
+      out.push(`Every extra delivery = AED ${st.bonusPer} more`);
+    }
+    if (st.salary.hasSalary) {
+      const m = monName(st.salary.month);
+      out.push(st.salary.pending > 0 ? `${m} salary: ${aed(st.salary.received)} received · ${aed(st.salary.pending)} to come` : `${m} salary fully received ✅`);
+    }
+    const mins = Math.round((new Date(st.nextPrayer.at).getTime() - now.getTime()) / 60000);
+    const pn = PRAYER[st.nextPrayer.name] ?? st.nextPrayer.name.toUpperCase();
+    if (mins >= 0 && mins <= 25) out.push(`${pn} in ${mins} min — don't miss your namaz 🕌`);
+    else if (mins > 25 && mins <= 90) out.push(`Next namaz: ${pn} in ${Math.floor(mins / 60) ? `${Math.floor(mins / 60)}h ` : ""}${mins % 60}m`);
+  }
+  if (today) {
+    if (today.untouched.length) out.push(`Not started yet: ${today.untouched.slice(0, 3).join(", ")}${today.untouched.length > 3 ? ` +${today.untouched.length - 3}` : ""}`);
+    if (today.inHand > 0) out.push(`${today.inHand} parcel${today.inHand === 1 ? "" : "s"} still in hand`);
+  }
   const minsLeft = 24 * 60 - (now.getHours() * 60 + now.getMinutes());
   if (me.delivered === 0) out.push("Your first delivery puts you on the board");
   if (me.ahead) {
@@ -48,6 +93,8 @@ export default function DriverRace() {
   const [event, setEvent] = useState<{ text: string; tone: "good" | "bad" | "info" } | null>(null);
   const [tickN, setTickN] = useState(0);
   const [open, setOpen] = useState(false);
+  const [stats, setStats] = useState<RaceStats | null>(null);
+  const [today, setToday] = useState<Today | null>(null);
   const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const prevRanks = useRef<Map<string, number>>(new Map());
@@ -92,6 +139,22 @@ export default function DriverRace() {
       }
       prevRanks.current = new Map(d.drivers.map((p) => [p.code, p.rank]));
       setData(d);
+      apiFetch<RaceStats>("/driver/race-stats").then(setStats).catch(() => {});
+      apiFetch<{ orders: Order[] }>("/driver/orders")
+        .then(({ orders }) => {
+          // Areas with parcels in hand where nothing has been delivered yet today.
+          const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
+          const open = new Map<string, number>();
+          const done = new Set<string>();
+          for (const o of orders) {
+            const a = areaOf(o);
+            if (o.status === "PENDING" || o.status === "TRANSFER") open.set(a, (open.get(a) ?? 0) + 1);
+            else if (o.status === "DELIVERED") done.add(a);
+          }
+          const untouched = [...open.entries()].filter(([a]) => !done.has(a) && a !== "OTHER AREA" && a !== "NO ADDRESS").sort((x, y) => y[1] - x[1]).map(([a]) => a);
+          setToday({ inHand: [...open.values()].reduce((x, y) => x + y, 0), untouched });
+        })
+        .catch(() => {});
       if (gained.size) {
         setFlash(gained);
         setTimeout(() => setFlash(new Set()), 1000);
@@ -153,11 +216,10 @@ export default function DriverRace() {
   const pool = noOneYet && data.yesterdayWinner
     ? [`Yesterday's winner: ${data.yesterdayWinner.name} 🏆`, "New race — first delivery takes the lead"]
     : data.me
-      ? ambient(data.me, new Date())
+      ? ambient(data.me, new Date(), stats, today)
       : [];
   const line = event?.text ?? pool[tickN % Math.max(1, pool.length)] ?? "";
 
-  const ordered2 = [...data.drivers].sort((a, b) => a.rank - b.rank);
   const pinStyle = (p: RacePin) => ({
     background: colorOf(p.code),
     boxShadow: flash.has(p.code) ? "0 0 0 4px #4ADE80" : p.me ? "0 0 0 2px #F3D58E" : undefined,
@@ -169,7 +231,7 @@ export default function DriverRace() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open today's race"
+        aria-label="Open my month"
         className="block w-full rounded-2xl bg-navy p-3 text-left text-paper shadow-md active:scale-[0.99]"
       >
         <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">
@@ -215,37 +277,86 @@ export default function DriverRace() {
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={() => setOpen(false)}>
           <div
             role="dialog"
-            aria-label="Today's race"
+            aria-label="My month"
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0A1226] p-4 text-[#E9ECF5] shadow-2xl"
             style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}
           >
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <div className="font-display text-lg font-bold">Today&apos;s race</div>
-                <div className="font-mono text-[10.5px] uppercase tracking-wide text-[#B7C0DA]">12 midnight to 12 midnight</div>
+                <div className="font-display text-lg font-bold">My month</div>
+                <div className="font-mono text-[10.5px] uppercase tracking-wide text-[#B7C0DA]">{stats ? `${monName(stats.month)} · ${stats.daysLeft} days left` : "Loading…"}</div>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg" aria-label="Close">×</button>
             </div>
-            <div className="space-y-2.5">
-              {ordered2.map((p) => (
-                <div key={p.code} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${p.me ? "bg-[#2A2410]" : "bg-white/[0.04]"}`}>
-                  <span className="w-6 text-center font-display text-base font-extrabold text-[#B7C0DA]">{p.rank}</span>
-                  <span className="w-[68px] truncate text-[13px] font-bold">{p.me ? "You" : p.name}</span>
-                  <div className="relative mx-[13px] h-[3px] flex-1 rounded bg-white/15">
-                    <span
-                      className="absolute top-1/2 grid h-[26px] w-[26px] place-items-center rounded-full text-[10px] font-extrabold text-[#0A1226]"
-                      style={{ left: `${p.pos * 100}%`, transform: "translate(-50%, -50%)", transition: "left 1s cubic-bezier(.3,.7,.3,1)", ...pinStyle(p) }}
-                    >
-                      {p.code}
-                    </span>
+            {stats ? (
+              <div className="space-y-3">
+                {/* Target */}
+                <section className="rounded-xl bg-white/[0.05] p-3">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#B7C0DA]">Target {stats.target}</span>
+                    <span className="font-display text-2xl font-extrabold text-[#F3D58E]">{stats.monthDelivered}</span>
                   </div>
-                  <span className="h-4 w-1.5 shrink-0 rounded-sm" style={{ background: "repeating-linear-gradient(#fff 0 4px,#222 4px 8px)" }} aria-hidden="true" />
+                  <Bar parts={[{ v: Math.min(stats.monthDelivered, stats.target), c: "#4ADE80" }, { v: stats.left, c: "rgba(255,255,255,.12)" }]} />
+                  {stats.extra > 0 && <Bar parts={[{ v: stats.extra, c: "#F3D58E" }, { v: Math.max(0, stats.target / 5 - stats.extra), c: "rgba(255,255,255,.08)" }]} thin />}
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <Tile label="Delivered" value={String(stats.monthDelivered)} />
+                    {stats.left > 0 ? <Tile label="To target" value={String(stats.left)} tone="#FF8A8A" /> : <Tile label="Extra" value={`+${stats.extra}`} tone="#F3D58E" />}
+                    {stats.left > 0 ? (
+                      <Tile label="Per day" value={String(Math.ceil(stats.left / Math.max(1, stats.daysLeft)))} />
+                    ) : (
+                      <Tile label="Bonus" value={aed(stats.bonus)} tone="#4ADE80" />
+                    )}
+                  </div>
+                  <div className="mt-1.5 text-center font-mono text-[10px] uppercase text-[#B7C0DA]">Every delivery after {stats.target} = AED {stats.bonusPer} bonus</div>
+                </section>
+
+                {/* Previous month salary */}
+                {stats.salary.hasSalary && (
+                  <section className="rounded-xl bg-white/[0.05] p-3">
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#B7C0DA]">{monName(stats.salary.month)} salary</span>
+                      <span className="font-mono text-sm font-bold">{aed(stats.salary.earned)}</span>
+                    </div>
+                    <Bar parts={[{ v: stats.salary.received, c: "#4ADE80" }, { v: stats.salary.pending, c: "#FF8A8A" }]} />
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+                      <Tile label="Received" value={aed(stats.salary.received)} tone="#4ADE80" />
+                      <Tile label="To receive" value={aed(stats.salary.pending)} tone={stats.salary.pending ? "#FF8A8A" : undefined} />
+                    </div>
+                  </section>
+                )}
+
+                {/* Today */}
+                {data.me && (
+                  <section className="rounded-xl bg-white/[0.05] p-3">
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#B7C0DA]">Today</span>
+                      <span className="font-mono text-[11px] font-bold text-[#F3D58E]">
+                        {data.me.delivered} / next {Math.ceil((data.me.delivered + 1) / 10) * 10}
+                      </span>
+                    </div>
+                    <Bar parts={[{ v: data.me.delivered % 10 || (data.me.delivered ? 10 : 0), c: "#60A5FA" }, { v: 10 - (data.me.delivered % 10 || (data.me.delivered ? 10 : 0)), c: "rgba(255,255,255,.12)" }]} />
+                    {today && today.untouched.length > 0 && (
+                      <div className="mt-2">
+                        <div className="font-mono text-[10px] uppercase text-[#B7C0DA]">Not started yet</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {today.untouched.map((a) => (
+                            <span key={a} className="rounded-md bg-[#FF8A8A]/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#FF8A8A]">{a}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                <div className="rounded-lg bg-[#1E3A2A] px-3 py-2 text-center font-mono text-[11px] font-bold uppercase tracking-wide text-[#4ADE80]">
+                  🕌 Next namaz: {PRAYER[stats.nextPrayer.name] ?? stats.nextPrayer.name} ·{" "}
+                  {new Date(stats.nextPrayer.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" })}
                 </div>
-              ))}
-            </div>
-            <div className={`mt-3 rounded-lg bg-white/[0.06] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>
-            <div className="mt-2 text-center font-mono text-[10.5px] text-[#B7C0DA]">Ties: whoever reached the count first stays ahead</div>
+              </div>
+            ) : (
+              <div className="py-8 text-center font-mono text-xs text-[#B7C0DA]">Loading…</div>
+            )}
           </div>
         </div>
       )}
@@ -260,6 +371,29 @@ export default function DriverRace() {
 @keyframes raceArrow{0%,100%{opacity:.25}40%{opacity:1}}
 .race-live{animation:raceLive 1.2s infinite}@keyframes raceLive{50%{opacity:.2}}
 @media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-bob,.race-trail,.race-live,.race-arrow i{animation:none}}`}</style>
+    </div>
+  );
+}
+
+/** Horizontal stacked bar. */
+function Bar({ parts, thin }: { parts: { v: number; c: string }[]; thin?: boolean }) {
+  const total = parts.reduce((a, p) => a + Math.max(0, p.v), 0) || 1;
+  return (
+    <div className={`mt-2 flex w-full overflow-hidden rounded-full bg-white/10 ${thin ? "h-1.5" : "h-3"}`}>
+      {parts.map((p, i) => (
+        <span key={i} style={{ width: `${(Math.max(0, p.v) / total) * 100}%`, background: p.c, transition: "width .8s ease" }} />
+      ))}
+    </div>
+  );
+}
+
+function Tile({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-lg bg-black/25 px-1.5 py-1.5">
+      <div className="font-mono text-[9px] uppercase tracking-wide text-[#B7C0DA]">{label}</div>
+      <div className="font-display text-[15px] font-extrabold" style={tone ? { color: tone } : undefined}>
+        {value}
+      </div>
     </div>
   );
 }

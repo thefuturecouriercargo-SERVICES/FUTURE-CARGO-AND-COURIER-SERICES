@@ -1,5 +1,6 @@
 "use client";
 
+import { saveBlob, savePdf } from "@/lib/savePdf";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, todayStr, fmtDate, fmtDateLong } from "@/lib/format";
@@ -169,7 +170,7 @@ async function makeScanPdf(shown: ScanRow[], o: ExportOpts) {
         doc.text(`Page ${page}`, 285, 205, { align: "right" });
       },
     });
-    doc.save(`scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.pdf`);
+    await savePdf(doc, `scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.pdf`);
 }
 
 async function makeScanExcel(shown: ScanRow[], o: ExportOpts) {
@@ -256,14 +257,10 @@ async function makeScanExcel(shown: ScanRow[], o: ExportOpts) {
     if (o.filterText) ds.addRow([]).getCell(1).value = `Filters: ${o.filterText}`;
 
     const buf = await wb.xlsx.writeBuffer();
-    const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    await saveBlob(
+      new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      `scan-report-${o.day}${o.fileTag ? `-${o.fileTag.replace(/\s+/g, "_")}` : ""}.xlsx`
+    );
 }
 
 /** view "drivers" shows only the per-driver summary; "list" (default) shows everything. inTab drops the top margin. */

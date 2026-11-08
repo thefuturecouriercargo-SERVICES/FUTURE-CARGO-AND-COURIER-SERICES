@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/context/AuthContext";
 import RegisterSW from "@/components/RegisterSW";
 import AppRefresh from "@/components/AppRefresh";
+import IOSDownloadFix from "@/components/IOSDownloadFix";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <RegisterSW />
         <AppRefresh />
+        <IOSDownloadFix />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

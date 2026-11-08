@@ -8,6 +8,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { dayRange, monthRange } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
+import { chargeFor } from "../lib/deliveryCharge";
 
 const router = Router();
 router.use(authenticate, requireRole("SUPER_ADMIN", "MANAGER"));
@@ -252,7 +253,7 @@ router.get(
       seenCn.add(cn);
       const sc = b.order ? scanInfo.get(b.order.id) : undefined;
       const type = !b.order ? "AWAITING" : sc ? "SCANNED" : "MANUAL";
-      add(b.vendorId, b.vendor.name, type, b.order?.total ?? b.codAmount, b.order?.deliveryCharge ?? b.vendor.deliveryCharge, {
+      add(b.vendorId, b.vendor.name, type, b.order?.total ?? b.codAmount, b.order?.deliveryCharge ?? chargeFor(b.vendor, b.emirate, b.address), {
         at: sc?.at ?? b.createdAt,
         scan: sc,
         cnNo: cn,

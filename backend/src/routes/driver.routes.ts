@@ -336,4 +336,51 @@ router.get(
   })
 );
 
+// Personal race box numbers — only the driver's own figures, never anyone else's.
+const MONTH_TARGET = 700;
+const EXTRA_BONUS = 5;
+router.get(
+  "/race-stats",
+  asyncHandler(async (req, res) => {
+    const me = req.user!.sub;
+    const H4 = 4 * 60 * 60 * 1000;
+    const { start, end, year, month } = monthRange();
+    const from = new Date(start.getTime() - H4);
+    const to = new Date(end.getTime() + 24 * 60 * 60 * 1000 - H4);
+    const prevMonth = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+    const daysInMonth = end.getUTCDate();
+    const dayOfMonth = new Date(Date.now() + H4).getUTCDate();
+
+    const [monthDelivered, user, payrollRow, entries, emirateInfo] = await Promise.all([
+      prisma.order.count({ where: { employeeId: me, status: "DELIVERED", resolvedAt: { gte: from, lt: to } } }),
+      prisma.user.findUnique({ where: { id: me }, select: { baseSalary: true } }),
+      prisma.payroll.findUnique({ where: { month_employeeId: { month: prevMonth, employeeId: me } } }),
+      prisma.payrollEntry.findMany({ where: { month: prevMonth, employeeId: me }, select: { type: true, amount: true } }),
+      driverEmirate(me).catch(() => ({ emirate: "DUBAI" })),
+    ]);
+    const base = (await salariesForMonth(prevMonth, [me]))[me] ?? user?.baseSalary ?? 0;
+    const sum = (t: string) => entries.filter((e) => e.type === t).reduce((a, e) => a + e.amount, 0);
+    const earned = Math.round((base / 30) * (payrollRow?.workingDays ?? 30)) + sum("BONUS") - sum("SHORT");
+    const received = sum("PAID");
+
+    // Next prayer for the emirate where the driver works most today.
+    const pt = prayerTimesFor(emirateInfo.emirate);
+    const now = Date.now();
+    const next = pt.prayers.find((p) => new Date(p.at).getTime() > now) ?? { name: "fajr", at: pt.nextFajr };
+
+    res.json({
+      month: `${year}-${String(month).padStart(2, "0")}`,
+      monthDelivered,
+      target: MONTH_TARGET,
+      left: Math.max(0, MONTH_TARGET - monthDelivered),
+      extra: Math.max(0, monthDelivered - MONTH_TARGET),
+      bonusPer: EXTRA_BONUS,
+      bonus: Math.max(0, monthDelivered - MONTH_TARGET) * EXTRA_BONUS,
+      daysLeft: Math.max(0, daysInMonth - dayOfMonth + 1),
+      salary: { month: prevMonth, earned: Math.max(0, earned), received, pending: Math.max(0, earned - received), hasSalary: base > 0 },
+      nextPrayer: { name: next.name, at: next.at },
+    });
+  })
+);
+
 export default router;

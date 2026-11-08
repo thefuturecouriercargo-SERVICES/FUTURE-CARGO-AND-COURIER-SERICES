@@ -67,6 +67,7 @@ import { Order, OrderStatus, Summary, Vendor } from "@/types";
 import { DashboardSkeleton, PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import ShareReportButton from "@/components/ShareReportButton";
+import ManagerReminder from "@/components/ManagerReminder";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 interface DailyResponse {
   date: string;
@@ -307,8 +308,9 @@ return (
             Next →
           </button>
           {!headerSlot && todayButton}
+          {!headerSlot && <ManagerReminder />}
           {!headerSlot && shareButton}
-          {headerSlot && createPortal(<>{todayButton}{shareButton}</>, headerSlot)}
+          {headerSlot && createPortal(<>{todayButton}<ManagerReminder compact />{shareButton}</>, headerSlot)}
         </div>
         <div className="flex flex-wrap items-center gap-2 md:justify-self-end">
   <label className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">

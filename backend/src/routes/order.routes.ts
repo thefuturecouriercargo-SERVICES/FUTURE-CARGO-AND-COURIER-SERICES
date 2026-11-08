@@ -8,6 +8,7 @@ import { dayRange, monthRange, parseDateParam, displayDate } from "../utils/date
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal, emitToUser } from "../lib/socket";
 import { lockOrderCreation } from "../services/booking.service";
+import { chargeFor } from "../lib/deliveryCharge";
 import { updateOrderContact, withContact } from "../lib/orderContact";
 
 const router = Router();
@@ -204,7 +205,7 @@ const order = await prisma.$transaction(async (tx) => {
           cnNo: data.cnNo,
           vendorId: vendor.id,
           brandName: vendor.name,
-          deliveryCharge: vendor.deliveryCharge,
+          deliveryCharge: chargeFor(vendor, data.emirate, data.remarks),
           total: data.total,
           payment: data.payment,
           emirate: data.emirate.toUpperCase(),
@@ -249,7 +250,13 @@ router.put(
     if (data.vendorId) {
       const vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
       if (!vendor) throw new ApiError(404, "Vendor not found");
-     vendorFields = { vendorId: vendor.id, brandName: vendor.name, deliveryCharge: vendor.deliveryCharge };
+     vendorFields = { vendorId: vendor.id, brandName: vendor.name };
+}
+// Charge follows the vendor and the area (outside areas have their own rate).
+if (data.vendorId || (data.emirate && data.emirate.toUpperCase() !== existing.emirate)) {
+  const v = data.vendorId ? await prisma.vendor.findUnique({ where: { id: data.vendorId } }) : await prisma.vendor.findUnique({ where: { id: existing.vendorId } });
+  const bk = await prisma.booking.findFirst({ where: { orderId: existing.id }, select: { address: true } });
+  if (v) vendorFields.deliveryCharge = chargeFor(v, data.emirate ?? existing.emirate, bk?.address ?? existing.custAddress ?? existing.remarks);
 }
 
 if (data.cnNo !== undefined && data.cnNo !== existing.cnNo) {
@@ -348,6 +355,17 @@ router.patch(
         where: { id: { in: data.ids } },
         data: updateData,
       });
+    }
+
+    // A new emirate can move parcels in/out of outside areas → refresh their charge.
+    if (data.emirate) {
+      const rows = await prisma.order.findMany({ where: { id: { in: data.ids } }, include: { vendor: true } });
+      const bks = await prisma.booking.findMany({ where: { orderId: { in: data.ids } }, select: { orderId: true, address: true } });
+      const addr = new Map(bks.map((b) => [b.orderId, b.address]));
+      for (const o of rows) {
+        const c = chargeFor(o.vendor, o.emirate, addr.get(o.id) ?? o.custAddress ?? o.remarks);
+        if (c !== o.deliveryCharge) await prisma.order.update({ where: { id: o.id }, data: { deliveryCharge: c } });
+      }
     }
 
     await writeAuditLog({
