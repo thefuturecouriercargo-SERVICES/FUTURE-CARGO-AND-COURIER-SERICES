@@ -129,15 +129,13 @@ function analyse(sorted: (AdminRaceRow & { code: string; f: string })[], live: b
   return { insights, ticker };
 }
 
-/** Admin's live race: every driver on one track, with counts and running insights.
+/** Rotating comment box for admin, under the Employee-wise heading: live overtakes,
+ * new deliveries and cancels, plus insights (lead, watch, pace, clear rate and more).
  * Uses the same rows as the Employee-wise table, so it updates with the dashboard. */
 export default function AdminRace({ rows, live }: Props) {
-  const [width, setWidth] = useState(0);
   const [tick, setTick] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [event, setEvent] = useState<{ text: string; tone: Tone } | null>(null);
-  const [flash, setFlash] = useState<Set<string>>(new Set());
-  const trackRef = useRef<HTMLDivElement>(null);
   const prev = useRef<Map<string, { rank: number; delivered: number; cancelled: number }> | null>(null);
   const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -153,12 +151,12 @@ export default function AdminRace({ rows, live }: Props) {
     prev.current = nowMap;
     if (!was || !live) return;
     let ev: { text: string; tone: Tone } | null = null;
-    const bumped = new Set<string>();
+    const bumped: string[] = [];
     for (const r of sorted) {
       const o = was.get(r.id);
       if (!o) continue;
       const n = nowMap.get(r.id)!;
-      if (r.delivered > o.delivered) bumped.add(r.code);
+      if (r.delivered > o.delivered) bumped.push(r.id);
       if (!ev && n.rank < o.rank) {
         const passed = sorted.filter((x) => x.id !== r.id && (was.get(x.id)?.rank ?? 99) < o.rank && nowMap.get(x.id)!.rank > n.rank).map((x) => x.f);
         ev = { tone: "good", text: n.rank === 1 ? `${r.f} TAKES THE LEAD${passed.length ? ` FROM ${passed.join(" & ")}` : ""} 👑` : `${r.f} OVERTOOK ${passed.join(" & ") || "A DRIVER"} → NOW P${n.rank}` };
@@ -168,14 +166,10 @@ export default function AdminRace({ rows, live }: Props) {
       const c = sorted.find((r) => r.cancelled > (was.get(r.id)?.cancelled ?? r.cancelled));
       if (c) ev = { tone: "bad", text: `NEW CANCEL · ${c.f} (${c.cancelled} TODAY)` };
     }
-    if (!ev && bumped.size) {
-      const r = sorted.find((x) => bumped.has(x.code))!;
+    if (!ev && bumped.length) {
+      const r = sorted.find((x) => x.id === bumped[0])!;
       const add = r.delivered - (was.get(r.id)?.delivered ?? r.delivered);
       ev = { tone: "info", text: `+${add} ${r.f} · NOW ${r.delivered} DELIVERED (P${nowMap.get(r.id)!.rank})` };
-    }
-    if (bumped.size) {
-      setFlash(bumped);
-      setTimeout(() => setFlash(new Set()), 1200);
     }
     if (ev) {
       setEvent(ev);
@@ -193,133 +187,26 @@ export default function AdminRace({ rows, live }: Props) {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
-    ro.observe(el);
-    setWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, [rows.length > 0]);
-
   if (!rows.length) return null;
 
   const { insights, ticker: extra } = analyse(sorted, live, now);
-  // One comment box: the key insights first, then everything else, in rotation.
+  // The key insights first, then everything else, in rotation.
   const ticker = [...insights.map((i) => ({ text: `${i.label}: ${i.text}`, tone: i.tone })), ...extra];
   const line = event ?? ticker[tick % Math.max(1, ticker.length)];
-
-  // Place pins: ties share one spot (stacked), separate spots never overlap.
-  const PIN = 30;
-  const lead = Math.max(1, sorted[0].delivered);
-  const groups: (typeof sorted)[] = [];
-  for (const r of sorted) {
-    const g = groups[groups.length - 1];
-    if (g && g[0].delivered === r.delivered) g.push(r);
-    else groups.push([r]);
-  }
-  const step = Math.min(PIN + 10, width / Math.max(1, groups.length - 1));
-  const xs = groups.map((g) => (g[0].delivered / lead) * 0.96 * width);
-  for (let k = 1; k < xs.length; k++) xs[k] = Math.min(xs[k], xs[k - 1] - step);
-  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], 10);
-  for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step);
+  if (!line) return null;
 
   return (
-    <div className="arace mb-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A1226] p-3 text-[#E9ECF5]">
-      {/* Road: faint direction arrows, gold finish strip */}
-      <div className="flex h-[84px] items-center gap-2.5 rounded-lg bg-black/25 pl-[30px] pr-3">
-        <div ref={trackRef} className="relative h-4 min-w-0 flex-1">
-          <div className="absolute inset-0 flex items-center justify-around font-mono text-[14px] text-white/[0.14]" aria-hidden>
-            {Array.from({ length: 14 }, (_, i) => (
-              <span key={i} className="arace-arrow" style={{ animationDelay: `${(i * 0.11).toFixed(2)}s` }}>›</span>
-            ))}
-          </div>
-          {width > 0 &&
-            groups.flatMap((g, k) => {
-              const x = Math.min(xs[k], width);
-              return g.map((r, j) => {
-                const top = j === 0;
-                const under = j;
-                const leader = k === 0 && r.delivered > 0;
-                const delay = `${((k * 0.37 + j * 0.2) % 1.6).toFixed(2)}s`;
-                return (
-                  <span
-                    key={r.id}
-                    className="absolute top-1/2"
-                    style={{
-                      left: x,
-                      transition: "left 1.2s cubic-bezier(.3,.7,.3,1)",
-                      zIndex: top ? 20 : 10 - under,
-                      transform: `translate(calc(-50% - ${under * 4}px), calc(-26px + ${under * 2}px))`,
-                    }}
-                    title={`${r.name}: ${r.delivered} delivered · ${r.pending} pending`}
-                  >
-                    <span className="arace-push relative block" style={{ animationDelay: delay }}>
-                      {top && (
-                        <>
-                          <span className="arace-puff" style={{ animationDelay: delay }} />
-                          <span className="arace-puff" style={{ animationDelay: `calc(${delay} + .5s)` }} />
-                        </>
-                      )}
-                      {top && (
-                        <span className="block whitespace-nowrap text-center font-mono text-[9.5px] font-bold leading-[12px] tracking-wider text-white/55">{r.code}</span>
-                      )}
-                      <span
-                        className="block"
-                        style={{
-                          color: flash.has(r.code) ? "#4ADE80" : leader ? "#F3D58E" : "#F4F6FB",
-                          opacity: top ? 1 : 0.45,
-                          transition: "color .4s",
-                        }}
-                      >
-                        <TruckIcon />
-                      </span>
-                      {top && (
-                        <span className="block whitespace-nowrap text-center font-mono text-[12.5px] font-bold leading-[14px] tabular-nums" style={{ color: leader ? "#F3D58E" : "#F4F6FB" }}>
-                          {r.delivered}
-                          {g.length > 1 ? <span className="text-[9.5px] text-white/50"> ×{g.length}</span> : null}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                );
-              });
-            })}
-        </div>
-        <div className="h-10 w-1 shrink-0 rounded-sm bg-[#F3D58E]/80" aria-hidden />
+    <div className="mb-3">
+      <div
+        key={line.text}
+        className="arace-comment truncate border-l-[3px] px-3 py-2 font-mono text-[10.5px] font-bold uppercase tracking-wide"
+        style={{ color: TONE[line.tone], borderColor: TONE[line.tone], background: `${TONE[line.tone]}14` }}
+        title={line.text}
+      >
+        {line.text}
       </div>
-
-      {/* One comment box — side line colour follows the comment */}
-      {line && (
-        <div
-          key={line.text}
-          className="arace-comment mt-2.5 truncate border-l-[3px] px-3 py-2 font-mono text-[10.5px] font-bold uppercase tracking-wide"
-          style={{ color: TONE[line.tone], borderColor: TONE[line.tone], background: `${TONE[line.tone]}10` }}
-          title={line.text}
-        >
-          {line.text}
-        </div>
-      )}
-
       <style>{`.arace-comment{animation:araceIn .4s ease}@keyframes araceIn{from{opacity:0;transform:translateY(4px)}}
-.arace-arrow{animation:araceArrow 1.4s linear infinite}@keyframes araceArrow{0%,100%{color:rgba(255,255,255,.08)}50%{color:rgba(255,255,255,.3)}}
-.arace-push{animation:aracePush 1.6s ease-in-out infinite}
-@keyframes aracePush{0%,100%{transform:translateX(0)}35%{transform:translateX(7px)}60%{transform:translateX(5px)}}
-.arace-puff{position:absolute;right:26px;top:30px;width:7px;height:7px;border-radius:50%;background:rgba(233,236,245,.5);animation:aracePuff 1s ease-out infinite}
-@keyframes aracePuff{from{transform:translateX(0) scale(.6);opacity:.7}to{transform:translateX(-24px) translateY(-4px) scale(1.6);opacity:0}}
-@media (prefers-reduced-motion:reduce){.arace-comment,.arace-arrow,.arace-push,.arace-puff{animation:none}}`}</style>
+@media (prefers-reduced-motion:reduce){.arace-comment{animation:none}}`}</style>
     </div>
-  );
-}
-
-/** White delivery-truck icon (outline), sized for the race track. */
-function TruckIcon() {
-  return (
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="7" cy="17" r="2" />
-      <circle cx="17" cy="17" r="2" />
-      <path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5" />
-      <path d="M3 9l4 0" />
-    </svg>
   );
 }
