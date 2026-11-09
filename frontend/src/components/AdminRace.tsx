@@ -212,10 +212,10 @@ export default function AdminRace({ rows, live }: Props) {
 
   if (!rows.length) return null;
 
-  const { insights, ticker } = analyse(sorted, live, now);
+  const { insights, ticker: extra } = analyse(sorted, live, now);
+  // One comment box: the key insights first, then everything else, in rotation.
+  const ticker = [...insights.map((i) => ({ text: `${i.label}: ${i.text}`, tone: i.tone })), ...extra];
   const line = event ?? ticker[tick % Math.max(1, ticker.length)];
-  const teamDelivered = sorted.reduce((s, r) => s + r.delivered, 0);
-  const minsLeft = minsToMidnight(now);
 
   // Place pins: ties share one spot (stacked), separate spots never overlap.
   const PIN = 28;
@@ -233,58 +233,50 @@ export default function AdminRace({ rows, live }: Props) {
   for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step);
 
   return (
-    <div className="arace mb-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A1226] text-[#E9ECF5]">
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b border-white/[0.07] px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-widest">
-        {live ? (
-          <>
-            <span className="arace-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
-            <span className="text-[#FF8A8A]">Live race</span>
-            <span className="hidden text-white/45 sm:inline">· to 12 midnight</span>
-          </>
-        ) : (
-          <span className="text-[#F3D58E]">Final result</span>
-        )}
-        <span className="ml-auto flex items-center gap-3">
-          {live && <span className="text-white/60">{hm(minsLeft)} left</span>}
-          <span className="text-[#4ADE80]">{teamDelivered} delivered</span>
-        </span>
-      </div>
-
-      {/* Track */}
-      <div className="px-3.5 pt-3">
-        <div className="arace-road flex h-[62px] items-start rounded-lg bg-black/25 px-[20px] pt-[16px]">
-          <div ref={trackRef} className={`relative h-[3px] min-w-0 flex-1 rounded ${live ? "arace-lane" : "arace-lane-still"}`}>
-            {width > 0 &&
-              groups.flatMap((g, k) => {
-                const x = Math.min(xs[k], width);
-                return g.map((r, j) => {
-                  const top = j === 0;
-                  const under = j;
-                  const leader = k === 0 && r.delivered > 0;
-                  return (
-                    <span
-                      key={r.id}
-                      className="absolute top-1/2"
-                      style={{
-                        left: x,
-                        transition: "left 1.2s cubic-bezier(.3,.7,.3,1)",
-                        zIndex: top ? 20 : 10 - under,
-                        transform: `translate(calc(-50% - ${under * 4}px), calc(-50% + ${under * 2}px))`,
-                      }}
-                      title={`${r.name}: ${r.delivered} delivered · ${r.pending} pending`}
-                    >
-                      {top && live && r.delivered > 0 && (
-                        <span className="arace-trail absolute right-[20px] top-1/2 h-[3px] w-[18px] -translate-y-1/2 rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${colorOf(r.code)})` }} />
+    <div className="arace mb-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A1226] p-3 text-[#E9ECF5]">
+      {/* Road: faint direction arrows, gold finish strip */}
+      <div className="flex h-[72px] items-center gap-2.5 rounded-lg bg-black/25 pl-[30px] pr-3">
+        <div ref={trackRef} className="relative h-4 min-w-0 flex-1">
+          <div className="absolute inset-0 flex items-center justify-around font-mono text-[14px] text-white/[0.14]" aria-hidden>
+            {Array.from({ length: 14 }, (_, i) => (
+              <span key={i} className="arace-arrow" style={{ animationDelay: `${(i * 0.11).toFixed(2)}s` }}>›</span>
+            ))}
+          </div>
+          {width > 0 &&
+            groups.flatMap((g, k) => {
+              const x = Math.min(xs[k], width);
+              return g.map((r, j) => {
+                const top = j === 0;
+                const under = j;
+                const leader = k === 0 && r.delivered > 0;
+                const delay = `${((k * 0.37 + j * 0.2) % 1.6).toFixed(2)}s`;
+                return (
+                  <span
+                    key={r.id}
+                    className="absolute top-1/2"
+                    style={{
+                      left: x,
+                      transition: "left 1.2s cubic-bezier(.3,.7,.3,1)",
+                      zIndex: top ? 20 : 10 - under,
+                      transform: `translate(calc(-50% - ${under * 4}px), calc(-14px + ${under * 2}px))`,
+                    }}
+                    title={`${r.name}: ${r.delivered} delivered · ${r.pending} pending`}
+                  >
+                    <span className="arace-push relative block" style={{ animationDelay: delay }}>
+                      {top && (
+                        <>
+                          <span className="arace-puff" style={{ animationDelay: delay }} />
+                          <span className="arace-puff" style={{ animationDelay: `calc(${delay} + .5s)` }} />
+                        </>
                       )}
                       <span
-                        className={`${live ? "arace-bob" : ""} relative grid place-items-center rounded-full border-2 border-[#0A1226] text-[10px] font-extrabold text-[#0A1226]`}
+                        className="arace-tilt relative grid place-items-center rounded-full border-2 border-[#0A1226] text-[10px] font-extrabold text-[#0A1226]"
                         style={{
                           width: PIN,
                           height: PIN,
                           background: colorOf(r.code),
                           boxShadow: flash.has(r.code) ? "0 0 0 4px #4ADE80" : leader ? "0 0 0 2px #F3D58E" : undefined,
-                          animationDelay: `${(k % 5) * 0.17}s`,
+                          animationDelay: delay,
                         }}
                       >
                         {top ? r.code : ""}
@@ -296,43 +288,35 @@ export default function AdminRace({ rows, live }: Props) {
                         </span>
                       )}
                     </span>
-                  );
-                });
-              })}
-          </div>
+                  </span>
+                );
+              });
+            })}
         </div>
+        <div className="h-10 w-1 shrink-0 rounded-sm bg-[#F3D58E]/80" aria-hidden />
       </div>
 
-      {/* Live comment */}
+      {/* One comment box — side line colour follows the comment */}
       {line && (
-        <div className="flex items-center gap-2 px-3.5 pt-2.5">
-          <span className="shrink-0 rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[8.5px] font-bold uppercase tracking-widest text-white/50">{event ? "Now" : "Note"}</span>
-          <div key={line.text} className="arace-comment min-w-0 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide" style={{ color: TONE[line.tone] }}>
-            {line.text}
-          </div>
+        <div
+          key={line.text}
+          className="arace-comment mt-2.5 truncate border-l-[3px] px-3 py-2 font-mono text-[10.5px] font-bold uppercase tracking-wide"
+          style={{ color: TONE[line.tone], borderColor: TONE[line.tone], background: `${TONE[line.tone]}10` }}
+          title={line.text}
+        >
+          {line.text}
         </div>
       )}
 
-      {/* Key insights */}
-      <div className="grid grid-cols-1 gap-1.5 p-3.5 pt-2.5 sm:grid-cols-2">
-        {insights.map((it) => (
-          <div key={it.label} className="flex min-w-0 items-center gap-2 rounded-md bg-white/[0.04] px-2.5 py-1.5">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TONE[it.tone] }} />
-            <span className="w-[62px] shrink-0 font-mono text-[8.5px] font-bold uppercase tracking-widest text-white/45">{it.label}</span>
-            <span className="min-w-0 truncate font-mono text-[10px] font-bold uppercase tracking-wide" style={{ color: it.tone === "info" ? "#E9ECF5" : TONE[it.tone] }} title={it.text}>
-              {it.text}
-            </span>
-          </div>
-        ))}
-      </div>
-
       <style>{`.arace-comment{animation:araceIn .4s ease}@keyframes araceIn{from{opacity:0;transform:translateY(4px)}}
-.arace-lane,.arace-lane-still{background:repeating-linear-gradient(90deg,rgba(255,255,255,.25) 0 10px,transparent 10px 20px);background-size:20px 3px}
-.arace-lane{animation:araceRoad .6s linear infinite}@keyframes araceRoad{to{background-position:-20px 0}}
-.arace-bob{animation:araceBob .5s ease-in-out infinite alternate}@keyframes araceBob{to{transform:translateY(-1.5px)}}
-.arace-trail{animation:araceTrail .45s ease-in-out infinite alternate}@keyframes araceTrail{from{opacity:.35;width:12px}to{opacity:.8;width:20px}}
-.arace-live{animation:araceLive 1.2s infinite}@keyframes araceLive{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.arace-comment,.arace-lane,.arace-bob,.arace-trail,.arace-live{animation:none}}`}</style>
+.arace-arrow{animation:araceArrow 1.4s linear infinite}@keyframes araceArrow{0%,100%{color:rgba(255,255,255,.08)}50%{color:rgba(255,255,255,.3)}}
+.arace-push{animation:aracePush 1.6s ease-in-out infinite}
+@keyframes aracePush{0%,100%{transform:translateX(0)}35%{transform:translateX(7px)}60%{transform:translateX(5px)}}
+.arace-tilt{animation:araceTilt .5s ease-in-out infinite alternate}
+@keyframes araceTilt{from{transform:rotate(-8deg)}to{transform:rotate(4deg) translateY(-2px)}}
+.arace-puff{position:absolute;right:22px;top:10px;width:7px;height:7px;border-radius:50%;background:rgba(233,236,245,.5);animation:aracePuff 1s ease-out infinite}
+@keyframes aracePuff{from{transform:translateX(0) scale(.6);opacity:.7}to{transform:translateX(-24px) translateY(-4px) scale(1.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.arace-comment,.arace-arrow,.arace-push,.arace-tilt,.arace-puff{animation:none}}`}</style>
     </div>
   );
 }
