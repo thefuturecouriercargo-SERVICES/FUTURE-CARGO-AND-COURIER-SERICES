@@ -285,7 +285,7 @@ export default function PrayerReminder() {
       )}
 
       {active && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center whitespace-normal break-words bg-black/80 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md overflow-hidden rounded-xl border-2 border-brass bg-navy text-paper shadow-2xl">
             <div className="border-b border-brass/40 bg-navy-2 px-5 py-4 text-center">
               <div className="text-3xl">🕌</div>
@@ -318,7 +318,7 @@ export default function PrayerReminder() {
             <div className="px-5 pb-5">
               <button
                 onClick={close}
-                className="w-full rounded-lg bg-brass py-3.5 text-lg font-bold text-navy hover:bg-brass-light"
+                className="w-full rounded-lg bg-brass px-4 py-3.5 text-lg font-bold leading-snug text-navy hover:bg-brass-light"
                 lang="ml"
               >
                 ശരി, നിസ്കരിക്കാൻ പോകുന്നു 🤲
