@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate } from "@/lib/format";
@@ -82,7 +82,6 @@ export default function AgentReportPage() {
   const [tab, setTab] = useState("change");
   const [result, setResult] = useState("");
   const [historyKey, setHistoryKey] = useState(0);
-  const [unpaidKey, setUnpaidKey] = useState(0);
 
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -101,7 +100,6 @@ export default function AgentReportPage() {
         method: "POST",
         body: { rows: rows.map((x) => ({ tracking: x.tracking, status: x.status, cod: x.cod, source: x.source, reportDate: x.reportDate, file: x.file })) },
       });
-      setUnpaidKey((k) => k + 1);
       const r = await apiFetch<{ items: Item[]; summary: Summary }>("/agent-report/preview", { method: "POST", body: { rows } });
       setItems(r.items);
       setSummary(r.summary);
@@ -192,8 +190,7 @@ export default function AgentReportPage() {
         />
       </label>
 
-      <UnpaidTable refreshKey={unpaidKey} />
-      <p className="-mt-3 mb-6 text-xs text-ink-soft">
+      <p className="mb-6 text-xs text-ink-soft">
         RTO and pickup parcels to receive back: <Link href="/returns" className="font-semibold text-navy underline">Cancel &amp; Pickup page →</Link>
       </p>
 
@@ -258,7 +255,7 @@ export default function AgentReportPage() {
           )}
           {tab === "waitPdf" && visible.length > 0 && (
             <p className="mb-2 text-xs text-ink-soft">
-              Excel says Delivered — not marked from the Excel any more. Upload the agent&apos;s payment PDF to mark these Delivered; any not on a PDF show in &quot;Delivered but not paid&quot;.
+              Excel says Delivered — not marked from the Excel any more. Upload the agent&apos;s payment PDF to mark these Delivered.
             </p>
           )}
           {tab === "driver" && visible.length > 0 && (
@@ -435,125 +432,6 @@ function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string 
                   {sumDiff > 0 ? "+" : ""}
                   {fmtNumber(sumDiff)}
                 </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-interface UnpaidRow {
-  cn: string;
-  deliveredOn: string;
-  cod: number | null;
-  file: string | null;
-  order: { date: string; status: string; total: number; vendor: string; customer: string | null; holder: string | null } | null;
-}
-interface UnpaidData {
-  start: string;
-  cutoff: string | null;
-  lastPdfFile: string | null;
-  lastExcelFile: string | null;
-  rows: UnpaidRow[];
-  total: number;
-}
-
-const dmy = (d: string) => fmtDate(d);
-
-/**
- * Delivered but not paid: CNs the agent's Excel shows Delivered (on or before the latest
- * payment PDF's date) that are on no payment PDF. Counts from the start date only.
- */
-function UnpaidTable({ refreshKey }: { refreshKey: number }) {
-  const [data, setData] = useState<UnpaidData | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    apiFetch<UnpaidData>("/agent-report/unpaid")
-      .then((r) => {
-        setData(r);
-        setError("");
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load payment check"));
-  }, [refreshKey]);
-
-  function downloadCsv() {
-    if (!data) return;
-    const head = ["CN", "Delivered on", "Vendor", "Customer", "With", "Our status", "Amount", "From Excel"];
-    const lines = data.rows.map((r) =>
-      [r.cn, dmy(r.deliveredOn), r.order?.vendor ?? "", r.order?.customer ?? "", r.order?.holder ?? "", r.order?.status ?? "Not found", r.cod ?? "", r.file ?? ""]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    );
-    lines.push(["", "", "", "", "", "TOTAL", data.total, ""].map((v) => `"${v}"`).join(","));
-    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `delivered-not-paid-till-${data.cutoff ?? "na"}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  return (
-    <section className="mb-6 border border-brass bg-white p-3 md:p-4">
-      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-navy">
-            Delivered but not paid{data && data.cutoff ? ` — till ${dmy(data.cutoff)}` : ""} ({data?.rows.length ?? 0})
-          </h2>
-          <p className="text-xs text-ink-soft">
-            Excel says Delivered, but the CN is on no payment PDF — up to the latest PDF&apos;s date. Counting from {data ? dmy(data.start) : "…"}; earlier deliveries are ignored.
-            {data?.lastPdfFile && <> Latest PDF: <b>{data.lastPdfFile}</b>.</>}
-          </p>
-        </div>
-        {data && data.rows.length > 0 && (
-          <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">
-            ⬇ Download CSV
-          </button>
-        )}
-      </div>
-
-      {error && <p className="text-sm text-cancelled">{error}</p>}
-      {data && !data.cutoff && (
-        <p className="border border-line bg-paper p-3 text-sm text-ink-soft">Upload the agent&apos;s payment PDF to check it against the Excel.</p>
-      )}
-      {data && data.cutoff && data.rows.length === 0 && (
-        <p className="border border-line bg-paper p-3 text-sm text-delivered">✓ Every delivered CN till {dmy(data.cutoff)} is on a payment PDF.</p>
-      )}
-      {data && data.rows.length > 0 && (
-        <div className="table-wrap border border-line">
-          <table className="data-table min-w-[720px]">
-            <thead>
-              <tr>
-                <th>CN</th>
-                <th>Delivered on</th>
-                <th>Vendor / Customer</th>
-                <th>With</th>
-                <th>Ours now</th>
-                <th className="text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.cn}>
-                  <td className="font-mono font-bold text-navy">{r.cn}</td>
-                  <td className="font-mono text-xs">{dmy(r.deliveredOn)}</td>
-                  <td>
-                    <span className="block">{r.order?.vendor ?? "—"}</span>
-                    {r.order?.customer && <span className="text-xs text-ink-soft">{r.order.customer}</span>}
-                  </td>
-                  <td className="text-xs">{r.order?.holder ?? ""}</td>
-                  <td>{r.order ? <Pill s={r.order.status} /> : <span className="text-xs text-cancelled">Not found</span>}</td>
-                  <td className="text-right font-mono">{r.cod != null ? fmtNumber(r.cod) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={5}>Total not paid ({data.rows.length} CNs)</td>
-                <td className="text-right font-mono text-cancelled">{fmtNumber(data.total)}</td>
               </tr>
             </tfoot>
           </table>
