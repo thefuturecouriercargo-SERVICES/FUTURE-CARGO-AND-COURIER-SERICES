@@ -265,11 +265,10 @@ export default function AdminRace({ rows, live }: Props) {
                         <span className="block whitespace-nowrap text-center font-mono text-[9.5px] font-bold leading-[12px] tracking-wider text-white/55">{r.code}</span>
                       )}
                       <span
-                        className="arace-tilt block"
+                        className="block"
                         style={{
                           color: flash.has(r.code) ? "#4ADE80" : leader ? "#F3D58E" : "#F4F6FB",
                           opacity: top ? 1 : 0.45,
-                          animationDelay: delay,
                           transition: "color .4s",
                         }}
                       >
@@ -306,11 +305,9 @@ export default function AdminRace({ rows, live }: Props) {
 .arace-arrow{animation:araceArrow 1.4s linear infinite}@keyframes araceArrow{0%,100%{color:rgba(255,255,255,.08)}50%{color:rgba(255,255,255,.3)}}
 .arace-push{animation:aracePush 1.6s ease-in-out infinite}
 @keyframes aracePush{0%,100%{transform:translateX(0)}35%{transform:translateX(7px)}60%{transform:translateX(5px)}}
-.arace-tilt{animation:araceTilt .5s ease-in-out infinite alternate}
-@keyframes araceTilt{from{transform:rotate(-8deg)}to{transform:rotate(4deg) translateY(-2px)}}
 .arace-puff{position:absolute;right:26px;top:30px;width:7px;height:7px;border-radius:50%;background:rgba(233,236,245,.5);animation:aracePuff 1s ease-out infinite}
 @keyframes aracePuff{from{transform:translateX(0) scale(.6);opacity:.7}to{transform:translateX(-24px) translateY(-4px) scale(1.6);opacity:0}}
-@media (prefers-reduced-motion:reduce){.arace-comment,.arace-arrow,.arace-push,.arace-tilt,.arace-puff{animation:none}}`}</style>
+@media (prefers-reduced-motion:reduce){.arace-comment,.arace-arrow,.arace-push,.arace-puff{animation:none}}`}</style>
     </div>
   );
 }
