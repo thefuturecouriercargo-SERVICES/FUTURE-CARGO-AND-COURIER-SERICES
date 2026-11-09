@@ -22,20 +22,12 @@ type Tone = "good" | "bad" | "warn" | "info";
 interface Insight { label: string; text: string; tone: Tone }
 
 const CODES: Record<string, string> = { ANAS: "AN", MASOOD: "MS", NIYAS: "NS", NOUSHAD: "ND", SAVAD: "SV", FARIS: "FS" };
-const COLORS = ["#4FD1C5", "#F2836B", "#E2B453", "#A78BFA", "#60A5FA", "#F472B6", "#34D399", "#FB923C"];
-const FIXED: Record<string, string> = { AN: "#4FD1C5", MS: "#F2836B", NS: "#E2B453", ND: "#A78BFA", SV: "#60A5FA", FS: "#F472B6" };
 const TONE: Record<Tone, string> = { good: "#4ADE80", bad: "#FF8A8A", warn: "#F5B544", info: "#E9ECF5" };
 
 const first = (name: string) => name.trim().split(/\s+/)[0].toUpperCase();
 function codeOf(name: string) {
   const f = first(name);
   return CODES[f] ?? (f.slice(0, 1) + f.slice(-1));
-}
-function colorOf(code: string) {
-  if (FIXED[code]) return FIXED[code];
-  let h = 0;
-  for (const c of code) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return COLORS[h % COLORS.length];
 }
 const pctOf = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "S"}`;
@@ -218,7 +210,7 @@ export default function AdminRace({ rows, live }: Props) {
   const line = event ?? ticker[tick % Math.max(1, ticker.length)];
 
   // Place pins: ties share one spot (stacked), separate spots never overlap.
-  const PIN = 28;
+  const PIN = 30;
   const lead = Math.max(1, sorted[0].delivered);
   const groups: (typeof sorted)[] = [];
   for (const r of sorted) {
@@ -235,7 +227,7 @@ export default function AdminRace({ rows, live }: Props) {
   return (
     <div className="arace mb-4 overflow-hidden rounded-xl border border-white/10 bg-[#0A1226] p-3 text-[#E9ECF5]">
       {/* Road: faint direction arrows, gold finish strip */}
-      <div className="flex h-[72px] items-center gap-2.5 rounded-lg bg-black/25 pl-[30px] pr-3">
+      <div className="flex h-[84px] items-center gap-2.5 rounded-lg bg-black/25 pl-[30px] pr-3">
         <div ref={trackRef} className="relative h-4 min-w-0 flex-1">
           <div className="absolute inset-0 flex items-center justify-around font-mono text-[14px] text-white/[0.14]" aria-hidden>
             {Array.from({ length: 14 }, (_, i) => (
@@ -258,7 +250,7 @@ export default function AdminRace({ rows, live }: Props) {
                       left: x,
                       transition: "left 1.2s cubic-bezier(.3,.7,.3,1)",
                       zIndex: top ? 20 : 10 - under,
-                      transform: `translate(calc(-50% - ${under * 4}px), calc(-14px + ${under * 2}px))`,
+                      transform: `translate(calc(-50% - ${under * 4}px), calc(-26px + ${under * 2}px))`,
                     }}
                     title={`${r.name}: ${r.delivered} delivered · ${r.pending} pending`}
                   >
@@ -269,22 +261,24 @@ export default function AdminRace({ rows, live }: Props) {
                           <span className="arace-puff" style={{ animationDelay: `calc(${delay} + .5s)` }} />
                         </>
                       )}
+                      {top && (
+                        <span className="block whitespace-nowrap text-center font-mono text-[9.5px] font-bold leading-[12px] tracking-wider text-white/55">{r.code}</span>
+                      )}
                       <span
-                        className="arace-tilt relative grid place-items-center rounded-full border-2 border-[#0A1226] text-[10px] font-extrabold text-[#0A1226]"
+                        className="arace-tilt block"
                         style={{
-                          width: PIN,
-                          height: PIN,
-                          background: colorOf(r.code),
-                          boxShadow: flash.has(r.code) ? "0 0 0 4px #4ADE80" : leader ? "0 0 0 2px #F3D58E" : undefined,
+                          color: flash.has(r.code) ? "#4ADE80" : leader ? "#F3D58E" : "#F4F6FB",
+                          opacity: top ? 1 : 0.45,
                           animationDelay: delay,
+                          transition: "color .4s",
                         }}
                       >
-                        {top ? r.code : ""}
+                        <TruckIcon />
                       </span>
                       {top && (
-                        <span className="absolute left-1/2 top-[calc(100%+3px)] -translate-x-1/2 whitespace-nowrap font-mono text-[10px] font-bold tabular-nums" style={{ color: leader ? "#F3D58E" : "rgba(233,236,245,.7)" }}>
+                        <span className="block whitespace-nowrap text-center font-mono text-[12.5px] font-bold leading-[14px] tabular-nums" style={{ color: leader ? "#F3D58E" : "#F4F6FB" }}>
                           {r.delivered}
-                          {g.length > 1 ? ` ×${g.length}` : ""}
+                          {g.length > 1 ? <span className="text-[9.5px] text-white/50"> ×{g.length}</span> : null}
                         </span>
                       )}
                     </span>
@@ -314,9 +308,21 @@ export default function AdminRace({ rows, live }: Props) {
 @keyframes aracePush{0%,100%{transform:translateX(0)}35%{transform:translateX(7px)}60%{transform:translateX(5px)}}
 .arace-tilt{animation:araceTilt .5s ease-in-out infinite alternate}
 @keyframes araceTilt{from{transform:rotate(-8deg)}to{transform:rotate(4deg) translateY(-2px)}}
-.arace-puff{position:absolute;right:22px;top:10px;width:7px;height:7px;border-radius:50%;background:rgba(233,236,245,.5);animation:aracePuff 1s ease-out infinite}
+.arace-puff{position:absolute;right:26px;top:30px;width:7px;height:7px;border-radius:50%;background:rgba(233,236,245,.5);animation:aracePuff 1s ease-out infinite}
 @keyframes aracePuff{from{transform:translateX(0) scale(.6);opacity:.7}to{transform:translateX(-24px) translateY(-4px) scale(1.6);opacity:0}}
 @media (prefers-reduced-motion:reduce){.arace-comment,.arace-arrow,.arace-push,.arace-tilt,.arace-puff{animation:none}}`}</style>
     </div>
+  );
+}
+
+/** White delivery-truck icon (outline), sized for the race track. */
+function TruckIcon() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="7" cy="17" r="2" />
+      <circle cx="17" cy="17" r="2" />
+      <path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5" />
+      <path d="M3 9l4 0" />
+    </svg>
   );
 }
