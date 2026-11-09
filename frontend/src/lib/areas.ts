@@ -69,7 +69,7 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?khawaneej\b|\bkhawanij\b/i, "AL KHAWANEEJ"],
   [/\bawir\b/i, "AL AWIR"],
   [/\bmuhaisnah?\b|\bmuhsina\b|\bmuhaisna\b|\bmhaisna\b|\bmuhaisanah\b|\bmuhaisinah\b|\bmuhaisina\b|\bmuhaisnah[\s\-']*\d\b|\bsonapur\b/i, "MUHAISNAH"],
-  [/\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)|\bdamascus[\s\-']*street\b|\bdamascus[\s\-']*st\b|\b(?:al[\s\-]*)?quasis\b|\b(?:al[\s\-]*)?qusis\b|\b(?:al[\s\-]*)?qussais\b/i, "AL QUSAIS"],
+  [/\bdafza\b|\bdafz\b|\bdubai[\s\-']*airport[\s\-']*free[\s\-']*zone\b|\bairport[\s\-']*free[\s\-']*zone\b|\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)|\bdamascus[\s\-']*street\b|\bdamascus[\s\-']*st\b|\b(?:al[\s\-]*)?quasis\b|\b(?:al[\s\-]*)?qusis\b|\b(?:al[\s\-]*)?qussais\b/i, "AL QUSAIS"],
   [/\bal[\s\-]*twar\b|\btawar\b/i, "AL TWAR"],
   [/\b(?:al[\s\-]*)?nahda\b|\b(?:al[\s\-]*)?nahadha\b|\b(?:al[\s\-]*)?nahdha\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
   [/\b(?:al[\s\-]*)?rashidiy?a\b|\brashidiyah\b|\brashidia\b/i, "AL RASHIDIYA"],
