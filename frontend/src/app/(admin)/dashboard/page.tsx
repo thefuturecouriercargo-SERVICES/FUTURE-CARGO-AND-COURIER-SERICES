@@ -60,6 +60,7 @@ import KpiFocusRow from "@/components/KpiFocusRow";
 import StatusStamp from "@/components/StatusStamp";
 import DeliveryStatusRing from "@/components/charts/DeliveryStatusRing";
 import EmployeeLeaderboard from "@/components/EmployeeLeaderboard";
+import AdminRace from "@/components/AdminRace";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
 import { Order, OrderStatus, Summary, Vendor } from "@/types";
@@ -239,6 +240,19 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   const agentIdSet = new Set((data?.agentBreakdown ?? []).map((r) => r.employee.id));
   const nonAgentPendingCarryover = pendingCarryover.filter((o) => !agentIdSet.has(o.employeeId));
 
+  // One row per driver, shared by the live race and the Employee-wise table.
+  const leaderRows = employeeRows.map((r) => {
+    const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
+    return {
+      id: r.employee.id,
+      name: r.employee.name,
+      delivered: r.delivered,
+      pending: empPending,
+      cancelled: r.cancelled,
+      transferred: r.transferred,
+      total: r.delivered + empPending + r.transferred + r.cancelled,
+    };
+  });
   // Sum of each driver's own attributed pending (their own carryover included) —
   // used for the TOTAL row so it matches the sum of the rows actually shown, instead
   // of the company-wide pending figure (which also includes agents' carryover).
@@ -382,19 +396,9 @@ return (
                   Download PDF
                 </a>
               </div>
+              <AdminRace rows={leaderRows} live={!useRange && date === todayStr()} />
               <EmployeeLeaderboard
-                rows={employeeRows.map((r) => {
-                  const empPending = r.pending + pendingCarryover.filter((o) => o.employeeId === r.employee.id).length;
-                  return {
-                    id: r.employee.id,
-                    name: r.employee.name,
-                    delivered: r.delivered,
-                    pending: empPending,
-                    cancelled: r.cancelled,
-                    transferred: r.transferred,
-                    total: r.delivered + empPending + r.transferred + r.cancelled,
-                  };
-                })}
+                rows={leaderRows}
                 totals={{
                   delivered: employeeRows.reduce((s, r) => s + r.delivered, 0),
                   pending: employeePendingTotal,
