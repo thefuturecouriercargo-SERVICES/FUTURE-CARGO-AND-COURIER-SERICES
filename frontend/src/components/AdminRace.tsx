@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export interface AdminRaceRow {
   id: string;
@@ -138,6 +139,21 @@ export default function AdminRace({ rows, live }: Props) {
   const [event, setEvent] = useState<{ text: string; tone: Tone } | null>(null);
   const prev = useRef<Map<string, { rank: number; delivered: number; cancelled: number }> | null>(null);
   const eventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Business-wide comments (milestones, history, P&L, vendors, agent uploads…) from the server.
+  const [feed, setFeed] = useState<{ text: string; tone: Tone }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      apiFetch<{ lines: { text: string; tone: Tone }[] }>("/insights-feed")
+        .then((r) => alive && setFeed(r.lines ?? []))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
 
   const sorted = [...rows]
     .map((r) => ({ ...r, code: codeOf(r.name), f: first(r.name) }))
@@ -191,7 +207,15 @@ export default function AdminRace({ rows, live }: Props) {
 
   const { insights, ticker: extra } = analyse(sorted, live, now);
   // The key insights first, then everything else, in rotation.
-  const ticker = [...insights.map((i) => ({ text: `${i.label}: ${i.text}`, tone: i.tone })), ...extra];
+  const race = [...insights.map((i) => ({ text: `${i.label}: ${i.text}`, tone: i.tone })), ...extra];
+  // Mix: after every 2 race lines, one business comment, so both keep rotating.
+  const ticker: { text: string; tone: Tone }[] = [];
+  const n = Math.max(race.length, feed.length * 2);
+  for (let i = 0, f = 0; i < n || f < feed.length; i++) {
+    if (race.length) ticker.push(race[i % race.length]);
+    if (i % 2 === 1 && f < feed.length) ticker.push(feed[f++]);
+    if (i > race.length + feed.length * 3) break;
+  }
   const line = event ?? ticker[tick % Math.max(1, ticker.length)];
   if (!line) return null;
 
@@ -199,7 +223,7 @@ export default function AdminRace({ rows, live }: Props) {
     <div className="mb-3">
       <div
         key={line.text}
-        className="arace-comment truncate border-l-[3px] px-3 py-2 font-mono text-[10.5px] font-bold uppercase tracking-wide"
+        className="arace-comment line-clamp-2 border-l-[3px] px-3 py-2 font-mono text-[10.5px] font-bold uppercase tracking-wide"
         style={{ color: TONE[line.tone], borderColor: TONE[line.tone], background: `${TONE[line.tone]}14` }}
         title={line.text}
       >
