@@ -13,6 +13,7 @@ import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScann
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Link from "next/link";
 import DriverRace from "@/components/DriverRace";
 
 interface Summary {
@@ -1258,16 +1259,22 @@ export default function DriverPortalPage() {
         ] as const;
         return (
           <div className="mb-3">
-            <div className="mb-1.5 flex items-center">
+            <div className="mb-1.5 grid grid-cols-3 gap-1.5">
               <button
                 type="button"
                 onClick={() => setRaceShown((v) => !v)}
                 aria-pressed={raceShown}
-                className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]"
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-white px-2 py-2 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]"
               >
-                <span className="flip-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
-                {raceShown ? "Show counters" : "Live race"}
+                <span className="flip-live h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF5A5F]" />
+                {raceShown ? "Counters" : "Live race"}
               </button>
+              <Link href="/driver/history" className="flex items-center justify-center rounded-lg bg-white px-2 py-2 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]">
+                History
+              </Link>
+              <Link href="/driver/payroll" className="flex items-center justify-center rounded-lg bg-white px-2 py-2 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]">
+                Payroll
+              </Link>
             </div>
             <div className="flip-wrap">
               <div className={`flip-inner ${raceShown ? "is-flipped" : ""}`}>

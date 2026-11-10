@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import AuthGate from "@/components/AuthGate";
 import LiveBridge from "@/components/LiveBridge";
 import PrayerReminder from "@/components/PrayerReminder";
@@ -26,23 +24,15 @@ function DriverTopbar() {
           <div className="font-display text-lg font-bold tracking-wide">Future Courier</div>
           <div className="truncate font-mono text-[10.5px] uppercase tracking-wide text-brass-light">{user?.name}</div>
         </div>
-        <button
-          onClick={logout}
-          className="shrink-0 rounded-full border border-white/25 px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
-        >
-          Sign out
-        </button>
-      </div>
-      <div className="mt-2 flex items-center gap-x-3.5 overflow-hidden whitespace-nowrap border-t border-white/10 pt-2">
-        <Link href="/driver/history" className="shrink-0 font-mono text-[10.5px] uppercase tracking-wide text-line hover:text-brass-light">
-          My History
-        </Link>
-        <Link href="/driver/payroll" className="shrink-0 font-mono text-[10.5px] uppercase tracking-wide text-line hover:text-brass-light">
-          My Payroll
-        </Link>
-        <span className="ml-auto min-w-0 truncate text-[11px]">
+        <div className="flex w-[92px] shrink-0 flex-col items-stretch gap-1.5 whitespace-nowrap">
+          <button
+            onClick={logout}
+            className="w-full rounded-full border border-white/25 px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-line hover:border-brass-light hover:text-white"
+          >
+            Sign out
+          </button>
           <PrayerReminder />
-        </span>
+        </div>
       </div>
     </div>
   );
