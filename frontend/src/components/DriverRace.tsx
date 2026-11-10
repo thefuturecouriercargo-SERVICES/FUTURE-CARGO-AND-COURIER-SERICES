@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -225,7 +226,7 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
     L
       ? {
           background: p.me ? "var(--brass)" : "#E9E4D8",
-          color: p.me ? "#FFFFFF" : "#6B7280",
+          color: p.me ? "#FFFFFF" : "#14213D",
           boxShadow: flash.has(p.code) ? "0 0 0 4px #0B7A3E" : p.me ? "0 0 0 2px #F3D58E" : undefined,
         }
       : {
@@ -245,9 +246,13 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
         className={`block w-full text-left active:scale-[0.99] ${L ? "h-full rounded-2xl bg-white p-3 text-navy shadow ring-1 ring-line" : "rounded-2xl bg-navy p-3 text-paper shadow-md"}`}
       >
         <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">
-          <span className="race-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
-          <span className={L ? "text-cancelled" : "text-[#FF8A8A]"}>Live race</span>
-          <span className={L ? "text-ink-soft" : "text-paper/50"}>· to 12 midnight</span>
+          {!L && (
+            <>
+              <span className="race-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
+              <span className="text-[#FF8A8A]">Live race</span>
+              <span className="text-paper/50">· to 12 midnight</span>
+            </>
+          )}
           <span className="ml-auto flex items-center gap-2">
             {data.me && <span className={L ? "text-delivered" : "text-[#F3D58E]"}>{data.me.delivered} today</span>}
             <span className={`race-arrow flex text-[13px] leading-none ${L ? "text-brass" : "text-[#F3D58E]"}`} aria-label="Race direction">
@@ -271,7 +276,7 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
                 >
                   {p.top && !L && <span className="race-trail absolute right-[18px] top-1/2 h-[3px] w-[18px] -translate-y-1/2 rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${colorOf(p.code)})` }} />}
                   <span
-                    className={`race-bob relative grid h-[26px] w-[26px] place-items-center rounded-full border-2 text-[10px] font-extrabold ${L ? "border-white" : "border-navy text-[#0A1226]"}`}
+                    className={`race-bob relative grid h-[26px] w-[26px] place-items-center rounded-full border-2 ${L ? "border-white text-[11px] font-black" : "border-navy text-[10px] font-extrabold text-[#0A1226]"}`}
                     style={{ animationDelay: `${(i % 5) * 0.17}s`, ...pinStyle(p) }}
                   >
                     {p.top ? p.code : ""}
@@ -283,7 +288,7 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
         <div key={line} className={`race-comment mt-2 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>
       </button>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-3 sm:items-center" onClick={() => setOpen(false)}>
           <div
             role="dialog"
@@ -368,7 +373,8 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
               <div className="py-8 text-center font-mono text-xs text-[#B7C0DA]">Loading…</div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}
 .race-lane{background:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 10px,transparent 10px 20px);background-size:20px 3px;animation:raceRoad .6s linear infinite}

@@ -246,6 +246,22 @@ export default function DriverPortalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [raceShown, setRaceShown] = useState(false);
+  // Auto-flip to the live race for 15 s every 2 minutes, unless the driver opened it themselves.
+  const raceManual = useRef(false);
+  useEffect(() => {
+    let back: ReturnType<typeof setTimeout> | null = null;
+    const i = setInterval(() => {
+      if (raceManual.current || document.hidden) return;
+      setRaceShown(true);
+      back = setTimeout(() => {
+        if (!raceManual.current) setRaceShown(false);
+      }, 15000);
+    }, 120000);
+    return () => {
+      clearInterval(i);
+      if (back) clearTimeout(back);
+    };
+  }, []);
   const [search, setSearch] = useState("");
   // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
   const [areaFilter, setAreaFilter] = useState("");
@@ -1262,7 +1278,11 @@ export default function DriverPortalPage() {
             <div className="mb-1.5 grid grid-cols-3 gap-1.5">
               <button
                 type="button"
-                onClick={() => setRaceShown((v) => !v)}
+                onClick={() => {
+                  const next = !raceShown;
+                  raceManual.current = next;
+                  setRaceShown(next);
+                }}
                 aria-pressed={raceShown}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-white px-2 py-2 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]"
               >
