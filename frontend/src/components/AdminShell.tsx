@@ -1,6 +1,7 @@
 "use client";
 
 import LiveBridge from "@/components/LiveBridge";
+import AdminIdleRefresh from "@/components/AdminIdleRefresh";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -116,6 +117,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     <div className={`admin-shell ${prefs.dark ? "theme-midnight" : ""} min-h-screen bg-paper text-ink`}>
       <FeedbackHost />
       <LiveBridge />
+      <AdminIdleRefresh />
       <CommandPalette links={visibleNav.map((n) => ({ href: n.href, label: n.label, group: n.group }))} />
       <AdminVoiceAssistant />
       <div ref={headerRef} className="relative z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">
