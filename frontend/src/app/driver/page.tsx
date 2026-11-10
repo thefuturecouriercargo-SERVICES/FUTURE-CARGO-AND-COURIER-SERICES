@@ -13,6 +13,7 @@ import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScann
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import DriverRace from "@/components/DriverRace";
 
 interface Summary {
   assigned: number;
@@ -243,6 +244,7 @@ export default function DriverPortalPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
+  const [raceShown, setRaceShown] = useState(false);
   const [search, setSearch] = useState("");
   // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
   const [areaFilter, setAreaFilter] = useState("");
@@ -1191,7 +1193,7 @@ export default function DriverPortalPage() {
 
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-8 pt-0">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3">
       {awaitingBankConfirm ? (
         <div className="fixed bottom-24 right-4 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
           <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
@@ -1249,28 +1251,59 @@ export default function DriverPortalPage() {
         const nCan = orders.filter((o) => o.status === "CANCELLED").length;
         const pct = orders.length ? Math.round((nDel / orders.length) * 100) : 0;
         const tiles = [
-          ["ALL", "Total", orders.length, "text-paper"],
-          ["PENDING", "Pending", nPend, "text-[#F5C46B]"],
-          ["DELIVERED", "Delivered", nDel, "text-[#7FD3A5]"],
-          ["CANCELLED", "Cancelled", nCan, "text-[#F4A29A]"],
+          ["ALL", "Total", orders.length, "text-navy"],
+          ["PENDING", "Pending", nPend, "text-brass"],
+          ["DELIVERED", "Delivered", nDel, "text-delivered"],
+          ["CANCELLED", "Cancelled", nCan, "text-cancelled"],
         ] as const;
         return (
-          <div className="mb-3 rounded-2xl bg-navy p-3 text-paper shadow-md">
-            <div className="grid grid-cols-4 gap-1.5">
-              {tiles.map(([k, label, n, color]) => (
-                <button
-                  key={k}
-                  onClick={() => setStatusTab(k)}
-                  className={`rounded-xl px-1 py-2 text-center transition ${statusTab === k ? "bg-white/20 ring-1 ring-white/60" : "bg-white/5"}`}
-                >
-                  <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
-                  <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-paper/70">{label}</div>
-                </button>
-              ))}
+          <div className="mb-3">
+            <div className="mb-1.5 flex items-center">
+              <button
+                type="button"
+                onClick={() => setRaceShown((v) => !v)}
+                aria-pressed={raceShown}
+                className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-navy shadow-sm ring-1 ring-line active:scale-[0.97]"
+              >
+                <span className="flip-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
+                {raceShown ? "Show counters" : "Live race"}
+              </button>
             </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/15" aria-label={`${pct}% delivered`}>
-              <div className="h-full rounded-full bg-[#7FD3A5] transition-all" style={{ width: `${pct}%` }} />
+            <div className="flip-wrap">
+              <div className={`flip-inner ${raceShown ? "is-flipped" : ""}`}>
+                <div className="flip-face" aria-hidden={raceShown}>
+                  <div className="h-full rounded-2xl bg-white p-3 shadow ring-1 ring-line">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {tiles.map(([k, label, n, color]) => (
+                        <button
+                          key={k}
+                          tabIndex={raceShown ? -1 : 0}
+                          onClick={() => setStatusTab(k)}
+                          className={`rounded-xl px-1 py-2 text-center transition ${statusTab === k ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
+                        >
+                          <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
+                          <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-ink-soft">{label}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${pct}% delivered`}>
+                      <div className="h-full rounded-full bg-delivered transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="flip-face flip-back" aria-hidden={!raceShown}>
+                  <DriverRace embedded />
+                </div>
+              </div>
             </div>
+            <style>{`.flip-wrap{perspective:900px}
+.flip-inner{display:grid;transition:transform .6s cubic-bezier(.3,.7,.3,1);transform-style:preserve-3d}
+.flip-inner.is-flipped{transform:rotateX(180deg)}
+.flip-face{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.flip-back{transform:rotateX(180deg)}
+.flip-inner:not(.is-flipped) .flip-back,.flip-inner.is-flipped>.flip-face:first-child{pointer-events:none}
+.flip-live{animation:flipLive 1.2s infinite}@keyframes flipLive{50%{opacity:.2}}
+@media (prefers-reduced-motion:reduce){.flip-inner{transition:none}.flip-live{animation:none}}`}</style>
           </div>
         );
       })()}

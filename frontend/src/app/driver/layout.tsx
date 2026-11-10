@@ -5,7 +5,6 @@ import Link from "next/link";
 import AuthGate from "@/components/AuthGate";
 import LiveBridge from "@/components/LiveBridge";
 import PrayerReminder from "@/components/PrayerReminder";
-import DriverRace from "@/components/DriverRace";
 import { useAuth } from "@/context/AuthContext";
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
@@ -13,9 +12,6 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
     <AuthGate allow={["DRIVER"]}>
       <LiveBridge />
       <DriverTopbar />
-      <div className="mx-auto max-w-5xl px-4 pt-3">
-        <DriverRace />
-      </div>
       {children}
     </AuthGate>
   );

@@ -86,7 +86,8 @@ function ambient(me: RaceMe, now: Date, st: RaceStats | null, today: Today | nul
 }
 
 /** One-line live race to 12 midnight. Shows places only — never other drivers' counts. */
-export default function DriverRace() {
+export default function DriverRace({ embedded = false }: { embedded?: boolean } = {}) {
+  const L = embedded; // light card that sits on the back of the counters
   const [data, setData] = useState<RaceData | null>(null);
   const [width, setWidth] = useState(0);
   const [flash, setFlash] = useState<Set<string>>(new Set());
@@ -220,33 +221,42 @@ export default function DriverRace() {
       : [];
   const line = event?.text ?? pool[tickN % Math.max(1, pool.length)] ?? "";
 
-  const pinStyle = (p: RacePin) => ({
-    background: colorOf(p.code),
-    boxShadow: flash.has(p.code) ? "0 0 0 4px #4ADE80" : p.me ? "0 0 0 2px #F3D58E" : undefined,
-  });
-  const commentCls = event?.tone === "good" ? "text-[#4ADE80]" : event?.tone === "bad" ? "text-[#FF8A8A]" : "text-[#E9ECF5]";
+  const pinStyle = (p: RacePin) =>
+    L
+      ? {
+          background: p.me ? "var(--brass)" : "#E9E4D8",
+          color: p.me ? "#FFFFFF" : "#6B7280",
+          boxShadow: flash.has(p.code) ? "0 0 0 4px #0B7A3E" : p.me ? "0 0 0 2px #F3D58E" : undefined,
+        }
+      : {
+          background: colorOf(p.code),
+          boxShadow: flash.has(p.code) ? "0 0 0 4px #4ADE80" : p.me ? "0 0 0 2px #F3D58E" : undefined,
+        };
+  const commentCls = L
+    ? event?.tone === "good" ? "text-delivered" : event?.tone === "bad" ? "text-cancelled" : "text-navy"
+    : event?.tone === "good" ? "text-[#4ADE80]" : event?.tone === "bad" ? "text-[#FF8A8A]" : "text-[#E9ECF5]";
 
   return (
-    <div className="mb-3">
+    <div className={L ? "h-full" : "mb-3"}>
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open my month"
-        className="block w-full rounded-2xl bg-navy p-3 text-left text-paper shadow-md active:scale-[0.99]"
+        className={`block w-full text-left active:scale-[0.99] ${L ? "h-full rounded-2xl bg-white p-3 text-navy shadow ring-1 ring-line" : "rounded-2xl bg-navy p-3 text-paper shadow-md"}`}
       >
         <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">
           <span className="race-live h-1.5 w-1.5 rounded-full bg-[#FF5A5F]" />
-          <span className="text-[#FF8A8A]">Live race</span>
-          <span className="text-paper/50">· to 12 midnight</span>
+          <span className={L ? "text-cancelled" : "text-[#FF8A8A]"}>Live race</span>
+          <span className={L ? "text-ink-soft" : "text-paper/50"}>· to 12 midnight</span>
           <span className="ml-auto flex items-center gap-2">
-            {data.me && <span className="text-[#F3D58E]">{data.me.delivered} today</span>}
-            <span className="race-arrow flex text-[13px] leading-none text-[#F3D58E]" aria-label="Race direction">
+            {data.me && <span className={L ? "text-delivered" : "text-[#F3D58E]"}>{data.me.delivered} today</span>}
+            <span className={`race-arrow flex text-[13px] leading-none ${L ? "text-brass" : "text-[#F3D58E]"}`} aria-label="Race direction">
               <i>›</i><i>›</i><i>›</i>
             </span>
           </span>
         </div>
-        <div className="race-road mt-2.5 flex h-[38px] items-center rounded-xl bg-black/25 px-[17px]">
-          <div ref={trackRef} className="race-lane relative h-[3px] min-w-0 flex-1 rounded">
+        <div className={`race-road mt-2.5 flex h-[38px] items-center rounded-xl px-[17px] ${L ? "bg-paper" : "bg-black/25"}`}>
+          <div ref={trackRef} className={`relative h-[3px] min-w-0 flex-1 rounded ${L ? "race-lane-light" : "race-lane"}`}>
             {width > 0 &&
               placed.map((p, i) => (
                 <span
@@ -259,9 +269,9 @@ export default function DriverRace() {
                     transform: `translate(calc(-50% - ${p.under * 4}px), calc(-50% + ${p.under * 2}px))`,
                   }}
                 >
-                  {p.top && <span className="race-trail absolute right-[18px] top-1/2 h-[3px] w-[18px] -translate-y-1/2 rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${colorOf(p.code)})` }} />}
+                  {p.top && !L && <span className="race-trail absolute right-[18px] top-1/2 h-[3px] w-[18px] -translate-y-1/2 rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${colorOf(p.code)})` }} />}
                   <span
-                    className="race-bob relative grid h-[26px] w-[26px] place-items-center rounded-full border-2 border-navy text-[10px] font-extrabold text-[#0A1226]"
+                    className={`race-bob relative grid h-[26px] w-[26px] place-items-center rounded-full border-2 text-[10px] font-extrabold ${L ? "border-white" : "border-navy text-[#0A1226]"}`}
                     style={{ animationDelay: `${(i % 5) * 0.17}s`, ...pinStyle(p) }}
                   >
                     {p.top ? p.code : ""}
@@ -362,6 +372,7 @@ export default function DriverRace() {
       )}
       <style>{`.race-comment{animation:raceIn .4s ease}@keyframes raceIn{from{opacity:0;transform:translateY(4px)}}
 .race-lane{background:repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 10px,transparent 10px 20px);background-size:20px 3px;animation:raceRoad .6s linear infinite}
+.race-lane-light{background:repeating-linear-gradient(90deg,rgba(20,33,61,.18) 0 10px,transparent 10px 20px);background-size:20px 3px;animation:raceRoad .6s linear infinite}
 @keyframes raceRoad{to{background-position:-20px 0}}
 .race-bob{animation:raceBob .5s ease-in-out infinite alternate}
 @keyframes raceBob{to{transform:translateY(-1.5px)}}
@@ -370,7 +381,7 @@ export default function DriverRace() {
 .race-arrow i{font-style:normal;animation:raceArrow 1.1s infinite}.race-arrow i:nth-child(2){animation-delay:.18s}.race-arrow i:nth-child(3){animation-delay:.36s}
 @keyframes raceArrow{0%,100%{opacity:.25}40%{opacity:1}}
 .race-live{animation:raceLive 1.2s infinite}@keyframes raceLive{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-bob,.race-trail,.race-live,.race-arrow i{animation:none}}`}</style>
+@media (prefers-reduced-motion:reduce){.race-comment,.race-lane,.race-lane-light,.race-bob,.race-trail,.race-live,.race-arrow i{animation:none}}`}</style>
     </div>
   );
 }
