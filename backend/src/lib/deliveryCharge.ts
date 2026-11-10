@@ -1,7 +1,7 @@
 /**
  * Delivery charge per parcel.
  *
- * Outside areas — Umm Al Quwain, Fujairah, Al Ain, Ras Al Khaimah, Sajja and Kalba —
+ * Outside areas — Umm Al Quwain, Fujairah, Al Ain, Ras Al Khaimah, Sajja, Kalba and Damac Hills 2 —
  * are charged 20 for every vendor, except RIJUS and ATHEEN who pay 25 there.
  * Everywhere else the vendor's own rate applies.
  *
@@ -10,13 +10,13 @@
  * address always counts, however it is spelled.
  */
 export const OUTSIDE_EMIRATES = ["UMM AL QUWAIN", "FUJAIRAH", "AL AIN", "RAS AL KHAIMAH"] as const;
-export const OUTSIDE_AREAS = ["UMM AL QUWAIN", "FUJAIRAH", "AL AIN", "RAS AL KHAIMAH", "SAJJA", "KALBA"] as const;
+export const OUTSIDE_AREAS = ["UMM AL QUWAIN", "FUJAIRAH", "AL AIN", "RAS AL KHAIMAH", "SAJJA", "KALBA", "DAMAC HILLS 2"] as const;
 export type OutsideArea = (typeof OUTSIDE_AREAS)[number];
 
 /** Spelling-tolerant patterns for each outside place (first match wins). */
 const OUTSIDE_TEXT: [RegExp, OutsideArea][] = [
-  // Umm Al Quwain · Ummul Kuvain · Um al Qaiwain · Ummulquwain · Umm Al Quain · UAQ · Kuwain
-  [/\bu+m+[\s\-'’]*(?:[aeu]l+[\s\-'’]*)?[qkg][aeiouwv]{1,6}n\b|\b[qk]u[wv]+a?i?y?n\b|\bu\.?a\.?q\b/i, "UMM AL QUWAIN"],
+  // Umm Al Quwain · Ummul Kuvain · Um al Qaiwain · Ummulquwain · Umm Al Quain · Umin al Quin · UAQ · Kuwain
+  [/\bu+m+[aeiu]*n?[\s\-'’]*(?:[aeu]l+[\s\-'’]*)?[qkg][aeiouwv]{1,6}n\b|\b[qk]u[wv]+a?i?y?n\b|\bu\.?a\.?q\b/i, "UMM AL QUWAIN"],
   // Fujairah · Fujaira · Fujeirah · Fujira · Fojaira
   [/\bf[uo]+j+[aeiy]{0,3}r+a*h?\b/i, "FUJAIRAH"],
   // Al Ain · Alain · Al Ayn — but not "Al Ain road" (that runs through Dubai)
@@ -27,6 +27,8 @@ const OUTSIDE_TEXT: [RegExp, OutsideArea][] = [
   [/\b(?:al[\s\-]*)?saj+a'?a?h?\b|\bsajja\b/i, "SAJJA"],
   // Kalba · Qalba · Khalba
   [/\b(?:kh?|q)al+ba\b/i, "KALBA"],
+  // Damac Hills 2 · Damac Hills II · DH2 · Akoya Oxygen (its old name)
+  [/\bdamac[\s\-'’]*hills?[\s\-'’]*(?:2|ii|two)\b|\bdh[\s\-]?2\b|\bakoya[\s\-'’]*oxygen\b/i, "DAMAC HILLS 2"],
 ];
 
 /** Outside place named in an address, if any. */
