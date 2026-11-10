@@ -116,6 +116,8 @@ const DUBAI: AreaRule[] = [
 ];
 
 const SHARJAH: AreaRule[] = [
+  // Saif Zone (Sharjah Airport International Free Zone) is its own area — never Al Nahda / Sharjah Airport.
+  [/\bsa[iy]e?f[\s\-']*(?:free[\s\-']*)?zone\b|\bsaifzone\b|\bs\.?a\.?i\.?f\.?\s*z\b|\bsharj?a?h?a?[\s\-']*airport[\s\-']*(?:international[\s\-']*)?free[\s\-']*zone\b/i, "SAIF ZONE"],
   [/\bal[\s\-]*madam\b|(?<!\b(?:call|contact|ask|tell|inform|to|for|dear|hi|hello|mr|mrs)\s+)\bmadam\b(?!\s*(?:will|is|number|no|mobile|phone|sir))|\balmadam\b|\b(?:al[\s\-]*)?mada'?am\b|\b(?:al[\s\-]*)?madaam\b/i, "AL MADAM"],
   [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?18\b)|(?:\bsanaiya\s*-?\s*18\b)/i, "INDUSTRIAL AREA 18"],
   [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?17\b)|(?:\bsanaiya\s*-?\s*17\b)/i, "INDUSTRIAL AREA 17"],
@@ -194,7 +196,7 @@ const SHARJAH: AreaRule[] = [
   [/\bal[\s\-]*sharq\b/i, "AL SHARQ"],
   [/\b(?:al[\s\-]*)?khezamia\b/i, "AL KHEZAMIA"],
   [/\b(?:al[\s\-]*)?romaila\b/i, "AL ROMAILA"],
-  [/\bsharjah[\s\-']*airport\b|\bairport[\s\-']*road[\s\-']*sharjah\b/i, "SHARJAH AIRPORT"],
+  [/\bsharj?a?h?a?[\s\-']*airport\b|\bairport[\s\-']*road[\s\-']*sharjah\b/i, "SHARJAH AIRPORT"],
   [/\b(?:al[\s\-]*)?dhaid\b|\bdhaid\b/i, "AL DHAID"],
   [/\bmleiha\b/i, "MLEIHA"],
   [/\bkhor[\s\-']*?fakk?an\b|\bkhorfakan\b/i, "KHOR FAKKAN"],
@@ -491,6 +493,7 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "SHARJAH|INDUSTRIAL AREA 12",
   "SHARJAH|INDUSTRIAL AREA 11",
   "SHARJAH|AL NAHDA (SHJ)",
+  "SHARJAH|SAIF ZONE",
   "SHARJAH|INDUSTRIAL AREA 2",
   "SHARJAH|INDUSTRIAL AREA 3",
   "SHARJAH|INDUSTRIAL AREA 6",
@@ -525,6 +528,8 @@ const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHA
 export function detectArea(address?: string | null, emirate?: string | null): string {
   const text = (address ?? "").replace(/\s+/g, " ").trim();
   if (!text) return "NO ADDRESS";
+  // Saif Zone (Sharjah Airport Free Zone) is its own area, whatever else the address mentions.
+  if (/\bsa[iy]e?f[\s\-']*(?:free[\s\-']*)?zone\b|\bsaifzone\b|\bsharj?a?h?a?[\s\-']*airport[\s\-']*(?:international[\s\-']*)?free[\s\-']*zone\b/i.test(text)) return "SAIF ZONE";
   // Al Nahda exists in both Dubai and Sharjah: an emirate written in the address decides.
   if (/\bnah[a]?d[h]?a\b/i.test(text)) {
     if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
