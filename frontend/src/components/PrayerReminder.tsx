@@ -267,7 +267,7 @@ export default function PrayerReminder() {
   return (
     <>
       {upcoming && info && (
-        <span className="flex w-full items-center justify-center gap-1 rounded-full border border-navy/50 px-3 py-1 font-mono text-[11px] font-bold text-navy" title={`Next azan · ${info.emirateLabel}`}>
+        <span className="flex w-full items-center justify-center gap-1 rounded-full border border-white/25 px-3 py-1 font-mono text-[11px] text-brass-light" title={`Next azan · ${info.emirateLabel}`}>
           🕌 {timeFmt(upcoming.at)}
         </span>
       )}
@@ -275,13 +275,13 @@ export default function PrayerReminder() {
       {push === "off" && (
         <button
           onClick={() => void subscribe(true)}
-          className="w-full animate-pulse rounded-full border border-navy px-2 py-1 font-mono text-[10px] font-bold text-navy"
+          className="w-full animate-pulse rounded-full border border-brass-light px-2 py-1 font-mono text-[10px] font-bold text-brass-light"
         >
           🔔 Azan ON
         </button>
       )}
       {push === "denied" && (
-        <span className="w-full text-center font-mono text-[10px] font-bold text-cancelled" title="Allow notifications in phone settings">🔕 Blocked</span>
+        <span className="w-full text-center font-mono text-[10px] text-cancelled" title="Allow notifications in phone settings">🔕 Blocked</span>
       )}
 
       {active && (
