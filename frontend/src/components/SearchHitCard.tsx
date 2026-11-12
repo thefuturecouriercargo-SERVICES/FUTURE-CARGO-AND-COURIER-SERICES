@@ -435,7 +435,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
           )}
         </div>
         {b && (
-          <div data-share-hide="1" className="mt-2 normal-case">
+          <div data-share-hide="1" className="mt-2">
             <CustomerRiskBadge phone={b.customerPhone} excludeCn={h.cnNo} />
           </div>
         )}

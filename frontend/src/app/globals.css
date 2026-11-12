@@ -719,3 +719,31 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .ap-row, .ap-newtag, .ap-shake, .ap-spin, .ap-printing .ap-label, .ap-toast, .ap-bump, .ap-pulse { animation: none !important; transition: none !important; }
 }
+
+/* ─── ALL CAPS everywhere ─────────────────────────────────────────────────
+   Every portal (admin, driver, vendor, login, labels, print pages) shows all
+   text in capital letters. Placeholders and typed values too — except fields
+   where case matters (email, password, URL), which keep what the user types.
+   Display only: saved data is not changed. */
+html,
+body,
+body *,
+body *::before,
+body *::after,
+input,
+textarea,
+select,
+button,
+::placeholder {
+  text-transform: uppercase !important;
+}
+input[type="email"],
+input[type="password"],
+input[type="url"],
+[data-keep-case],
+[data-keep-case]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="url"]::placeholder {
+  text-transform: none !important;
+}

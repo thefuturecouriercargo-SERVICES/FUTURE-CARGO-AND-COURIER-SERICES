@@ -38,6 +38,7 @@ function VendorLoginForm() {
             <label htmlFor="vlogin-user" className="mb-1.5 block text-xs font-medium text-ink-soft">Username</label>
             <input
               id="vlogin-user"
+              data-keep-case
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}

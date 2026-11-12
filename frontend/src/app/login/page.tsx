@@ -40,6 +40,7 @@ export default function LoginPage() {
             </label>
             <input
               id="login-user"
+              data-keep-case
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}

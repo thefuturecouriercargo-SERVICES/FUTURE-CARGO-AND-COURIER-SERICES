@@ -402,7 +402,7 @@ export default function PhotoBulkEntry({
           {cards.length} card{cards.length === 1 ? "" : "s"} · {reading > 0 ? `reading ${reading}… · ` : ""}
           {ready.length} to check · {saved.length} saved
           {ready.length - readyOk.length > 0 ? ` · ${ready.length - readyOk.length} need fixing (red)` : ""}
-          <span className="ml-2 normal-case">Amber = the reader wasn&apos;t sure, please check.</span>
+          <span className="ml-2">Amber = the reader wasn&apos;t sure, please check.</span>
         </p>
       )}
 
@@ -542,7 +542,7 @@ export default function PhotoBulkEntry({
                         <button
                           type="button"
                           onClick={() => setField(c.key, "agent", c.fields.agent === NO_AGENT ? "" : NO_AGENT)}
-                          className={`rounded border px-1.5 text-[10px] normal-case ${c.fields.agent === NO_AGENT ? "border-gold bg-gold font-bold text-navy" : "border-line"}`}
+                          className={`rounded border px-1.5 text-[10px] ${c.fields.agent === NO_AGENT ? "border-gold bg-gold font-bold text-navy" : "border-line"}`}
                         >
                           Not mentioned
                         </button>

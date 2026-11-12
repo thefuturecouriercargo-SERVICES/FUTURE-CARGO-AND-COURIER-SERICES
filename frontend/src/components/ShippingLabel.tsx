@@ -170,7 +170,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           <div style={{ fontSize: narrow ? 13 : 15, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
           <div style={{ fontSize: 9 }}>{dubaiDate(booking.createdAt)}</div>
           <div className="mt-0.5" style={{ fontSize: 9 }}>
-            From: <b style={{ textTransform: "none" }}>{labelVendorName(booking.vendor.name)}</b>
+            From: <b>{labelVendorName(booking.vendor.name)}</b>
           </div>
           {(hasOrderNo || billNo || parsed.agent) && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1" style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1 }}>
