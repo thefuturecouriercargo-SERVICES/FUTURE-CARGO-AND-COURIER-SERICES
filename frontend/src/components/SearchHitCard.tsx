@@ -262,16 +262,32 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
   async function drawImage(): Promise<Blob | null> {
     if (!cardRef.current) return null;
     const { toBlob } = await import("html-to-image");
+    // Draw from an off-screen copy at a fixed width, so the picture looks the same
+    // from a phone or a computer: buttons removed completely (no empty space left
+    // at the bottom) and a dark frame around the card so chat apps don't cover
+    // the top with their own bar.
+    const frame = document.createElement("div");
+    frame.style.cssText =
+      "position:fixed;left:-10000px;top:0;width:480px;padding:56px 20px;background:#070B16;box-sizing:border-box;pointer-events:none;";
+    const copy = cardRef.current.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("[data-share-hide]").forEach((n) => n.remove());
+    copy.style.width = "100%";
+    frame.appendChild(copy);
+    document.body.appendChild(frame);
     const opts = {
       pixelRatio: 2,
       cacheBust: true,
-      backgroundColor: "#0D1424",
-      filter: (n: HTMLElement) => !(n instanceof HTMLElement && n.dataset && n.dataset.shareHide),
+      backgroundColor: "#070B16",
+      width: frame.offsetWidth,
+      height: frame.offsetHeight,
+      style: { left: "0", top: "0", position: "static" },
     };
     try {
-      return await toBlob(cardRef.current, opts);
+      return await toBlob(frame, opts);
     } catch {
-      return await toBlob(cardRef.current, { ...opts, skipFonts: true });
+      return await toBlob(frame, { ...opts, skipFonts: true });
+    } finally {
+      frame.remove();
     }
   }
   useEffect(() => {
