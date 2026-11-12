@@ -95,7 +95,7 @@ const IconPin = () => <Svg><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 
 const IconCopy = () => <Svg><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>;
 const IconEdit = () => <Svg><path d="M4 20h4L19 9l-4-4L4 16v4z" /></Svg>;
 const IconShare = () => (
-  <Svg size={14}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></Svg>
+  <Svg><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></Svg>
 );
 const IconAlert = () => <Svg><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></Svg>;
 
@@ -302,6 +302,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       {copied ? <IconCheck /> : <IconCopy />}
     </Tile>
   );
+  tiles.push(<Tile key="share" label={shared ? "Sent" : "Share"} onClick={share}><IconShare /></Tile>);
   if (onEdit) tiles.push(<Tile key="edit" label="Edit" onClick={onEdit}><IconEdit /></Tile>);
 
   const sub = h.vendorName;
@@ -314,19 +315,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
           <span className="truncate font-mono text-xs tracking-wider text-[#94A3B8]">
             CN {h.cnNo} · {sub}
           </span>
-          <span className="flex shrink-0 items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
-            <button
-              type="button"
-              onClick={share}
-              aria-label="Share this consignment"
-              title="Share"
-              className="flex items-center gap-1 rounded-full border border-[#2A3654] px-2.5 py-1 text-[11px] font-bold uppercase text-[#CBD5E1] hover:border-[#E2B857] hover:text-[#E2B857]"
-            >
-              <IconShare />
-              {shared ? "Sent" : "Share"}
-            </button>
-          </span>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
         </div>
         <div className="flex items-baseline justify-between gap-3">
           <span className="truncate text-2xl font-bold">{b?.customerName ?? h.vendorName}</span>

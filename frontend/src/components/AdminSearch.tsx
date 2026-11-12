@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate } from "@/lib/format";
@@ -59,8 +60,11 @@ export default function AdminSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // The parcel shown in the separate popup window (opened with OPEN).
+  const [viewHit, setViewHit] = useState<Hit | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   // Jump to the order's day on Daily Entry and open it there (Edit / Delete).
@@ -68,12 +72,23 @@ export default function AdminSearch() {
     if (!h.orderId || !h.orderDate) return;
     const detail = { date: h.orderDate, cn: h.cnNo, id: h.orderId };
     setOpen(false);
+    setViewHit(null);
     if (window.location.pathname.startsWith("/orders")) {
       window.dispatchEvent(new CustomEvent("fc-open-order", { detail }));
     } else {
       router.push(`/orders?date=${detail.date}&cn=${detail.cn}&open=${detail.id}`);
     }
   }
+
+  // Esc closes the popup window.
+  useEffect(() => {
+    if (!viewHit) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setViewHit(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewHit]);
 
   // "/" focuses the search box (unless already typing somewhere).
   useEffect(() => {
@@ -105,7 +120,9 @@ export default function AdminSearch() {
   // Close when clicking outside.
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (modalRef.current && modalRef.current.contains(t)) return;
+      if (boxRef.current && !boxRef.current.contains(t)) setOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -127,7 +144,7 @@ export default function AdminSearch() {
         if (cancelled) return;
         setHits(r.results);
         setError("");
-        setOpenKey(r.results.length === 1 ? r.results[0].key : null);
+        setOpenKey(null);
       } catch (e) {
         if (cancelled) return;
         setHits([]);
@@ -241,26 +258,51 @@ export default function AdminSearch() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setOpenKey(isOpen ? null : h.key)}
-                        aria-expanded={isOpen}
-                        className={`rounded-lg px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide ${
-                          isOpen ? "border border-[#2A3654] text-[#CBD5E1] hover:border-[#E2B857]" : "bg-[#E2B857] text-[#1A1405] hover:bg-[#F5D27A]"
-                        }`}
+                        onClick={() => {
+                          setOpenKey(h.key);
+                          setViewHit(h);
+                        }}
+                        className="rounded-lg bg-[#E2B857] px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide text-[#1A1405] hover:bg-[#F5D27A]"
                       >
-                        {isOpen ? "Close" : "Open"}
+                        Open
                       </button>
                     </span>
                   </div>
-                  {isOpen && (
-                    <div className="border-t border-line bg-paper p-3">
-                      <SearchHitCard h={h} area={area} onEdit={h.orderId ? () => openInDailyEntry(h) : undefined} />
-                    </div>
-                  )}
                 </div>
               );
             })}
         </div>
       )}
+
+      {viewHit &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setViewHit(null);
+            }}
+          >
+            <div ref={modalRef} role="dialog" aria-modal="true" aria-label={`CN ${viewHit.cnNo}`} className="w-full max-w-[560px]">
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setViewHit(null)}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2A3654] bg-[#0D1424] text-[#CBD5E1] hover:border-[#E2B857] hover:text-[#E2B857]"
+                >
+                  ✕
+                </button>
+              </div>
+              <SearchHitCard
+                h={viewHit}
+                area={viewHit.area || detectArea(viewHit.booking?.address, viewHit.emirate)}
+                onEdit={viewHit.orderId ? () => openInDailyEntry(viewHit) : undefined}
+              />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
