@@ -94,6 +94,9 @@ const IconChat = () => <Svg><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.
 const IconPin = () => <Svg><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></Svg>;
 const IconCopy = () => <Svg><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>;
 const IconEdit = () => <Svg><path d="M4 20h4L19 9l-4-4L4 16v4z" /></Svg>;
+const IconShare = () => (
+  <Svg size={14}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" /></Svg>
+);
 const IconAlert = () => <Svg><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></Svg>;
 
 /* ---------- tracking steps ---------- */
@@ -166,6 +169,7 @@ function Tile({ children, href, onClick, tone = "plain", label }: { children: Re
  */
 export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails; area?: string | null; onEdit?: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const b = h.booking ?? null;
   const cancelled = h.stage === "CANCELLED";
   const rejected = h.stage === "REJECTED";
@@ -245,6 +249,40 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
     .filter(Boolean)
     .join("\n");
 
+  const orderNo = h.vendorRef || b?.vendorRef || null;
+  const hit = (k: string) => (h.matched ?? []).includes(k);
+  // Share: the phone's share sheet (WhatsApp, etc.); on desktop, opens WhatsApp with the text.
+  const shareText = [
+    `CN ${h.cnNo} — ${h.vendorName}`,
+    `Status: ${chip.text}`,
+    orderNo ? `Order no: #${orderNo}` : "",
+    h.billNo ? `Bill no: ${h.billNo}` : "",
+    b ? `Customer: ${b.customerName}` : "",
+    b ? `Phone: ${b.customerPhone}` : "",
+    address ? `Address: ${address}` : "",
+    b?.items ? `Items: ${b.items}` : "",
+    h.driver ? `Driver: ${h.driver}` : "",
+    cod === 0 && b ? "PREPAID — do not collect cash" : cod < 0 ? `REFUND: AED ${fmtNumber(-cod)}` : `COD: AED ${fmtNumber(cod)}`,
+    b?.notes ? `Note: ${b.notes}` : "",
+    (cancelled || rejected) && reasonText ? `Reason: ${reasonText}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  async function share() {
+    const nav = navigator as Navigator & { share?: (d: { title?: string; text?: string }) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({ title: `CN ${h.cnNo}`, text: shareText });
+        return;
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
+      }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener");
+    setShared(true);
+    setTimeout(() => setShared(false), 1500);
+  }
+
   const tiles: ReactNode[] = [];
   if (b) {
     tiles.push(<Tile key="call" tone="gold" label="Call" href={`tel:${tel}`}><IconPhone /></Tile>);
@@ -267,8 +305,6 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
   if (onEdit) tiles.push(<Tile key="edit" label="Edit" onClick={onEdit}><IconEdit /></Tile>);
 
   const sub = h.vendorName;
-  const orderNo = h.vendorRef || b?.vendorRef || null;
-  const hit = (k: string) => (h.matched ?? []).includes(k);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[#1F2A44] bg-[#0D1424] font-sans uppercase text-[#E5E7EB]">
@@ -278,7 +314,19 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
           <span className="truncate font-mono text-xs tracking-wider text-[#94A3B8]">
             CN {h.cnNo} · {sub}
           </span>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
+          <span className="flex shrink-0 items-center gap-2">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
+            <button
+              type="button"
+              onClick={share}
+              aria-label="Share this consignment"
+              title="Share"
+              className="flex items-center gap-1 rounded-full border border-[#2A3654] px-2.5 py-1 text-[11px] font-bold uppercase text-[#CBD5E1] hover:border-[#E2B857] hover:text-[#E2B857]"
+            >
+              <IconShare />
+              {shared ? "Sent" : "Share"}
+            </button>
+          </span>
         </div>
         <div className="flex items-baseline justify-between gap-3">
           <span className="truncate text-2xl font-bold">{b?.customerName ?? h.vendorName}</span>

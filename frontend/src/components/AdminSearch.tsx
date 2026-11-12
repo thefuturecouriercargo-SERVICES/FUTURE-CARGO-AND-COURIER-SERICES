@@ -207,11 +207,7 @@ export default function AdminSearch() {
               const isOpen = openKey === h.key;
               return (
                 <div key={h.key} className="border-b border-line last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => setOpenKey(isOpen ? null : h.key)}
-                    className={`flex w-full items-start justify-between gap-2 p-3 text-left hover:bg-paper ${isOpen ? "bg-paper" : ""}`}
-                  >
+                  <div className={`flex w-full items-start justify-between gap-2 p-3 text-left ${isOpen ? "bg-paper" : ""}`}>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-baseline gap-x-2">
                         <b className="font-mono text-sm text-navy">CN {h.cnNo}</b>
@@ -239,10 +235,22 @@ export default function AdminSearch() {
                         </span>
                       )}
                     </span>
-                    <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>
-                      {st.text}
+                    <span className="flex shrink-0 flex-col items-end gap-2">
+                      <span className={`whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>
+                        {st.text}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setOpenKey(isOpen ? null : h.key)}
+                        aria-expanded={isOpen}
+                        className={`rounded-lg px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wide ${
+                          isOpen ? "border border-[#2A3654] text-[#CBD5E1] hover:border-[#E2B857]" : "bg-[#E2B857] text-[#1A1405] hover:bg-[#F5D27A]"
+                        }`}
+                      >
+                        {isOpen ? "Close" : "Open"}
+                      </button>
                     </span>
-                  </button>
+                  </div>
                   {isOpen && (
                     <div className="border-t border-line bg-paper p-3">
                       <SearchHitCard h={h} area={area} onEdit={h.orderId ? () => openInDailyEntry(h) : undefined} />
