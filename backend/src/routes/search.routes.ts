@@ -40,6 +40,14 @@ export interface SearchHit {
   enteredAt: string;
   // When it was marked Delivered / Cancelled (null while still open).
   resolvedAt?: string | null;
+  // Popup details: DL charge, payment mode, and the separate office remark /
+  // driver note (shown as the reason when cancelled).
+  deliveryCharge?: number | null;
+  payment?: string | null;
+  remarks?: string | null;
+  driverNote?: string | null;
+  driverNoteAt?: string | null;
+  rejectReason?: string | null;
   booking?: {
     customerName: string;
     customerPhone: string;
@@ -110,6 +118,9 @@ router.get(
             area: true,
             remarks: true,
             driverNote: true,
+            driverNoteAt: true,
+            deliveryCharge: true,
+            payment: true,
             emirate: true,
             resolvedAt: true,
             createdAt: true,
@@ -175,6 +186,12 @@ router.get(
           orderDate: b.order ? b.order.date.toISOString().slice(0, 10) : null,
           enteredAt: (b.order?.createdAt ?? b.createdAt).toISOString(),
           resolvedAt: b.order?.resolvedAt ? b.order.resolvedAt.toISOString() : null,
+          deliveryCharge: b.order?.deliveryCharge ?? null,
+          payment: b.order?.payment ?? null,
+          remarks: b.order?.remarks ?? null,
+          driverNote: b.order?.driverNote ?? null,
+          driverNoteAt: b.order?.driverNoteAt ? b.order.driverNoteAt.toISOString() : null,
+          rejectReason: b.rejectReason ?? null,
           booking: {
             customerName: b.customerName,
             customerPhone: b.customerPhone,
@@ -215,6 +232,12 @@ router.get(
           orderDate: o.date.toISOString().slice(0, 10),
           enteredAt: o.createdAt.toISOString(),
           resolvedAt: o.resolvedAt ? o.resolvedAt.toISOString() : null,
+          deliveryCharge: o.deliveryCharge,
+          payment: o.payment,
+          remarks: o.remarks,
+          driverNote: o.driverNote,
+          driverNoteAt: o.driverNoteAt ? o.driverNoteAt.toISOString() : null,
+          rejectReason: null,
           booking: null,
           matched,
         };

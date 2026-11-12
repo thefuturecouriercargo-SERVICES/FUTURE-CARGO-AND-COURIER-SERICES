@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
-import OrderDetails from "@/components/OrderDetails";
+import SearchHitCard from "@/components/SearchHitCard";
 import { OrderBookingDetails } from "@/types";
 
 type Stage = "AWAITING_PICKUP" | "REJECTED" | "PENDING" | "DELIVERED" | "TRANSFER" | "CANCELLED";
@@ -28,14 +28,15 @@ interface Hit {
   orderDate?: string | null;
   enteredAt?: string;
   resolvedAt?: string | null;
+  deliveryCharge?: number | null;
+  payment?: string | null;
+  remarks?: string | null;
+  driverNote?: string | null;
+  driverNoteAt?: string | null;
+  rejectReason?: string | null;
   booking?: OrderBookingDetails | null;
   matched: string[];
 }
-
-const fmtDT = (iso?: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })
-    : "—";
 
 const STAGE: Record<Stage, { text: string; cls: string }> = {
   AWAITING_PICKUP: { text: "Awaiting pickup", cls: "bg-pending-bg text-pending" },
@@ -244,49 +245,7 @@ export default function AdminSearch() {
                   </button>
                   {isOpen && (
                     <div className="border-t border-line bg-paper p-3">
-                      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border border-line bg-white px-3 py-2">
-                          <p className="font-mono text-[9px] uppercase tracking-wide text-ink-soft">Entered</p>
-                          <p className="font-mono text-xs font-semibold text-navy">{fmtDT(h.enteredAt)}</p>
-                          {h.orderDate && (
-                            <p className="font-mono text-[10px] text-ink-soft">
-                              Sheet day {fmtDate(h.orderDate)}
-                            </p>
-                          )}
-                        </div>
-                        <div className="rounded-lg border border-line bg-white px-3 py-2">
-                          <p className="font-mono text-[9px] uppercase tracking-wide text-ink-soft">
-                            {h.stage === "DELIVERED" ? "Delivered" : h.stage === "CANCELLED" ? "Cancelled" : "Delivered / Cancelled"}
-                          </p>
-                          <p
-                            className={`font-mono text-xs font-semibold ${
-                              h.stage === "DELIVERED" ? "text-delivered" : h.stage === "CANCELLED" ? "text-cancelled" : "text-ink-soft"
-                            }`}
-                          >
-                            {h.stage === "DELIVERED" || h.stage === "CANCELLED" ? fmtDT(h.resolvedAt) : `Not yet — ${STAGE[h.stage]?.text ?? h.stage}`}
-                          </p>
-                        </div>
-                      </div>
-                      {h.orderId ? (
-                        <button
-                          type="button"
-                          onClick={() => openInDailyEntry(h)}
-                          className="mb-3 w-full rounded-lg border border-brass bg-brass/15 px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wide text-navy hover:bg-brass/30"
-                        >
-                          ✎ Open in Daily Entry — edit / delete
-                        </button>
-                      ) : (
-                        <p className="mb-3 text-xs text-ink-soft">Not on Daily Entry yet ({STAGE[h.stage]?.text ?? h.stage}).</p>
-                      )}
-                      {h.note && <p className="mb-2 text-sm text-cancelled">{h.note}</p>}
-                      {h.booking ? (
-                        <OrderDetails riskCheck booking={h.booking} cnNo={h.cnNo} vendorName={h.vendorName} total={h.amount} />
-                      ) : (
-                        <p className="text-sm text-ink-soft">
-                          Daily Entry order — no customer details on file. Vendor {h.vendorName}, AED {fmtNumber(h.amount)}
-                          {h.driver ? `, driver ${h.driver}` : ""}.
-                        </p>
-                      )}
+                      <SearchHitCard h={h} area={area} onEdit={h.orderId ? () => openInDailyEntry(h) : undefined} />
                     </div>
                   )}
                 </div>
