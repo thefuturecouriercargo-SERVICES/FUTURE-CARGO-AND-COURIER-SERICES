@@ -1,3 +1,4 @@
+import { emirateFromAddress } from "./areas";
 /**
  * Delivery charge per parcel.
  *
@@ -65,7 +66,9 @@ const EMIRATE_WORD: Record<string, RegExp> = {
 export function correctEmirate(emirate: string, address?: string | null): string {
   const em = (emirate ?? "").toUpperCase().trim();
   const place = outsidePlaceInText(address);
-  if (!place || !(OUTSIDE_EMIRATES as readonly string[]).includes(place) || place === em) return em;
+  // No outside emirate in the address → check Dubai / Sharjah / Ajman / Abu Dhabi against the area named.
+  if (!place || !(OUTSIDE_EMIRATES as readonly string[]).includes(place)) return emirateFromAddress(em, address);
+  if (place === em) return em;
   const own = EMIRATE_WORD[em];
   if (own && own.test(address ?? "")) return em; // address names both → keep what was chosen
   return place;

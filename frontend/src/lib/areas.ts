@@ -1,3 +1,4 @@
+// COPY of backend/src/lib/areas.ts — keep both files the same when changing areas.
 /**
  * UAE delivery areas for all 7 emirates (plus Al Ain), with common spellings and short forms.
  * Used to pick the area for driver piles / labels and the emirate when a message omits it.
@@ -93,10 +94,10 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?satwa\b/i, "SATWA"],
   [/\bal[\s\-]*wasl\b|\bcity[\s\-']*walk\b|\bbox[\s\-']*park\b/i, "AL WASL"],
   [/\b(?:al[\s\-]*)?bada'?a\b/i, "AL BADAA"],
-  [/\bumm[\s\-']*suqeim\b|\bum[\s\-']*suqeim\b|\bumm[\s\-']*sequim\b/i, "UMM SUQEIM"],
+  [/\bumm?[\s\-']*su?q[ae]?[iy]?e?[ie]?me?\b|\bumm[\s\-']*sequim\b|\bumm?[\s\-']*s[ou]q[ae]?[iy]?m\b/i, "UMM SUQEIM"],
   [/\bal[\s\-]*manara\b/i, "AL MANARA"],
   [/\bal[\s\-]*safa\b/i, "AL SAFA"],
-  [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
+  [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bjum[ae]{1,2}i?ra+h?\b|\bjumair?ah?\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
   // Al Khail Gate / Al Khail Heights are inside Al Quoz (customers write "Alkhile gate", "khail gate"…).
   [/\b(?:al[\s\-']*)?kh?[aeiy]{1,2}le?[\s\-']*(?:gates?|heights?)\b/i, "AL QUOZ"],
   [/\bal[\s\-']*q[ou]{1,2}[sz]e?\b|\bal[\s\-']*koz\b|\bal[\s\-']*kouz\b|\balq[ou]{1,2}[sz]\b|\bquoz\b|\bqouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
@@ -584,6 +585,19 @@ export function emirateOfArea(text: string): string | undefined {
   return hits.length === 1 ? hits[0] : undefined;
 }
 
+/**
+ * Emirate that owns an area name from detectArea ("AL WARQA" → DUBAI), or
+ * undefined when the name isn't a known area or exists in more than one emirate.
+ */
+export function emirateOfAreaName(area?: string | null): string | undefined {
+  const a = (area ?? "").toUpperCase().trim();
+  if (!a) return undefined;
+  if (a === "AL NAHDA (DXB)") return "DUBAI";
+  if (a === "AL NAHDA (SHJ)" || a === "SAIF ZONE") return "SHARJAH";
+  const hits = Object.entries(BY_EMIRATE).filter(([, rules]) => rules.some(([, n]) => n === a)).map(([em]) => em);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
 /** True when the text names a known area (any emirate). */
 export function isKnownArea(text: string): boolean {
   return Object.values(BY_EMIRATE).some((rules) => rules.some(([re]) => re.test(text)));
@@ -711,4 +725,32 @@ function fuzzyArea(text: string, emirate: string, strict = false): string | unde
   const base = best.area.replace(/\s+\d+$/, "");
   if (best.after && /^\d{1,2}$/.test(best.after) && NUMBERED.has(`${base} ${Number(best.after)}`)) return `${base} ${Number(best.after)}`;
   return best.area;
+}
+
+/** Emirate words written in an address (only the four city emirates; outside emirates are handled elsewhere). */
+const EMIRATE_WORDS: Record<string, RegExp> = {
+  DUBAI: /\bdub[a]?[iy]\b|\bdxb\b/i,
+  SHARJAH: /\bsh[a]?r[a]?j[a]?h?\b|\bsharjha\b|\bshj\b/i,
+  ABUDHABI: /\babu\s*dh?abi\b|\babudh?abi\b|\bauh\b/i,
+  AJMAN: /\bajm[a]+n\b|\bajm\b/i,
+};
+
+/**
+ * Right emirate from the address when the chosen one is wrong (form left on the
+ * previous order's emirate, e.g. "Al Warqa" / "Jumeirah, Umm Suqeim" saved as Sharjah).
+ * Only for Dubai / Sharjah / Ajman / Abu Dhabi:
+ *  - address names the chosen emirate → keep it
+ *  - address names exactly one other of these emirates → that one
+ *  - else the emirate of the area found in the address, when that area belongs to one emirate only
+ */
+export function emirateFromAddress(emirate?: string | null, address?: string | null): string {
+  const em = (emirate ?? "").toUpperCase().trim();
+  const text = (address ?? "").trim();
+  if (!text || !(em in EMIRATE_WORDS)) return em;
+  if (EMIRATE_WORDS[em].test(text)) return em;
+  const named = Object.keys(EMIRATE_WORDS).filter((k) => EMIRATE_WORDS[k].test(text));
+  if (named.length === 1) return named[0];
+  if (named.length > 1) return em;
+  const owner = emirateOfAreaName(detectArea(text, em));
+  return owner && owner !== em ? owner : em;
 }

@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber, fmtDate } from "@/lib/format";
-import { detectArea, isWesternArea } from "@/lib/areas";
+import { detectArea, isWesternArea, emirateOfAreaName } from "@/lib/areas";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
 
@@ -229,7 +229,9 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           📍 {(() => {
             // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
             const a = detectArea(booking.address, booking.emirate);
-            const em = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+            const saved = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+            // The area decides the emirate printed (Al Warqa / Jumeirah are Dubai, whatever was selected).
+            const em = emirateOfAreaName(a) ?? saved;
             if (a === "OTHER AREA" || a === "NO ADDRESS") return em || "—";
             // Western Region parcels must not go with the Abu Dhabi city driver.
             if (isWesternArea(a)) return `${a} · WESTERN REGION`;

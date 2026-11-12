@@ -1,0 +1,756 @@
+// COPY of frontend/src/lib/areas.ts — keep both files the same when changing areas.
+/**
+ * UAE delivery areas for all 7 emirates (plus Al Ain), with common spellings and short forms.
+ * Used to pick the area for driver piles / labels and the emirate when a message omits it.
+ * First match wins inside an emirate, so more specific names come before broader ones.
+ */
+
+type AreaRule = [RegExp, string];
+
+const DUBAI: AreaRule[] = [
+  [/\bpalm[\s\-']*jebel[\s\-']*ali\b/i, "PALM JEBEL ALI"],
+  [/\bdubai[\s\-']*south\b|\bdubai[\s\-']*world[\s\-']*central\b|\bdwc\b|\bexpo[\s\-']*city\b|\bexpo[\s\-']*village\b|\bemaar[\s\-']*south\b|(?:\bmadinat\s*al\s*mataar\b)/i, "DUBAI SOUTH"],
+  [/\bbusiness[\s\-']*bay\b|(?:\bb\.?\s*bay\b)/i, "BUSINESS BAY"],
+  [/\bdubai[\s\-']*hills?\b|\bpark[\s\-']*lane\b|(?:\bmbr\s*city\b.*\bhills\b)/i, "DUBAI HILLS"],
+  [/\bcreek[\s\-']*harbou?r\b|\bcreek[\s\-']*beach\b|\bdubai[\s\-']*creek[\s\-']*residences?\b/i, "DUBAI CREEK HARBOUR"],
+  [/\bfestival[\s\-']*city\b|\bdfc\b/i, "FESTIVAL CITY"],
+  [/\bdown[\s\-']*?town\b|\bburj[\s\-']*khalifa\b|\bdubai[\s\-']*mall\b|\bboulevard\b|\bopera[\s\-']*district\b|(?:\bdownt\b)/i, "DOWNTOWN"],
+  [/\bdifc\b|\bfinancial[\s\-']*centre\b|\bfinancial[\s\-']*center\b|\bgate[\s\-']*village\b/i, "DIFC"],
+  [/\bza'?abeel\b|\bzabeel\b/i, "ZA'ABEEL"],
+  [/\bsheikh[\s\-']*zayed[\s\-']*road\b|\bshk[\s\-']*zayed[\s\-']*road\b|\bszr\b|\btrade[\s\-']*cent(re|er)\b|\bworld[\s\-']*trade\b|\bwtc\b|(?:\bdwtc\b)/i, "SHEIKH ZAYED ROAD"],
+  [/\bemirates[\s\-']*hills\b/i, "EMIRATES HILLS"],
+  [/\bthe[\s\-']*springs\b|\bthe[\s\-']*meadows\b|\bthe[\s\-']*lakes\b|\bthe[\s\-']*greens\b|\bthe[\s\-']*views\b|\bsprings[\s\-']*\d+\b|\bmeadows[\s\-']*\d+\b|\bemirates[\s\-']*living\b/i, "EMIRATES LIVING"],
+  [/\bjumeirah[\s\-']*park\b|\bjumeira[\s\-']*park\b/i, "JUMEIRAH PARK"],
+  [/\bjumeirah[\s\-']*islands\b/i, "JUMEIRAH ISLANDS"],
+  [/\bjumeirah[\s\-']*golf\b|\bjge\b/i, "JUMEIRAH GOLF ESTATES"],
+  [/\bjlt\b|\bjumeirah[\s\-']*lakes?[\s\-']*towers?\b|\bjumeira[\s\-']*lake\b|(?:\bcluster\s+[a-z]\b.*\b(jlt|lake))/i, "JLT"],
+  [/\bjbr\b|\bjumeirah[\s\-']*beach[\s\-']*res\w*\b|\bthe[\s\-']*walk\b|\bbluewaters?\b/i, "JBR"],
+  [/\bdubai[\s\-']*harbou?r\b|\bemaar[\s\-']*beachfront\b/i, "DUBAI HARBOUR"],
+  [/\bpalm[\s\-']*jumeirah\b|\bpalm[\s\-']*jumeira\b|\bthe[\s\-']*palm\b|\bpalm\b|\bshoreline[\s\-']*apartments?\b|\batlantis\b/i, "PALM JUMEIRAH"],
+  [/\b(dubai)[\s\-']*marina\b|\bmarina[\s\-']*walk\b|\bmarina[\s\-']*gate\b|\bprincess[\s\-']*tower\b|\belite[\s\-']*residence\b/i, "DUBAI MARINA"],
+  [/\bjvc\b|\bjumeirah[\s\-']*village[\s\-']*circle\b|\bjumeira[\s\-']*village[\s\-']*circle\b|\bjumeirah[\s\-']*village[\s\-']*c\b/i, "JVC"],
+  [/\bjvt\b|\bjumeirah[\s\-']*village[\s\-']*triangle\b|\bjumeira[\s\-']*village[\s\-']*triangle\b|\bjumeirah[\s\-']*village[\s\-']*t\b/i, "JVT"],
+  [/\b(?:al[\s\-]*)?barsha[\s\-']*south\b|\bbarsha[\s\-']*south\b/i, "AL BARSHA SOUTH"],
+  [/\bbarsha[\s\-']*heights?\b|\btecom\b|\btecomm\b/i, "BARSHA HEIGHTS"],
+  [/\b(?:al[\s\-]*)?barsha\b|\bmall[\s\-']*of[\s\-']*the[\s\-']*emirates\b|\bmoe\b|\bbarsha[\s\-']*\d\b/i, "AL BARSHA"],
+  [/\bdic\b|\bd[\s.]*i[\s.]*c\b\.?|\b(?:dubai[\s\-']*)?internet[\s\-']*city\b|\bintrnet[\s\-']*city\b/i, "DIC"],
+  [/\bdubai[\s\-']*industrial[\s\-']*city\b|\bindustrial[\s\-']*city[\s\-']*dubai\b/i, "DUBAI INDUSTRIAL CITY"],
+  [/\b(?:dubai[\s\-']*)?media[\s\-']*city\b|\bdmc\b/i, "MEDIA CITY"],
+  [/\b(?:al[\s\-]*)?sufouh\b|\bal[\s\-]*sufuh\b|\bsufuh\b|\bsoufouh\b|\bknowledge[\s\-']*village\b/i, "AL SUFOUH"],
+  [/\bprod[ue]ction[\s\-']*city\b|\bimpz\b|\bdpc\b/i, "DUBAI PRODUCTION CITY"],
+  [/\bstudio[\s\-']*city\b/i, "DUBAI STUDIO CITY"],
+  [/\bsports[\s\-']*city\b|\bdsc\b/i, "SPORTS CITY"],
+  [/\bmotor[\s\-']*city\b|\buptown[\s\-']*motor[\s\-']*city\b|\bgreen[\s\-']*community[\s\-']*motor[\s\-']*city\b/i, "MOTOR CITY"],
+  [/\bgreen[\s\-']*community\b/i, "DUBAI GREEN COMMUNITY"],
+  [/\barjan\b|\bal[\s\-']*barsha[\s\-']*south[\s\-']*3\b|\bdubai[\s\-']*science[\s\-']*park\b/i, "ARJAN"],
+  [/\b(?:al[\s\-]*)?barari\b/i, "AL BARARI"],
+  [/\bdamac[\s\-']*hills[\s\-']*2\b|\bdamac[\s\-']*hills[\s\-']*ii\b|\bakoya[\s\-']*oxygen\b|\bdh2\b|(?:\bakoya\b.*\b(oxygen|damac)\b)/i, "DAMAC HILLS 2"],
+  [/\bdamac[\s\-']*hills\b|\bakoya[\s\-']*by[\s\-']*damac\b/i, "DAMAC HILLS"],
+  [/\bdamac[\s\-']*lagoons?\b/i, "DAMAC LAGOONS"],
+  [/\btown[\s\-']*square\b|\bnshama\b/i, "TOWN SQUARE"],
+  [/\bremraam\b|\bal[\s\-']*ramth\b/i, "REMRAAM"],
+  [/\bmudon\b/i, "MUDON"],
+  [/\bserena\b|\bvillanova\b|\bla[\s\-']*quinta\b|\bla[\s\-']*rosa\b/i, "SERENA / VILLANOVA"],
+  [/\barabian[\s\-']*ranch(es)?\b|\branches\b/i, "ARABIAN RANCHES"],
+  [/\btilal[\s\-']*al[\s\-']*ghaf\b/i, "TILAL AL GHAF"],
+  [/\bwadi[\s\-']*al[\s\-']*safa[\s\-']*5\b|\bwadi[\s\-']*alsafa[\s\-']*5\b|\bwadi[\s\-']*safa[\s\-']*5\b/i, "DUBAILAND"],
+  [/\bmajan\b|\bmajaan\b|\bmajjan\b/i, "MAJAN"],
+  [/\bwadi[\s\-']*(?:al[\s\-']*)?safa\b|\bwadi[\s\-']*alsafa\b|\bwadialsafa\b|\bwadi[\s\-']*al[\s\-']*saffa\b/i, "WADI AL SAFA"],
+  [/\bdubai[\s\-']*?land\b|\bliving[\s\-']*legends\b|\bliwan\b|\bfalcon[\s\-']*city\b|\bglobal[\s\-']*village\b/i, "DUBAILAND"],
+  [/\bacademic[\s\-']*city\b/i, "ACADEMIC CITY"],
+  [/\bsilicon[\s\-']*oasis\b|\bdso\b|\bdubai[\s\-']*silicon\b|\bsilicon\b/i, "SILICON OASIS"],
+  [/\binternational[\s\-']*city\b|\bint'?l[\s\-']*city\b|\bintl[\s\-']*city\b|\bdragon[\s\-']*mart\b|\bcbd[\s\-']*\d+\b|\bfrance[\s\-']*cluster\b|\bchina[\s\-']*cluster\b|\bengland[\s\-']*cluster\b|\bitaly[\s\-']*cluster\b|\bpersia[\s\-']*cluster\b|\brussia[\s\-']*cluster\b|\bspain[\s\-']*cluster\b|\bgreece[\s\-']*cluster\b|\bmorocco[\s\-']*cluster\b|\bemirates[\s\-']*cluster\b/i, "INTERNATIONAL CITY"],
+  [/\bwarsan\b/i, "WARSAN"],
+  [/\b(?:al[\s\-]*)?aweer\b|\bal[\s\-]*awir\b|\bras[\s\-']*al[\s\-']*khor[\s\-']*industrial\b/i, "AL AWIR"],
+  [/\bras[\s\-']*al[\s\-']*khor\b/i, "RAS AL KHOR"],
+  [/\bnad[\s\-']*al[\s\-']*hamm?ar\b|\bnadd[\s\-']*al[\s\-']*hamm?ar\b|\bnadal[\s\-']*hamm?ar\b|\bnad[\s\-']*alhamm?ar\b/i, "NAD AL HAMAR"],
+  [/\b(?:al[\s\-]*)?warqa'?a?\b|\bwarqaa\b|\bal[\s\-']*war[kq]\b|\bwarqa[\s\-']*\d\b/i, "AL WARQA"],
+  [/\bmirdif+\b|\bmirdiff\b|\buptown[\s\-']*mirdif\b|\bmirdif[\s\-']*city[\s\-']*cent(re|er)\b/i, "MIRDIF"],
+  [/\b(?:al[\s\-]*)?mizhar\b/i, "AL MIZHAR"],
+  [/\b(?:al[\s\-]*)?khawaneej\b|\bkhawanij\b/i, "AL KHAWANEEJ"],
+  [/\bawir\b/i, "AL AWIR"],
+  [/\bmuhaisnah?\b|\bmuhsina\b|\bmuhaisna\b|\bmhaisna\b|\bmuhaisanah\b|\bmuhaisinah\b|\bmuhaisina\b|\bmuhaisnah[\s\-']*\d\b|\bsonapur\b/i, "MUHAISNAH"],
+  [/\bdafza\b|\bdafz\b|\bdubai[\s\-']*airport[\s\-']*free[\s\-']*zone\b|\bairport[\s\-']*free[\s\-']*zone\b|\b(?:al[\s\-]*)?qusais\b|\bqusais[\s\-']*\d\b|(?:\bal\s*qusais\b)|\bdamascus[\s\-']*street\b|\bdamascus[\s\-']*st\b|\b(?:al[\s\-]*)?quasis\b|\b(?:al[\s\-]*)?qusis\b|\b(?:al[\s\-]*)?qussais\b/i, "AL QUSAIS"],
+  [/\bal[\s\-]*twar\b|\btawar\b/i, "AL TWAR"],
+  [/\b(?:al[\s\-]*)?nahda\b|\b(?:al[\s\-]*)?nahadha\b|\b(?:al[\s\-]*)?nahdha\b|(?:\bal\s*nahda\b(?=.*\b(dubai|dxb|qusais|stadium)\b))|(?:\bnahda\b.*\bdubai\b)|(?:\bdubai\b.*\bnahda\b)/i, "AL NAHDA (DXB)"],
+  [/\b(?:al[\s\-]*)?rashidiy?a\b|\brashidiyah\b|\brashidia\b/i, "AL RASHIDIYA"],
+  [/\bgarhoud\b|\bgarhood\b|\bairport[\s\-']*terminal\b|\bdubai[\s\-']*airport\b|\bdxb[\s\-']*airport\b/i, "AL GARHOUD"],
+  [/\b(?:al[\s\-]*)?mamzar\b/i, "AL MAMZAR"],
+  [/\b(?:al[\s\-]*)?waheda\b|\bwuhaida\b|\b(?:al[\s\-]*)?wuheida\b|\bwuhaida\b|\bwaheida\b|\bwahaida\b|\bwuhida\b/i, "AL WAHEDA"],
+  [/\bhor[\s\-']*al[\s\-']*anz\b|\bhor[\s\-']*alanz\b|\bhorlanz\b|\bhoralanz\b|\bhor[\s\-']*al[\s\-']*ans\b|\bhor[\s\-']*el[\s\-']*anz\b|\bhorl[ae]nz\b|\bhor[\s\-']*l[ae]nz\b|\bhor[\s\-']*al[\s\-']*ens\b/i, "HOR AL ANZ"],
+  [/\babu[\s\-']*hail\b|\babuhail\b|\babu[\s\-']*hael\b|\bbuhail\b|\bbu[\s\-']*hail\b/i, "ABU HAIL"],
+  [/\b(?:al[\s\-]*)?rigga\b|\briqqa\b|\bal[\s\-']*riqqa\b|\brigga[\s\-']*road\b/i, "RIGGA"],
+  [/\b(?:al[\s\-]*)?baraha\b/i, "AL BARAHA"],
+  [/\b(?:al[\s\-]*)?murar\b|\bfrij[\s\-']*murar\b|\bfirj[\s\-']*murar\b|\bfereej[\s\-']*murar\b|\bfareej[\s\-']*murar\b|\bfreej[\s\-']*murar\b|\bmurar\b/i, "FRIJ MURAR"],
+  [/\bnaif\b|\bnayef\b|\bnayif\b|\bnaif[\s\-']*road\b/i, "NAIF"],
+  [/\bgold[\s\-']*souk\b|\bgold[\s\-']*souq\b|\bgold[\s\-']*market\b/i, "GOLD SOUK"],
+  [/\bdeira\b|\b(?:al[\s\-]*)?muraqqabat\b|\bmuraqabat\b|\bal[\s\-]*ras\b|\bport[\s\-']*saeed\b|\b(?:al[\s\-]*)?muteena\b|\b(?:al[\s\-]*)?khabaisi\b|\b(?:al[\s\-]*)?sabkha[\s\-']*deira\b|\bdeira[\s\-']*city[\s\-']*cent(re|er)\b|\b(?:al[\s\-]*)?ghurair\b|\bunion[\s\-']*metro\b|\bsalah[\s\-']*al[\s\-']*din\b|\bal[\s\-']*maktoum[\s\-']*road\b|\bbaniyas[\s\-']*square\b/i, "DEIRA"],
+  [/\b(?:al[\s\-]*)?karama\b|\bkaramah\b/i, "KARAMA"],
+  [/\boud[\s\-']*metha\b|\bud[\s\-']*metha\b/i, "OUD METHA"],
+  [/\bmank?hool\b|\bmankool\b|\bmankhul\b|\bmankul\b/i, "MANKHOOL"],
+  [/\b(?:al[\s\-]*)?raffa\b|\bmeena[\s\-']*bazaa?r\b|\bbur[\s\-']*dubai\b|\b(?:al[\s\-]*)?fahidi\b|\bal[\s\-]*souk[\s\-']*al[\s\-']*kabeer\b|\bal[\s\-']*hamriya[\s\-']*bur[\s\-']*dubai\b|\bburjuman\b|\b(?:al[\s\-]*)?hudaiba\b|\bumm[\s\-']*hurair\b/i, "BUR DUBAI"],
+  [/\bhealthcare[\s\-']*city\b|\bdhcc\b/i, "DUBAI HEALTHCARE CITY"],
+  [/\b(?:al[\s\-]*)?jaddaf\b|\bculture[\s\-']*village\b/i, "AL JADDAF"],
+  [/\b(?:al[\s\-]*)?satwa\b/i, "SATWA"],
+  [/\bal[\s\-]*wasl\b|\bcity[\s\-']*walk\b|\bbox[\s\-']*park\b/i, "AL WASL"],
+  [/\b(?:al[\s\-]*)?bada'?a\b/i, "AL BADAA"],
+  [/\bumm?[\s\-']*su?q[ae]?[iy]?e?[ie]?me?\b|\bumm[\s\-']*sequim\b|\bumm?[\s\-']*s[ou]q[ae]?[iy]?m\b/i, "UMM SUQEIM"],
+  [/\bal[\s\-]*manara\b/i, "AL MANARA"],
+  [/\bal[\s\-]*safa\b/i, "AL SAFA"],
+  [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bjum[ae]{1,2}i?ra+h?\b|\bjumair?ah?\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
+  // Al Khail Gate / Al Khail Heights are inside Al Quoz (customers write "Alkhile gate", "khail gate"…).
+  [/\b(?:al[\s\-']*)?kh?[aeiy]{1,2}le?[\s\-']*(?:gates?|heights?)\b/i, "AL QUOZ"],
+  [/\bal[\s\-']*q[ou]{1,2}[sz]e?\b|\bal[\s\-']*koz\b|\bal[\s\-']*kouz\b|\balq[ou]{1,2}[sz]\b|\bquoz\b|\bqouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
+  [/\bsobha[\s\-']*hartland\b|\bshoba[\s\-']*hartland\b|\bsobha\b|\bshoba\b|\bhartland\b/i, "SOBHA HARTLAND"],
+  [/\bnad[\s\-']*al[\s\-']*sheba\b|\bnad[\s\-']*alsheba\b|\bnadal[\s\-']*sheba\b|\bnadal[\s\-']*shiba\b|\bnad[\s\-']*al[\s\-']*shiba\b|\bnad[\s\-']*el[\s\-']*sheba\b|\bnadd[\s\-']*al[\s\-']*sheba\b/i, "NAD AL SHEBA"],
+  // Not bare "Al Khail": Al Khail Road runs past many areas, so it alone doesn't mean Meydan.
+  [/\bmeydan\b|\bmaidan[\s\-']*dubai\b|\bmeidan\b|\bmbr[\s\-']*city\b|\bmohammed[\s\-']*bin[\s\-']*rashid[\s\-']*city\b|\bdistrict[\s\-']*one\b/i, "MEYDAN / NAD AL SHEBA"],
+  [/\bumm[\s\-']*ramool\b/i, "UMM RAMOOL"],
+  [/\bdiscovery[\s\-']*gardens?\b/i, "DISCOVERY GARDENS"],
+  [/\b(?:al[\s\-]*)?furjan\b|\bfurjan[\s\-']*west\b|\bfurjan[\s\-']*east\b/i, "AL FURJAN"],
+  [/\bibn[\s\-']*bat+uta\b/i, "IBN BATTUTA"],
+  [/\bjebel[\s\-']*ali\b|\bjabal[\s\-']*ali\b|\bjafza\b|\bjebel[\s\-']*ali[\s\-']*free[\s\-']*zone\b|\bjebel[\s\-']*ali[\s\-']*village\b|\bjebal[\s\-']*ali\b/i, "JEBEL ALI"],
+  [/\bdip\b|\bdip[\s\-']*\d\b|\binvestment[\s\-']*park\b|\bdubai[\s\-']*investment[\s\-']*park\b|\bdubai[\s\-']*investments[\s\-']*park\b/i, "DIP"],
+  [/\bgreen[\s\-']*community[\s\-']*dip\b/i, "GREEN COMMUNITY"],
+  [/\b(?:al[\s\-]*)?lisaili\b|\b(?:al[\s\-]*)?lehbab\b/i, "AL LISAILI"],
+  [/\bhatta\b/i, "HATTA"],
+];
+
+const SHARJAH: AreaRule[] = [
+  // Saif Zone (Sharjah Airport International Free Zone) is its own area — never Al Nahda / Sharjah Airport.
+  [/\bsa[iy]e?f[\s\-']*(?:free[\s\-']*)?zone\b|\bsaifzone\b|\bs\.?a\.?i\.?f\.?\s*z\b|\bsharj?a?h?a?[\s\-']*airport[\s\-']*(?:international[\s\-']*)?free[\s\-']*zone\b/i, "SAIF ZONE"],
+  [/\bal[\s\-]*madam\b|(?<!\b(?:call|contact|ask|tell|inform|to|for|dear|hi|hello|mr|mrs)\s+)\bmadam\b(?!\s*(?:will|is|number|no|mobile|phone|sir))|\balmadam\b|\b(?:al[\s\-]*)?mada'?am\b|\b(?:al[\s\-]*)?madaam\b/i, "AL MADAM"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?18\b)|(?:\bsanaiya\s*-?\s*18\b)/i, "INDUSTRIAL AREA 18"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?17\b)|(?:\bsanaiya\s*-?\s*17\b)/i, "INDUSTRIAL AREA 17"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?16\b)|(?:\bsanaiya\s*-?\s*16\b)/i, "INDUSTRIAL AREA 16"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?15\b)|(?:\bsanaiya\s*-?\s*15\b)/i, "INDUSTRIAL AREA 15"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?14\b)|(?:\bsanaiya\s*-?\s*14\b)/i, "INDUSTRIAL AREA 14"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?13\b)|(?:\bsanaiya\s*-?\s*13\b)/i, "INDUSTRIAL AREA 13"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?12\b)|(?:\bsanaiya\s*-?\s*12\b)/i, "INDUSTRIAL AREA 12"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?11\b)|(?:\bsanaiya\s*-?\s*11\b)/i, "INDUSTRIAL AREA 11"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?10\b)|(?:\bsanaiya\s*-?\s*10\b)/i, "INDUSTRIAL AREA 10"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?9\b)|(?:\bsanaiya\s*-?\s*9\b)/i, "INDUSTRIAL AREA 9"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?8\b)|(?:\bsanaiya\s*-?\s*8\b)/i, "INDUSTRIAL AREA 8"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?7\b)|(?:\bsanaiya\s*-?\s*7\b)/i, "INDUSTRIAL AREA 7"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?6\b)|(?:\bsanaiya\s*-?\s*6\b)/i, "INDUSTRIAL AREA 6"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?5\b)|(?:\bsanaiya\s*-?\s*5\b)/i, "INDUSTRIAL AREA 5"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?4\b)|(?:\bsanaiya\s*-?\s*4\b)/i, "INDUSTRIAL AREA 4"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?3\b)|(?:\bsanaiya\s*-?\s*3\b)/i, "INDUSTRIAL AREA 3"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?2\b)|(?:\bsanaiya\s*-?\s*2\b)/i, "INDUSTRIAL AREA 2"],
+  [/(?:\bind(?:ustrial)?\.?\s*(?:area)?\s*(?:no\.?|#)?\s*-?\s*0?1\b)|(?:\bsanaiya\s*-?\s*1\b)/i, "INDUSTRIAL AREA 1"],
+  [/\baljada\b|\bal[\s\-']*jada\b/i, "ALJADA"],
+  [/\btilal[\s\-']*city\b/i, "TILAL CITY"],
+  [/\b(?:al[\s\-]*)?mamsha\b/i, "AL MAMSHA"],
+  [/\bmaryam[\s\-']*island\b/i, "MARYAM ISLAND"],
+  [/\bmuwaileh\b|\bmuweilah\b|\bmuwailih\b|\bmuwaila\b|\buniversity[\s\-']*city\b|\buni[\s\-']*city\b|\bal[\s\-']*muwaileh[\s\-']*commercial\b|\bmuweleah?\b|\bmuwelah\b|\bmuwailah\b|\bmuwele?ia\b|\bmwaileh\b|\bmuwaleh\b|(?:\bmuwail\w*)|(?:\bmuweil\w*)/i, "MUWAILEH"],
+  [/\bmusall?ah?\b|\bmusala\b/i, "AL MUSALLA"],
+  [/\b(?:al[\s\-]*)?ghubaiba\b/i, "AL GHUBAIBA"],
+  [/\bal[\s\-]*soor\b/i, "AL SOOR"],
+  [/\bshuwaihean\b|\bshuwaihein\b|\bshuwaiheen\b/i, "AL SHUWAIHEAN"],
+  [/\b(?:al[\s\-]*)?mujarr?ah?\b|\b(?:al[\s\-]*)?mujarra\b/i, "AL MUJARRAH"],
+  [/\b(?:al[\s\-]*)?heera\b|\bhira\b/i, "AL HEERA"],
+  [/\b(?:al[\s\-]*)?fisht\b/i, "AL FISHT"],
+  [/\b(?:al[\s\-]*)?ramla\b/i, "AL RAMLA"],
+  [/\b(?:al[\s\-]*)?qadisiy?ah?\b|\bqadsiya\b/i, "AL QADISIYA"],
+  [/\bal[\s\-]*azra\b/i, "AL AZRA"],
+  [/\bsamnan\b/i, "SAMNAN"],
+  [/\bhalwan\b/i, "HALWAN"],
+  [/\b(?:al[\s\-]*)?ramtha\b/i, "AL RAMTHA"],
+  [/\b(?:al[\s\-]*)?layyeh\b|\b(?:al[\s\-]*)?layya\b/i, "AL LAYYEH"],
+  [/\b(?:al[\s\-]*)?jazzat\b/i, "AL JAZZAT"],
+  [/\b(?:al[\s\-]*)?ghafia\b|\bghafiya\b|\bgafiya\b|\bgafia\b|\bghafiyah\b/i, "AL GHAFIA"],
+  [/\b(?:al[\s\-]*)?nekhailat\b/i, "AL NEKHAILAT"],
+  [/\b(?:al[\s\-]*)?sabkha\b/i, "AL SABKHA"],
+  [/\b(?:al[\s\-]*)?darari\b/i, "AL DARARI"],
+  [/\b(?:al[\s\-]*)?mirgab\b/i, "AL MIRGAB"],
+  [/\b(?:al[\s\-]*)?taawun\b|\btaawon\b|\bta'?awun\b|\btawun\b|\btawoon\b|\btaawoon\b|\btawwun\b|\bal[\s\-']*tawoon\b|\btaawan\b/i, "AL TAAWUN"],
+  [/\bal[\s\-]*khan\b|\bkhan[\s\-']*lagoon\b/i, "AL KHAN"],
+  [/(?:\bmamzar\b.*\bsharjah\b)/i, "AL MAMZAR (SHJ)"],
+  [/(?:\b(?:al\s*)?majaz\s*-?\s*(?:3|three)\b)/i, "AL MAJAZ 3"],
+  [/\b(?:al[\s\-]*)?majaz\b|\bmajaz[\s\-']*\d\b|\b(?:al[\s\-]*)?majaz[\s\-']*waterfront\b/i, "AL MAJAZ"],
+  [/\b(?:al[\s\-]*)?qasimi?y?a\b|\bqasimiya\b|\bqassimia\b|\bqasmiya\b|\bqasimiy?ah\b|\bqasmiyah\b|\bqassimiyah\b|\bal[\s\-]*nud\b|\bnud\b|\b(?:al[\s\-]*)?mahatta\b|\bmahatta\b|\bmahattah\b/i, "AL QASIMIA"],
+  [/\babu[\s\-']*shag?h?ara\b|\babu[\s\-']*shagra\b|\babu[\s\-']*shahara\b|\babushagara\b/i, "ABU SHAGARA"],
+  [/\brolla\b|\b(?:al[\s\-]*)?ghuwair\b|\b(?:al[\s\-]*)?mareija\b|\bal[\s\-']*mreija\b|\b(?:al[\s\-]*)?shuwaiheen\b|\bbank[\s\-']*street[\s\-']*sharjah\b|\barabian[\s\-']*gulf[\s\-']*street\b|\bumm[\s\-']*al[\s\-']*ta?ra?fa\b|\bumm[\s\-']*tarafa\b|\bum[\s\-']*al[\s\-']*tarafa\b|\bum[\s\-']*tarafa\b|\bumm[\s\-']*al[\s\-']*tharafa\b/i, "ROLLA"],
+  [/\b(?:al[\s\-]*)?butina\b|\bbutheena\b|\bbuteena\b|\bbutheenah\b|\bbuthina\b/i, "AL BUTINA"],
+  [/\b(?:al[\s\-]*)?yarmook\b|\byarmouk\b|\byarmuk\b/i, "AL YARMOOK"],
+  [/\bal[\s\-]*nabba\b/i, "AL NABBA"],
+  [/\b(?:al[\s\-]*)?saj+a'?a\b|\bsajja\b|\bsajja\b|\bsaja\b/i, "AL SAJAA"],
+  [/\b(?:al[\s\-]*)?hamriyah?[\s\-']*free[\s\-']*zone\b|\bhamriyah[\s\-']*sharjah\b/i, "AL HAMRIYAH (SHJ)"],
+  [/\bsharjah[\s\-']*industrial[\s\-']*area[\s\-']*\d*\b|\bindustrial[\s\-']*area[\s\-']*\d*\b|\bind\.?[\s\-']*area[\s\-']*\d*\b|\bsharjah[\s\-']*industrial\b|\bsanaiya[\s\-']*sharjah\b/i, "INDUSTRIAL AREA"],
+  [/\b(?:al[\s\-]*)?zahia\b|\bzahiya\b|\bcity[\s\-']*centre[\s\-']*al[\s\-']*zahia\b/i, "AL ZAHIA"],
+  [/\b(?:al[\s\-]*)?rahmaniy?a\b/i, "AL RAHMANIYA"],
+  [/\b(?:al[\s\-]*)?suyoh\b|\bsuyouh\b/i, "AL SUYOH / TILAL"],
+  [/\bmaysaloon\b|\bmaisaloon\b|\bmysaloon\b|\bmaysalon\b|\bmysalon\b|\bmaisalun\b/i, "MAYSALOON"],
+  [/\b(?:al[\s\-]*)?jubail\b/i, "AL JUBAIL"],
+  [/\b(?:al[\s\-]*)?nahda\b|\b(?:al[\s\-]*)?nahadha\b|\b(?:al[\s\-]*)?nahdha\b|(?:\bal\s*nahda\b(?=.*\b(sharjah|shj|sharja|sharjha)\b))|\b(?:al[\s\-]*)?nahda[\s\-']*sharjah\b|\bnahda[\s\-']*park\b/i, "AL NAHDA (SHJ)"],
+  [/\b(?:al[\s\-]*)?wahda\b|\bwahda[\s\-']*street\b/i, "AL WAHDA (SHJ)"],
+  [/\b(?:al[\s\-]*)?rifa'?a?\b/i, "AL RIFA"],
+  [/\bal[\s\-]*riqa\b/i, "AL RIQA"],
+  [/\b(?:al[\s\-]*)?qulay?a+h?\b|\bqulaiya\b|\bgulaya\b|\bgulayah\b|\bgulaiya\b/i, "AL QULAYA"],
+  [/\b(?:al[\s\-]*)?falaj[\s\-']*sharjah\b/i, "AL FALAJ"],
+  [/\b(?:al[\s\-]*)?qarain\b|\bqarayen\b/i, "AL QARAIN"],
+  [/\b(?:al[\s\-]*)?fayha\b|\bfaiyah\b|\bfaiha\b|\bfayah\b/i, "AL FAYHA"],
+  [/\b(?:al[\s\-]*)?mansoura\b/i, "AL MANSOURA"],
+  [/\b(?:al[\s\-]*)?mughaidir\b/i, "AL MUGHAIDIR"],
+  [/\bal[\s\-]*noaf\b/i, "AL NOAF"],
+  [/\b(?:al[\s\-]*)?jurainah?\b|\bjurina\b/i, "AL JURAINAH"],
+  [/\bal[\s\-]*sharq\b/i, "AL SHARQ"],
+  [/\b(?:al[\s\-]*)?khezamia\b/i, "AL KHEZAMIA"],
+  [/\b(?:al[\s\-]*)?romaila\b/i, "AL ROMAILA"],
+  [/\bsharj?a?h?a?[\s\-']*airport\b|\bairport[\s\-']*road[\s\-']*sharjah\b/i, "SHARJAH AIRPORT"],
+  [/\b(?:al[\s\-]*)?dhaid\b|\bdhaid\b/i, "AL DHAID"],
+  [/\bmleiha\b/i, "MLEIHA"],
+  [/\bkhor[\s\-']*?fakk?an\b|\bkhorfakan\b/i, "KHOR FAKKAN"],
+  [/\bkalba\b/i, "KALBA"],
+  [/\bdibba[\s\-']*al[\s\-']*hisn\b/i, "DIBBA AL HISN"],
+];
+
+/** Western Region (Al Dhafra) — far from Abu Dhabi city, not the Abu Dhabi driver's route. */
+export const WESTERN_AREAS = new Set(["RUWAIS", "MADINAT ZAYED", "GHAYATHI", "HABSHAN", "AL SILA", "SALAM CITY", "LIWA", "MIRFA", "JEBEL DHANNA", "DELMA"]);
+export const isWesternArea = (area?: string | null) => !!area && WESTERN_AREAS.has(area.toUpperCase());
+
+const ABUDHABI: AreaRule[] = [
+  [/\bruwais\b|\bruwayes\b|\bruwaiz\b|\bruwes\b/i, "RUWAIS"],
+  [/\bbada'?a?[\s\-']*za[iy]e?d\b|\bbadaa?[\s\-']*zayed\b|\bmadinat[\s\-']*zayed\b|\bmadina[\s\-']*zayed\b|\bmadeenat?[\s\-']*zayed\b|\bzayed[\s\-']*city[\s\-']*west\b/i, "MADINAT ZAYED"],
+  [/\bgh?a[iy]?y?a+th?i\b|\bgh?i[iy]a+th?i\b|\bghayathi\b|\bgayathi\b|\bghiyathi\b/i, "GHAYATHI"],
+  [/\bh[ae]f?b?shan\b|\bhabshan\b|\bhafshan\b|\bhabsan\b/i, "HABSHAN"],
+  [/\bsalam[\s\-']*city\b|\bmadinat[\s\-']*al[\s\-']*salam\b/i, "SALAM CITY"],
+  [/\bal[\s\-']*sila'?a?\b|\bsilaa?\b|\bsila'a\b/i, "AL SILA"],
+  [/\bjebel[\s\-']*dhanna\b|\bjabal[\s\-']*dhanna\b/i, "JEBEL DHANNA"],
+  [/\bliwa\b/i, "LIWA"],
+  [/\bmirfa\b|\bmirfah\b/i, "MIRFA"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*0?9\b)|(?:\bme\s*-?\s*0?9\b)|\bshabiya[\s\-']*9\b|\bshabhiya[\s\-']*9\b/i, "SHABIYA 9"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*10\b)|(?:\bme\s*-?\s*10\b)|\bshabiya[\s\-']*10\b|\bshabhiya[\s\-']*10\b/i, "SHABIYA 10"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*11\b)|(?:\bme\s*-?\s*11\b)|\bshabiya[\s\-']*11\b|\bshabhiya[\s\-']*11\b/i, "SHABIYA 11"],
+  [/(?:\bsh?abh?(?:iy|i|y)a\s*(?:me)?\s*-?\s*12\b)|(?:\bme\s*-?\s*12\b)|\bshabiya[\s\-']*12\b|\bshabhiya[\s\-']*12\b/i, "SHABIYA 12"],
+  [/\bsh?abh?(?:iy|i|y)ah?\b/i, "SHABIYA"],
+  [/\bicad\b|\bicad[\s\-']*\d\b|\bindustrial[\s\-']*city[\s\-']*of[\s\-']*abu[\s\-']*dhabi\b|\bmussafah[\s\-']*south\b/i, "ICAD"],
+  [/\bmussafah\b|\bmusaffah\b|\bmussaffa\b|\bmusafah\b|\bmussafa\b|\bmusafa\b|\bmusaffa\b|\bmusalfa\b|\bm-?\d+[\s\-']*mussafah\b|(?:\bm\s*-?\s*\d{1,2}\b.*\b(mussaf|musaf))|\bmussafah[\s\-']*industrial\b|\bmohammed[\s\-']*bin[\s\-']*zayed[\s\-']*industrial\b/i, "MUSSAFAH"],
+  [/\bshakhbout\b|\bshakbout\b|\bshakhboot\b|\bkhalifa[\s\-']*city[\s\-']*b\b|\bkcb\b|\bkhalifa[\s\-']*b\b/i, "SHAKHBOUT CITY"],
+  [/\bkhalifa[\s\-']*street\b|\bkhaleefa[\s\-']*street\b|\bkhalifa[\s\-']*st\b|\bsheikh[\s\-']*khalifa[\s\-']*street\b|\bsheikh[\s\-']*khalifa[\s\-']*bin[\s\-']*zayed[\s\-']*street\b/i, "KHALIFA STREET"],
+  [/\bal[\s\-]*falah[\s\-']*street\b|\bfalah[\s\-']*st\b|\bold[\s\-']*passport[\s\-']*road\b/i, "AL FALAH STREET"],
+  [/\bkhalifa[\s\-']*city\b|\bkhaleefa[\s\-']*city\b|\bkca\b|\bkhalifa[\s\-']*a\b|\bkhalifa[\s\-']*city[\s\-']*a\b|\bmasdar\b/i, "KHALIFA CITY"],
+  [/\bal[\s\-]*reef\b|\bal[\s\-]*reef[\s\-']*villas\b|\bal[\s\-]*reef[\s\-']*downtown\b/i, "AL REEF"],
+  [/\bal[\s\-]*falah[\s\-']*city\b|\bal[\s\-]*falah\b|\bfalah\b/i, "AL FALAH CITY"],
+  [/\bmbz\b|\bmbz[\s\-']*city\b|\bmohamm?e?d[\s\-']*bin[\s\-']*zayed?h?[\s\-']*city\b|\bmohamed[\s\-']*bin[\s\-']*zayed\b|\bmohammed[\s\-']*bin[\s\-']*zayedh\b/i, "MBZ CITY"],
+  [/\bghantoot\b|\bghanthoot\b|\bghantout\b|\b(?:al[\s\-]*)?ghadeer\b/i, "GHANTOOT"],
+  [/\bkizad\b|\bkhalifa[\s\-']*industrial[\s\-']*zone\b|\bkhalifa[\s\-']*port\b|\btaweelah\b|\bal[\s\-']*taweelah\b/i, "KIZAD"],
+  [/\b(?:al[\s\-]*)?samha\b/i, "AL SAMHA"],
+  [/\b(?:al[\s\-]*)?rahba\b/i, "AL RAHBA"],
+  [/\b(?:al[\s\-]*)?bahia\b|\bbahiya\b|\bbahiyah\b|\b(?:al[\s\-]*)?bahya\b/i, "AL BAHIA"],
+  [/\b(?:al[\s\-]*)?shahama\b|\bshahamah\b/i, "AL SHAHAMA"],
+  [/\b(?:al[\s\-]*)?shamkha\b|\bshamka\b|\bshamkhah\b/i, "AL SHAMKHA"],
+  [/\b(?:al[\s\-]*)?shawamekh\b|\bshawamikh\b/i, "AL SHAWAMEKH"],
+  [/\bbaniyas\b|\bbani[\s\-']*yas\b|\bbaniyas[\s\-']*east\b|\bbaniyas[\s\-']*west\b/i, "BANIYAS"],
+  [/\b(?:al[\s\-]*)?wathba\b|\bwathbha\b|\bwathbah\b/i, "AL WATHBA"],
+  [/\b(?:al[\s\-]*)?mafraq\b|\bmafreq\b|\bmafraq\b/i, "AL MAFRAQ"],
+  [/\bal[\s\-]*raha\b|\braha\b|\braha[\s\-']*beach\b|\braha[\s\-']*gardens\b/i, "AL RAHA"],
+  [/\byas\b|\byas[\s\-']*island\b|\byas[\s\-']*mall\b|\byas[\s\-']*acres\b|\bansam\b|\byas[\s\-']*bay\b/i, "YAS ISLAND"],
+  [/\b(?:al[\s\-]*)?maqtaa?\b|\bmaqta\b|\bkhor[\s\-']*al[\s\-']*maqta\b|\bbetween[\s\-']*two[\s\-']*bridges\b|\bbain[\s\-']*al[\s\-']*jessrain\b|\bbain[\s\-']*al[\s\-']*jesrain\b/i, "AL MAQTAA"],
+  [/\brabdan\b|\b(?:al[\s\-]*)?matar\b|\bairport[\s\-']*road[\s\-']*abu[\s\-']*dhabi\b/i, "RABDAN"],
+  [/\b(?:al[\s\-]*)?rawdah?\b|\browdha\b|\browdah\b|\brauda\b/i, "AL RAWDAH"],
+  [/\b(?:al[\s\-]*)?muroor\b|\bmuroor[\s\-']*road\b/i, "AL MUROOR"],
+  [/\b(?:al[\s\-]*)?mushrif\b|\bmushrif[\s\-']*mall\b|\b(?:al[\s\-]*)?karamah\b/i, "AL MUSHRIF"],
+  [/\b(?:al[\s\-]*)?nahyan\b|\bnahiyan\b|\bnahyan[\s\-']*camp\b/i, "AL NAHYAN"],
+  [/\b(?:al[\s\-]*)?wahda\b|\bwahda[\s\-']*mall\b/i, "AL WAHDA"],
+  [/\b(?:al[\s\-]*)?bateen\b|\bhudayriyat\b|\bras[\s\-']*al[\s\-']*akhdar\b|\bbateen[\s\-']*airport\b/i, "AL BATEEN"],
+  [/\b(?:al[\s\-]*)?manhal\b|\b(?:al[\s\-]*)?manaseer\b/i, "AL MANHAL"],
+  [/\b(?:al[\s\-]*)?khalidiy?ah?\b|\bkhalidhiya\b|\bkhalidhiyah\b|\b(?:al[\s\-]*)?khubeirah\b/i, "AL KHALIDIYA"],
+  [/\bcorniche[\s\-']*abu[\s\-']*dhabi\b|\babu[\s\-']*dhabi[\s\-']*corniche\b|\bcorniche[\s\-']*road\b|\bcorniche\b|\bbreakwater\b/i, "CORNICHE"],
+  [/\bhamdan[\s\-']*street\b|\bhamdan[\s\-']*st\b|\bhamdan\b|\bmarina[\s\-']*mall\b/i, "HAMDAN STREET"],
+  [/\belectra[\s\-']*street\b|\belectra\b|\bzayed[\s\-']*the[\s\-']*first[\s\-']*street\b|\bal[\s\-]*danah\b/i, "ELECTRA STREET"],
+  [/\bnajda[\s\-']*street\b|\bnajda\b|\b(?:al[\s\-]*)?markaziy?a\b|\bal[\s\-]*hosn\b|\b(?:al[\s\-]*)?dhafra[\s\-']*street\b/i, "NAJDA STREET"],
+  [/\b(?:al[\s\-]*)?zahiyah?\b|\btourist[\s\-']*club\b|\babu[\s\-']*dhabi[\s\-']*mall\b|\b(?:al[\s\-]*)?maryah\b|\bsowwah\b|\bal[\s\-]*mina[\s\-']*abu[\s\-']*dhabi\b|\bmina[\s\-']*zayed\b|\bport[\s\-']*zayed\b/i, "AL ZAHIYA"],
+  [/\bal[\s\-]*reem\b|\breem[\s\-']*island\b|\bshams[\s\-']*abu[\s\-']*dhabi\b|\bcity[\s\-']*of[\s\-']*lights\b|\bnajmat[\s\-']*abu[\s\-']*dhabi\b/i, "REEM ISLAND"],
+  [/\bsaadiyat\b|\bsaadiyath\b|\bsaadiyat[\s\-']*island\b/i, "SAADIYAT"],
+];
+
+const ALAIN: AreaRule[] = [
+  [/\bal[\s\-]*jimi\b/i, "AL JIMI"],
+  [/\b(?:al[\s\-]*)?muwaiji\b/i, "AL MUWAIJI"],
+  [/\b(?:al[\s\-]*)?towayya\b|\btawiya\b|\btiwayya\b/i, "AL TOWAYYA"],
+  [/\bhili\b/i, "HILI"],
+  [/\b(?:al[\s\-]*)?khabisi\b/i, "AL KHABISI"],
+  [/\b(?:al[\s\-]*)?mutaredh\b|\bmutarad\b/i, "AL MUTAREDH"],
+  [/\b(?:al[\s\-]*)?mutawaa\b|\bmutawa'?a\b/i, "AL MUTAWAA"],
+  [/\b(?:al[\s\-]*)?maqam\b/i, "AL MAQAM"],
+  [/\bfalaj[\s\-']*hazz?a\b|\bfalajaz+a\b|\bfalaj\b/i, "FALAJ HAZZA"],
+  [/\bzakher\b|\bzakhir\b/i, "ZAKHER"],
+  [/\bsanaiy?ah?\b|\bsanaya\b|\bal[\s\-']*ain[\s\-']*industrial\b|\bindustrial[\s\-']*area[\s\-']*al[\s\-']*ain\b/i, "SANAIYA"],
+  [/\b(?:al[\s\-]*)?qattara\b|\bqattarah\b/i, "AL QATTARA"],
+  [/\b(?:al[\s\-]*)?hayer\b/i, "AL HAYER"],
+  [/\bal[\s\-]*foah\b|\bfoaa\b/i, "AL FOAH"],
+  [/\b(?:al[\s\-]*)?yahar\b/i, "AL YAHAR"],
+  [/\b(?:al[\s\-]*)?masoudi\b|\bmasudi\b/i, "AL MASOUDI"],
+  [/\b(?:al[\s\-]*)?sarooj\b/i, "AL SAROOJ"],
+  [/\b(?:al[\s\-]*)?jahili\b/i, "AL JAHILI"],
+  [/\b(?:al[\s\-]*)?khrair\b/i, "AL KHRAIR"],
+  [/\bashar(e|i)j\b/i, "ASHAREJ"],
+  [/\b(?:al[\s\-]*)?markhaniy?a\b/i, "AL MARKHANIYA"],
+  [/\b(?:al[\s\-]*)?kuwaitat\b/i, "AL KUWAITAT"],
+  [/\b(?:al[\s\-]*)?muraba'?a\b/i, "AL MURABAA"],
+  [/\b(?:al[\s\-]*)?salamat\b/i, "AL SALAMAT"],
+  [/\b(?:al[\s\-]*)?niyadat\b/i, "AL NIYADAT"],
+  [/\bumm?[\s\-']*ghafa\b/i, "UM GHAFA"],
+  [/\b(?:al[\s\-]*)?dhahir\b/i, "AL DHAHIR"],
+  [/\bnahil\b/i, "NAHIL"],
+  [/\btawam\b/i, "TAWAM"],
+  [/\b(?:al[\s\-]*)?agabiy?y?a\b/i, "AL AGABIYYA"],
+  [/\b(?:al[\s\-]*)?wagan\b/i, "AL WAGAN"],
+  [/\bmezyad\b/i, "MEZYAD"],
+  [/\bsweihan\b/i, "SWEIHAN"],
+  [/\b(?:al[\s\-]*)?faqa'?a?\b/i, "AL FAQA"],
+];
+
+const AJMAN: AreaRule[] = [
+  [/\b(?:al[\s\-]*)?nuaimi?y?a\b|\bnuaimia\b|\bnuaimiyah\b/i, "AL NUAIMIYA"],
+  [/\b(?:al[\s\-]*)?rashidiy?a\b/i, "AL RASHIDIYA (AJM)"],
+  [/\b(?:al[\s\-]*)?j[aeiou]{1,2}r+f+\b|\bal[\s\-]*j[aeiou]?r[aeiou]?f\b|\bj[aeiou]{1,2}r+f+[\s\-']*industrial\b/i, "AL JURF"],
+  [/\bal[\s\-]*rawda\b/i, "AL RAWDA"],
+  [/\b(?:al[\s\-]*)?mowaihat\b|\bmuwaihat\b/i, "AL MOWAIHAT"],
+  [/\b(?:al[\s\-]*)?hamidiy?a\b|\bhumaidiy?ah?\b|\bhameediya\b/i, "AL HAMIDIYA"],
+  [/\bemirates[\s\-']*city\b/i, "EMIRATES CITY"],
+  [/\bal[\s\-]*zahra\b/i, "AL ZAHRA"],
+  [/\b(?:al[\s\-]*)?nakheel[\s\-']*ajman\b/i, "AL NAKHEEL"],
+  [/\bal[\s\-]*bustan\b/i, "AL BUSTAN"],
+  [/\bal[\s\-]*helio\b/i, "AL HELIO"],
+  [/\b(?:al[\s\-]*)?yasmeen\b/i, "AL YASMEEN"],
+  [/\b(?:al[\s\-]*)?amerah\b|\bal[\s\-']*amera\b/i, "AL AMERAH"],
+  [/\b(?:al[\s\-]*)?tallah\b/i, "AL TALLAH"],
+  [/\b(?:al[\s\-]*)?rumailah?\b|\brumaila\b/i, "AL RUMAILAH"],
+  [/\b(?:al[\s\-]*)?sawan\b|\bajman[\s\-']*one\b/i, "AL SAWAN"],
+  [/\bgarden[\s\-']*city\b/i, "GARDEN CITY"],
+  [/\bajman[\s\-']*downtown\b|\bajman[\s\-']*corniche\b|\bajman[\s\-']*city[\s\-']*cent(re|er)\b/i, "AJMAN DOWNTOWN"],
+  [/\bajman[\s\-']*industrial\b|\bnew[\s\-']*industrial[\s\-']*area\b/i, "AJMAN INDUSTRIAL"],
+  [/\b(?:al[\s\-]*)?manama\b/i, "AL MANAMA"],
+  [/\bmasfout\b/i, "MASFOUT"],
+];
+
+const RAK: AreaRule[] = [
+  [/\bal[\s\-]*hamra[\s\-']*village\b|\bal[\s\-]*hamra\b|\bmina[\s\-']*al[\s\-']*arab\b/i, "AL HAMRA"],
+  [/\b(?:al[\s\-]*)?marjan\b/i, "AL MARJAN ISLAND"],
+  [/\b(?:al[\s\-]*)?nakheel\b|\bdafan[\s\-']*al[\s\-']*nakheel\b/i, "AL NAKHEEL (RAK)"],
+  [/\bal[\s\-]*dhait\b/i, "AL DHAIT"],
+  [/\b(?:al[\s\-]*)?mamourah?\b|\bmamoura\b/i, "AL MAMOURAH"],
+  [/\bkhuzam\b/i, "KHUZAM"],
+  [/\bjulphar\b/i, "JULPHAR"],
+  [/\bal[\s\-]*qurm\b/i, "AL QURM"],
+  [/\bal[\s\-]*seer\b/i, "AL SEER"],
+  [/\b(?:al[\s\-]*)?uraibi\b|\bseih[\s\-']*al[\s\-']*uraibi\b/i, "AL URAIBI"],
+  [/\b(?:al[\s\-]*)?juwais\b/i, "AL JUWAIS"],
+  [/\b(?:al[\s\-]*)?mairid\b/i, "AL MAIRID"],
+  [/\bal[\s\-]*rams\b/i, "AL RAMS"],
+  [/\bkhor[\s\-']*khwair\b/i, "KHOR KHWAIR"],
+  [/\bjazeera[\s\-']*al[\s\-']*hamra\b/i, "AL JAZEERA AL HAMRA"],
+  [/\b(?:al[\s\-]*)?ghail\b/i, "AL GHAIL"],
+  [/\bdigdaga\b/i, "DIGDAGA"],
+  [/\bshamal\b/i, "SHAMAL"],
+  [/\b(?:al[\s\-]*)?hamraniy?ah?\b/i, "AL HAMRANIYAH"],
+  [/\b(?:al[\s\-]*)?kharran\b/i, "AL KHARRAN"],
+  [/\b(?:al[\s\-]*)?mataf\b/i, "AL MATAF"],
+  [/\b(?:al[\s\-]*)?muntasir\b/i, "AL MUNTASIR"],
+  [/\b(?:al[\s\-]*)?nadiyah?\b/i, "AL NADIYAH"],
+  [/\b(?:al[\s\-]*)?hulaila\b/i, "AL HULAILA"],
+  [/\bcorniche[\s\-']*al[\s\-']*qawasim\b|\bal[\s\-']*qawasim\b/i, "CORNICHE AL QAWASIM"],
+];
+
+const UAQ: AreaRule[] = [
+  [/\b(?:al[\s\-]*)?salamah?\b/i, "AL SALAMAH"],
+  [/\bal[\s\-]*raas\b/i, "AL RAAS"],
+  [/\b(?:al[\s\-]*)?humrah\b/i, "AL HUMRAH"],
+  [/\bal[\s\-]*maidan\b/i, "AL MAIDAN"],
+  [/\b(?:al[\s\-]*)?haditha\b/i, "AL HADITHA"],
+  [/\b(?:al[\s\-]*)?raudah\b/i, "AL RAUDAH"],
+  [/\bdar[\s\-']*al[\s\-']*baida\b/i, "AL DAR AL BAIDA"],
+  [/\bfalaj[\s\-']*al[\s\-']*mualla\b/i, "FALAJ AL MUALLA"],
+  [/\b(?:al[\s\-]*)?rafaa?h\b|\braafah\b/i, "AL RAFAAH"],
+  [/\bal[\s\-]*khor[\s\-']*uaq\b/i, "AL KHOR"],
+  [/\buaq[\s\-']*marina\b|\bumm[\s\-']*al[\s\-']*quwain[\s\-']*marina\b/i, "UAQ MARINA"],
+];
+
+const FUJAIRAH: AreaRule[] = [
+  [/\bdibba\b|\bdibba[\s\-']*al[\s\-']*fujairah\b|\bdibba[\s\-']*fujairah\b/i, "DIBBA"],
+  [/\bmasafi\b/i, "MASAFI"],
+  [/\b(?:al[\s\-]*)?faseel\b/i, "AL FASEEL"],
+  [/\bsakamkam\b/i, "SAKAMKAM"],
+  [/\bmerashid\b/i, "MERASHID"],
+  [/\b(?:al[\s\-]*)?gurfa\b/i, "AL GURFA"],
+  [/\bmirbah\b/i, "MIRBAH"],
+  [/\bqidfa\b/i, "QIDFA"],
+  [/\b(?:al[\s\-]*)?bidiy?ah?\b|\bbidya\b/i, "AL BIDIYAH"],
+  [/\bdadna\b/i, "DADNA"],
+  [/\bal[\s\-]*aqah\b/i, "AL AQAH"],
+  [/\bmurbeh\b/i, "MURBEH"],
+  [/\bal[\s\-]*hail[\s\-']*fujairah\b/i, "AL HAIL (FUJ)"],
+  [/\b(?:al[\s\-]*)?taween\b/i, "AL TAWEEN"],
+  [/\bfujairah[\s\-']*city\b|\bfujairah[\s\-']*corniche\b|\bhamad[\s\-']*bin[\s\-']*abdulla[\s\-']*road\b/i, "FUJAIRAH CITY"],
+];
+
+const BY_EMIRATE: Record<string, AreaRule[]> = {
+  "DUBAI": DUBAI,
+  "SHARJAH": SHARJAH,
+  "ABUDHABI": ABUDHABI,
+  "AL AIN": ALAIN,
+  "AJMAN": AJMAN,
+  "RAS AL KHAIMAH": RAK,
+  "UMM AL QUWAIN": UAQ,
+  "FUJAIRAH": FUJAIRAH,
+};
+
+/**
+ * Default driving order for "By area" (office's route list).
+ * A driver's own saved order (▲▼ on the driver page) still comes first.
+ */
+export const DEFAULT_AREA_ROUTE: string[] = [
+  "DUBAI|MUHAISNAH",
+  "DUBAI|AL QUSAIS",
+  "DUBAI|AL NAHDA (DXB)",
+  "DUBAI|AL GARHOUD",
+  "DUBAI|AL MAMZAR",
+  "DUBAI|HOR AL ANZ",
+  "DUBAI|ABU HAIL",
+  "DUBAI|RIGGA",
+  "DUBAI|AL BARAHA",
+  "DUBAI|FRIJ MURAR",
+  "DUBAI|NAIF",
+  "DUBAI|DEIRA",
+  "DUBAI|GOLD SOUK",
+  "DUBAI|BUR DUBAI",
+  "DUBAI|KARAMA",
+  "DUBAI|MANKHOOL",
+  "DUBAI|OUD METHA",
+  "DUBAI|AL RASHIDIYA",
+  "DUBAI|UMM RAMOOL",
+  "DUBAI|AL WARQA",
+  "DUBAI|MIRDIF",
+  "DUBAI|NAD AL HAMAR",
+  "DUBAI|INTERNATIONAL CITY",
+  "DUBAI|SILICON OASIS",
+  "DUBAI|AL QUOZ",
+  "DUBAI|AL BARSHA",
+  "DUBAI|JVC",
+  "DUBAI|DUBAI PRODUCTION CITY",
+  "DUBAI|JEBEL ALI",
+  "DUBAI|DISCOVERY GARDENS",
+  "DUBAI|DIP",
+  "DUBAI|DUBAILAND",
+  "DUBAI|MAJAN",
+  "DUBAI|WADI AL SAFA",
+  "DUBAI|NAD AL SHEBA",
+  "DUBAI|RAS AL KHOR",
+  "DUBAI|AL MIZHAR",
+  "DUBAI|AL FURJAN",
+  "DUBAI|SOBHA HARTLAND",
+  "ABUDHABI|GHANTOOT",
+  "ABUDHABI|KIZAD",
+  "ABUDHABI|AL SAMHA",
+  "ABUDHABI|AL RAHBA",
+  "ABUDHABI|AL BAHIA",
+  "ABUDHABI|AL SHAHAMA",
+  "ABUDHABI|AL REEF",
+  "ABUDHABI|AL FALAH CITY",
+  "ABUDHABI|AL SHAMKHA",
+  "ABUDHABI|AL SHAWAMEKH",
+  "ABUDHABI|SHAKHBOUT CITY",
+  "ABUDHABI|BANIYAS",
+  "ABUDHABI|AL WATHBA",
+  "ABUDHABI|AL MAFRAQ",
+  "ABUDHABI|ICAD",
+  "ABUDHABI|MUSSAFAH",
+  "ABUDHABI|SHABIYA",
+  "ABUDHABI|SHABIYA 9",
+  "ABUDHABI|SHABIYA 10",
+  "ABUDHABI|SHABIYA 11",
+  "ABUDHABI|SHABIYA 12",
+  "ABUDHABI|MBZ CITY",
+  "ABUDHABI|KHALIFA CITY",
+  "ABUDHABI|AL RAHA",
+  "ABUDHABI|AL MAQTAA",
+  "ABUDHABI|RABDAN",
+  "ABUDHABI|AL RAWDAH",
+  "ABUDHABI|AL MUROOR",
+  "ABUDHABI|AL MUSHRIF",
+  "ABUDHABI|AL NAHYAN",
+  "ABUDHABI|AL WAHDA",
+  "ABUDHABI|AL BATEEN",
+  "ABUDHABI|AL MANHAL",
+  "ABUDHABI|AL KHALIDIYA",
+  "ABUDHABI|CORNICHE",
+  "ABUDHABI|HAMDAN STREET",
+  "ABUDHABI|KHALIFA STREET",
+  "ABUDHABI|ELECTRA STREET",
+  "ABUDHABI|AL FALAH STREET",
+  "ABUDHABI|NAJDA STREET",
+  "ABUDHABI|REEM ISLAND",
+  "ABUDHABI|AL ZAHIYA",
+  "ABUDHABI|SAADIYAT",
+  "ABUDHABI|YAS ISLAND",
+  "SHARJAH|AL SAJAA",
+  "SHARJAH|INDUSTRIAL AREA 18",
+  "SHARJAH|INDUSTRIAL AREA 17",
+  "SHARJAH|INDUSTRIAL AREA 15",
+  "SHARJAH|MUWAILEH",
+  "SHARJAH|INDUSTRIAL AREA 13",
+  "SHARJAH|INDUSTRIAL AREA 12",
+  "SHARJAH|INDUSTRIAL AREA 11",
+  "SHARJAH|AL NAHDA (SHJ)",
+  "SHARJAH|SAIF ZONE",
+  "SHARJAH|INDUSTRIAL AREA 2",
+  "SHARJAH|INDUSTRIAL AREA 3",
+  "SHARJAH|INDUSTRIAL AREA 6",
+  "SHARJAH|AL TAAWUN",
+  "SHARJAH|AL KHAN",
+  "SHARJAH|AL MAJAZ 3",
+  "SHARJAH|AL MAJAZ",
+  "SHARJAH|AL WAHDA (SHJ)",
+  "SHARJAH|INDUSTRIAL AREA 4",
+  "SHARJAH|ABU SHAGARA",
+  "SHARJAH|AL QASIMIA",
+  "SHARJAH|AL YARMOOK",
+  "SHARJAH|ROLLA",
+  "SHARJAH|AL NABBA",
+  "SHARJAH|AL QULAYA",
+  "SHARJAH|AL BUTINA",
+  "SHARJAH|MAYSALOON",
+  "SHARJAH|AL FAYHA",
+  "SHARJAH|AL QADISIYA",
+  "SHARJAH|AL FISHT",
+  "SHARJAH|AL JAZZAT",
+  "SHARJAH|AL RAMLA",
+  "SHARJAH|AL GHAFIA",
+  "SHARJAH|INDUSTRIAL AREA",
+];
+
+const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
+const OUTSIDE_EM = new Set(["UMM AL QUWAIN", "FUJAIRAH", "RAS AL KHAIMAH", "AL AIN"]);
+const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHAIMAH", "FUJAIRAH"]);
+
+/** Best-guess area name, or the first part of the address when no known area matches. */
+export function detectArea(address?: string | null, emirate?: string | null): string {
+  const text = (address ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "NO ADDRESS";
+  // Saif Zone (Sharjah Airport Free Zone) is its own area, whatever else the address mentions.
+  if (/\bsa[iy]e?f[\s\-']*(?:free[\s\-']*)?zone\b|\bsaifzone\b|\bsharj?a?h?a?[\s\-']*airport[\s\-']*(?:international[\s\-']*)?free[\s\-']*zone\b/i.test(text)) return "SAIF ZONE";
+  // Al Nahda exists in both Dubai and Sharjah: an emirate written in the address decides.
+  if (/\bnah[a]?d[h]?a\b/i.test(text)) {
+    if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
+    if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
+  }
+  const em = (emirate ?? "").toUpperCase();
+  // Known emirate → only that emirate's areas (no "Jumeirah" for an Abu Dhabi parcel).
+  // Unknown emirate → every emirate.
+  const own = BY_EMIRATE[em];
+  // Neighbouring emirates share mistakes ("Muwaileh, Dubai"), so their areas come next —
+  // but the capital region (Abu Dhabi + Al Ain) and the north never mix.
+  const group = own ? (CAPITAL.has(em) ? CAPITAL : NORTH) : null;
+  const rules = own
+    ? [...own, ...Object.entries(BY_EMIRATE).filter(([k]) => k !== em && group!.has(k)).flatMap(([, r]) => r)]
+    : Object.values(BY_EMIRATE).flat();
+  // Shop / bank / building names ("Jumaira jewelry", "Al Rawda building", "Mashreq bank")
+  // name a place, not the area — look at the rest of the address first.
+  const plain = stripNames(text);
+  // Outside emirates: their own areas first, else the emirate itself is the area
+  // (never a neighbour's area or a shop name like "Al Sada Cafeteria").
+  if (OUTSIDE_EM.has(em)) {
+    for (const [re, name] of own!) if (re.test(plain) || re.test(text)) return name;
+    const near = fuzzyArea(plain, em, true);
+    if (near && own!.some(([, n]) => n === near)) return near;
+    return em;
+  }
+  for (const [re, name] of rules) if (re.test(plain)) return name;
+  for (const [re, name] of rules) if (re.test(text)) return name;
+  // Small spelling mistakes ("Sabiya", "Qusias", "Muwaileh"→"Muwailah") → closest known area.
+  const near = fuzzyArea(plain, own ? em : "", !!own) ?? (plain !== text ? fuzzyArea(text, own ? em : "", !!own) : undefined);
+  if (near) return near;
+  // Fallback: first chunk of the address that has letters (e.g. "Villa 12, Al Something" → "AL SOMETHING").
+  const parts = text.split(/[,\n\-–]+/).map((p) => p.trim()).filter((p) => /[a-z]{3}/i.test(p));
+  const named = parts.find((p) => p.length <= 25 && !/\d/.test(p) && !/\b(villa|flat|apt|apartment|room|building|bldg|tower|floor|street|st|road|near|opp|behind|makani|plot|house|no|office|shop)\b/i.test(p));
+  return named ? canonical(named) : "OTHER AREA";
+}
+
+/** Words that turn the name before them into a shop / company / building name. */
+const NAME_WORD =
+  "jewel+e?ry|jewel+ers?|jewel+ery|jewels|gold|bank|exchange|building|bldg|blg|tower|towers|residence|residences|restaurant|resturant|cafeteria|cafe|coffee|supermarket|super\\s*market|hypermarket|hyper\\s*market|grocery|groceries|baqala|trading|llc|l\\.l\\.c|est|establishment|electronics|textiles?|tailoring|tailors?|salon|saloon|pharmacy|clinic|hospital|hotel|motors?|garage|auto|furniture|perfumes?|fashion|boutique|store|stores|shop|company|co|group|services?|contracting|cargo|travels?|school|academy|institute";
+const NAME_RE = new RegExp(`\\b((?:[a-z'’]+[\\s\\-]+){1,3})(?:${NAME_WORD})\\b`, "gi");
+
+/** Drop "X jewellery", "X bank", "X building"… so the name X isn't read as the area. */
+function stripNames(text: string): string {
+  return text.replace(NAME_RE, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Emirate of the first known area named in the text (e.g. "JVT" → DUBAI). */
+export function emirateOfArea(text: string): string | undefined {
+  // Only when the places named all belong to one emirate ("Al Nahda" alone is Dubai or Sharjah → unknown).
+  const hits = Object.entries(BY_EMIRATE).filter(([, rules]) => rules.some(([re]) => re.test(text))).map(([em]) => em);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/**
+ * Emirate that owns an area name from detectArea ("AL WARQA" → DUBAI), or
+ * undefined when the name isn't a known area or exists in more than one emirate.
+ */
+export function emirateOfAreaName(area?: string | null): string | undefined {
+  const a = (area ?? "").toUpperCase().trim();
+  if (!a) return undefined;
+  if (a === "AL NAHDA (DXB)") return "DUBAI";
+  if (a === "AL NAHDA (SHJ)" || a === "SAIF ZONE") return "SHARJAH";
+  const hits = Object.entries(BY_EMIRATE).filter(([, rules]) => rules.some(([, n]) => n === a)).map(([em]) => em);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/** True when the text names a known area (any emirate). */
+export function isKnownArea(text: string): boolean {
+  return Object.values(BY_EMIRATE).some((rules) => rules.some(([re]) => re.test(text)));
+}
+
+/**
+ * Same unknown area written differently ("Al Musalla", "Sharjah Musallah",
+ * "musalla") → one name: drop emirate words, a leading "Al", and a trailing "h".
+ */
+function canonical(name: string): string {
+  let t = name
+    .replace(/[^\w\s'’]/g, " ")
+    .replace(/\b(sharjah|sharja|sharjha|shj|dubai|dxb|abu\s*dhabi|auh|ajman|ajm|al\s*ain|uae|united\s*arab\s*emirates|rak|uaq|fujairah)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  // Comparable form: no leading "Al", no trailing "h" after a vowel, no doubled final vowel.
+  t = t.replace(/^AL\s+/, "").replace(/(?<=[AEIOU])H\b/g, "").replace(/([AEIOU])\1\b/g, "$1").trim();
+  return t || "OTHER AREA";
+}
+
+/* ---------- Spelling-tolerant matching ---------- */
+
+/** Rough sound-alike form: "Al Qusais" / "alqusays" / "Qusis" end up close together. */
+function phon(t: string): string {
+  let x = t.toLowerCase().replace(/[^a-z]/g, "");
+  x = x.replace(/^(al|el|ul)(?=[a-z]{4,})/, "");
+  x = x
+    .replace(/kh/g, "k").replace(/q/g, "k").replace(/ck/g, "k").replace(/c/g, "k")
+    .replace(/gh/g, "g").replace(/dh/g, "d").replace(/th/g, "t").replace(/ph/g, "f")
+    .replace(/ee|ie|ey/g, "i").replace(/oo|ou|uo/g, "u").replace(/y/g, "i").replace(/w/g, "u").replace(/z/g, "s")
+    .replace(/(?<=[aeiou])h(?![aeiou])/g, "").replace(/h$/, "")
+    .replace(/(.)\1+/g, "$1");
+  return x;
+}
+
+/** Damerau–Levenshtein distance (swaps count as one mistake). */
+function editDist(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  return d[m][n];
+}
+
+const allowed = (len: number) => (len <= 4 ? 0 : len <= 6 ? 1 : len <= 10 ? 2 : 3);
+
+/** Words that are never an area on their own. */
+const NOT_AREA = new Set(
+  "villa flat apt apartment room building bldg tower floor street road near opp opposite behind makani plot house no number office shop block sector zone area city new old the and dubai sharjah sharja ajman abu dhabi ain uae emirates united arab ras khaimah umm quwain fujairah call customer please deliver delivery before after morning evening night time phone mobile whatsapp location pin home work back front side next main metro station mall market masjid mosque school hospital clinic hotel park beach center centre madam maam mam sir".split(" ")
+);
+
+/** Road words are dropped when comparing, so "Al Khail road" isn't read as "Naif road". */
+const ROADWORD = new Set(["road", "rd", "street", "st"]);
+
+type Spelling = { key: string; words: number; area: string; emirate: string };
+let SPELLINGS: Spelling[] | null = null;
+
+/** Plain spellings pulled from the area rules plus the area names themselves. */
+function spellings(): Spelling[] {
+  if (SPELLINGS) return SPELLINGS;
+  const out: Spelling[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string, area: string, emirate: string) => {
+    const words = raw.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w && !ROADWORD.has(w));
+    if (!words.length || words.every((w) => NOT_AREA.has(w))) return;
+    const key = phon(words.join(""));
+    if (key.length < 3) return; // very short names (JLT, JVC) only match exactly
+    const id = `${key}|${area}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ key, words: words.length, area, emirate });
+  };
+  for (const [em, rules] of Object.entries(BY_EMIRATE))
+    for (const [re, area] of rules) {
+      // Numbered areas ("AL MAJAZ 3") come from their base name + the number written after it.
+      if (!/\d\s*$/.test(area)) add(area.replace(/\(.*?\)/g, ""), area, em);
+      for (const alt of re.source.split("|")) {
+        const plain = alt
+          .replace(/\\b|\(\?:|[()^$]/g, "")
+          .replace(/\[\\s\\-'\]\*\??/g, " ")
+          .replace(/\\s[*+?]?/g, " ")
+          .replace(/'\??/g, "");
+        if (/^[a-z ]+$/i.test(plain.trim())) add(plain, area, em);
+      }
+    }
+  SPELLINGS = out;
+  return out;
+}
+
+const NUMBERED = new Set(DEFAULT_AREA_ROUTE.map((r) => r.split("|")[1]));
+
+/** Closest known area to any 1–3 word piece of the address, allowing small typing mistakes. */
+function fuzzyArea(text: string, emirate: string, strict = false): string | undefined {
+  const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const list = spellings();
+  let best: { score: number; area: string; after: string | undefined } | undefined;
+  for (let i = 0; i < tokens.length; i++)
+    for (let len = 1; len <= 3 && i + len <= tokens.length; len++) {
+      const piece = tokens.slice(i, i + len);
+      if (piece.some((w) => /\d/.test(w))) break;
+      if (piece.some((w) => ROADWORD.has(w))) continue; // "X road" vs "Y road" must not match on "road"
+
+      if (piece.every((w) => NOT_AREA.has(w) || w === "al")) continue;
+      const key = phon(piece.join(""));
+      if (key.length < 3) continue;
+      const after = tokens[i + len];
+      for (const sp of list) {
+        if (strict && (CAPITAL.has(emirate) ? !CAPITAL.has(sp.emirate) : CAPITAL.has(sp.emirate))) continue;
+        if (Math.abs(sp.key.length - key.length) > 3) continue;
+        const dist = editDist(key, sp.key);
+        if (dist > allowed(Math.min(key.length, sp.key.length))) continue;
+        // Lower is better: mistakes per letter, small push for the parcel's own emirate and longer pieces.
+        const score = dist / sp.key.length + (emirate && sp.emirate !== emirate ? 0.15 : 0) - sp.key.length * 0.002;
+        if (!best || score < best.score) best = { score, area: sp.area, after };
+      }
+    }
+  if (!best) return undefined;
+  // "Sabiya 12" → "SHABIYA 12" when that numbered area exists.
+  const base = best.area.replace(/\s+\d+$/, "");
+  if (best.after && /^\d{1,2}$/.test(best.after) && NUMBERED.has(`${base} ${Number(best.after)}`)) return `${base} ${Number(best.after)}`;
+  return best.area;
+}
+
+/** Emirate words written in an address (only the four city emirates; outside emirates are handled elsewhere). */
+const EMIRATE_WORDS: Record<string, RegExp> = {
+  DUBAI: /\bdub[a]?[iy]\b|\bdxb\b/i,
+  SHARJAH: /\bsh[a]?r[a]?j[a]?h?\b|\bsharjha\b|\bshj\b/i,
+  ABUDHABI: /\babu\s*dh?abi\b|\babudh?abi\b|\bauh\b/i,
+  AJMAN: /\bajm[a]+n\b|\bajm\b/i,
+};
+
+/**
+ * Right emirate from the address when the chosen one is wrong (form left on the
+ * previous order's emirate, e.g. "Al Warqa" / "Jumeirah, Umm Suqeim" saved as Sharjah).
+ * Only for Dubai / Sharjah / Ajman / Abu Dhabi:
+ *  - address names the chosen emirate → keep it
+ *  - address names exactly one other of these emirates → that one
+ *  - else the emirate of the area found in the address, when that area belongs to one emirate only
+ */
+export function emirateFromAddress(emirate?: string | null, address?: string | null): string {
+  const em = (emirate ?? "").toUpperCase().trim();
+  const text = (address ?? "").trim();
+  if (!text || !(em in EMIRATE_WORDS)) return em;
+  if (EMIRATE_WORDS[em].test(text)) return em;
+  const named = Object.keys(EMIRATE_WORDS).filter((k) => EMIRATE_WORDS[k].test(text));
+  if (named.length === 1) return named[0];
+  if (named.length > 1) return em;
+  const owner = emirateOfAreaName(detectArea(text, em));
+  return owner && owner !== em ? owner : em;
+}
