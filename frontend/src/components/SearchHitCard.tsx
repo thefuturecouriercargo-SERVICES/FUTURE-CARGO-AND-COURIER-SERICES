@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { toast } from "@/components/ui/Feedback";
 import { fmtNumber, fmtDate } from "@/lib/format";
 import { NotesText, isPickup } from "@/lib/notes";
 import CustomerRiskBadge from "@/components/CustomerRiskBadge";
@@ -171,7 +172,9 @@ function Tile({ children, href, onClick, tone = "plain", label }: { children: Re
  */
 export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails; area?: string | null; onEdit?: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [shared, setShared] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<Blob | null>(null);
   const b = h.booking ?? null;
   const cancelled = h.stage === "CANCELLED";
   const rejected = h.stage === "REJECTED";
@@ -253,36 +256,63 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
 
   const orderNo = h.vendorRef || b?.vendorRef || null;
   const hit = (k: string) => (h.matched ?? []).includes(k);
-  // Share: the phone's share sheet (WhatsApp, etc.); on desktop, opens WhatsApp with the text.
-  const shareText = [
-    `CN ${h.cnNo} — ${h.vendorName}`,
-    `Status: ${chip.text}`,
-    orderNo ? `Order no: #${orderNo}` : "",
-    h.billNo ? `Bill no: ${h.billNo}` : "",
-    b ? `Customer: ${b.customerName}` : "",
-    b ? `Phone: ${b.customerPhone}` : "",
-    address ? `Address: ${address}` : "",
-    b?.items ? `Items: ${b.items}` : "",
-    h.driver ? `Driver: ${h.driver}` : "",
-    cod === 0 && b ? "PREPAID — do not collect cash" : cod < 0 ? `REFUND: AED ${fmtNumber(-cod)}` : `COD: AED ${fmtNumber(cod)}`,
-    b?.notes ? `Note: ${b.notes}` : "",
-    (cancelled || rejected) && reasonText ? `Reason: ${reasonText}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-  async function share() {
-    const nav = navigator as Navigator & { share?: (d: { title?: string; text?: string }) => Promise<void> };
-    if (nav.share) {
-      try {
-        await nav.share({ title: `CN ${h.cnNo}`, text: shareText });
-        return;
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return;
-      }
+  // Share = a picture of this popup (without the buttons). The picture is drawn as
+  // soon as the popup opens, so tapping Share opens the share sheet straight away
+  // (iPhone only allows the share sheet right after a tap).
+  async function drawImage(): Promise<Blob | null> {
+    if (!cardRef.current) return null;
+    const { toBlob } = await import("html-to-image");
+    const opts = {
+      pixelRatio: 2,
+      cacheBust: true,
+      backgroundColor: "#0D1424",
+      filter: (n: HTMLElement) => !(n instanceof HTMLElement && n.dataset && n.dataset.shareHide),
+    };
+    try {
+      return await toBlob(cardRef.current, opts);
+    } catch {
+      return await toBlob(cardRef.current, { ...opts, skipFonts: true });
     }
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener");
-    setShared(true);
-    setTimeout(() => setShared(false), 1500);
+  }
+  useEffect(() => {
+    imgRef.current = null;
+    const t = setTimeout(() => {
+      drawImage()
+        .then((b) => {
+          imgRef.current = b;
+        })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h.cnNo, h.stage]);
+
+  async function share() {
+    setBusy(true);
+    try {
+      const blob = imgRef.current ?? (await drawImage());
+      if (!blob) throw new Error("Could not draw the picture");
+      imgRef.current = blob;
+      const file = new File([blob], `CN-${h.cnNo}.png`, { type: "image/png" });
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file], title: `CN ${h.cnNo}` });
+        return;
+      }
+      // Desktop: download the picture to attach anywhere.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast("Picture downloaded", "success", `CN-${h.cnNo}.png — attach it in WhatsApp.`);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return; // share sheet closed
+      toast("Could not share the picture", "error", err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const tiles: ReactNode[] = [];
@@ -304,13 +334,13 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       {copied ? <IconCheck /> : <IconCopy />}
     </Tile>
   );
-  tiles.push(<Tile key="share" label={shared ? "Sent" : "Share"} onClick={share}><IconShare /></Tile>);
+  tiles.push(<Tile key="share" label={busy ? "Wait…" : "Share"} onClick={share}><IconShare /></Tile>);
   if (onEdit) tiles.push(<Tile key="edit" label="Edit" onClick={onEdit}><IconEdit /></Tile>);
 
   const sub = h.vendorName;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#1F2A44] bg-[#0D1424] font-sans uppercase text-[#E5E7EB]">
+    <div ref={cardRef} className="overflow-hidden rounded-2xl border border-[#1F2A44] bg-[#0D1424] font-sans uppercase text-[#E5E7EB]">
       {/* header */}
       <div className="flex flex-col gap-1.5 px-5 pb-4 pt-5">
         <div className="flex items-center justify-between gap-3">
@@ -358,7 +388,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       )}
 
       {/* details table */}
-      <div className="px-5 pt-4">
+      <div className="px-5 pb-5 pt-4">
         <div className="overflow-hidden rounded-xl border border-[#1F2A44] text-sm">
           {orderNo && (
             <Row label="Order no" tone={hit("Order no") ? "hit" : undefined}>
@@ -405,14 +435,14 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
           )}
         </div>
         {b && (
-          <div className="mt-2 normal-case">
+          <div data-share-hide="1" className="mt-2 normal-case">
             <CustomerRiskBadge phone={b.customerPhone} excludeCn={h.cnNo} />
           </div>
         )}
       </div>
 
       {/* actions */}
-      <div className={`grid grid-cols-3 gap-2 px-5 pb-5 pt-4 ${SM_COLS[tiles.length] ?? "sm:grid-cols-6"}`}>
+      <div data-share-hide="1" className={`grid grid-cols-3 gap-2 px-5 pb-5 pt-0 ${SM_COLS[tiles.length] ?? "sm:grid-cols-6"}`}>
         {tiles}
       </div>
     </div>
