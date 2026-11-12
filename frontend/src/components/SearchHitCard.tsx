@@ -34,6 +34,8 @@ export interface SearchHitDetails {
 }
 
 const GOLD = "#E2B857";
+// Phones: 3 tiles a row; wider screens: all tiles on one row.
+const SM_COLS: Record<number, string> = { 1: "sm:grid-cols-1", 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4", 5: "sm:grid-cols-5", 6: "sm:grid-cols-6" };
 
 /** "10 NOV · 12:05 AM" in Dubai time. */
 function fmtShort(iso?: string | null) {
@@ -410,7 +412,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       </div>
 
       {/* actions */}
-      <div className="grid gap-2 px-5 pb-5 pt-4" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
+      <div className={`grid grid-cols-3 gap-2 px-5 pb-5 pt-4 ${SM_COLS[tiles.length] ?? "sm:grid-cols-6"}`}>
         {tiles}
       </div>
     </div>

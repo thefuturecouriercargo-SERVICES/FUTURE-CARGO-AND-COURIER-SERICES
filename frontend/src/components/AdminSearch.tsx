@@ -278,12 +278,16 @@ export default function AdminSearch() {
         typeof document !== "undefined" &&
         createPortal(
           <div
-            className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setViewHit(null);
+            className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto bg-black/70 px-4 pb-4 backdrop-blur-sm sm:items-center"
+            style={{ paddingTop: "max(1rem, calc(env(safe-area-inset-top) + 0.75rem))", paddingBottom: "max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem))" }}
+            onClick={(e) => {
+              // Tap anywhere — backdrop or the popup itself — closes it; its buttons and links still work.
+              const t = e.target as HTMLElement;
+              if (t.closest("a, button")) return;
+              setViewHit(null);
             }}
           >
-            <div ref={modalRef} role="dialog" aria-modal="true" aria-label={`CN ${viewHit.cnNo}`} className="w-full max-w-[560px]">
+            <div ref={modalRef} role="dialog" aria-modal="true" aria-label={`CN ${viewHit.cnNo}`} className="w-full max-w-[560px] cursor-pointer">
               <div className="mb-2 flex justify-end">
                 <button
                   type="button"
