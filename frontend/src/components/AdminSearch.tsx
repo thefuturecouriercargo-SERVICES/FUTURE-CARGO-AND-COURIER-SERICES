@@ -144,7 +144,13 @@ export default function AdminSearch() {
         if (cancelled) return;
         setHits(r.results);
         setError("");
-        setOpenKey(null);
+        // Only one match → open its popup straight away.
+        if (r.results.length === 1) {
+          setOpenKey(r.results[0].key);
+          setViewHit(r.results[0]);
+        } else {
+          setOpenKey(null);
+        }
       } catch (e) {
         if (cancelled) return;
         setHits([]);
