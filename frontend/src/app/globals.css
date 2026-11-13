@@ -747,3 +747,18 @@ input[type="password"]::placeholder,
 input[type="url"]::placeholder {
   text-transform: none !important;
 }
+
+/* Capitals take more room than mixed case, so on screen every letter is set
+   a little smaller (about 8–9%) to fit boxes as before. Works the same for
+   Tailwind sizes, px sizes and inline sizes. Printed labels keep their size. */
+@media screen {
+  html,
+  body,
+  body *,
+  input,
+  textarea,
+  select,
+  button {
+    font-size-adjust: cap-height 0.66;
+  }
+}
