@@ -211,7 +211,10 @@ export const isWesternArea = (area?: string | null) => !!area && WESTERN_AREAS.h
 
 const ABUDHABI: AreaRule[] = [
   [/\bruwais\b|\bruwayes\b|\bruwaiz\b|\bruwes\b/i, "RUWAIS"],
-  [/\bbada'?a?[\s\-']*za[iy]e?d\b|\bbadaa?[\s\-']*zayed\b|\bmadinat[\s\-']*zayed\b|\bmadina[\s\-']*zayed\b|\bmadeenat?[\s\-']*zayed\b|\bzayed[\s\-']*city[\s\-']*west\b/i, "MADINAT ZAYED"],
+  // "Madina Zayed" (no T) is the Abu Dhabi city area; "Madinat Zayed" is the Western Region town.
+  // The Madinat Zayed shopping / gold centre is in the city too.
+  [/\bmadinah?[\s\-']*zayed\b|\bmadeenah?[\s\-']*zayed\b|\bmadinat[\s\-']*zayed[\s\-']*(?:shopping|gold|mall|cent(?:er|re))\b/i, "MADINA ZAYED"],
+  [/\bbada'?a?[\s\-']*za[iy]e?d\b|\bbadaa?[\s\-']*zayed\b|\bmadinat[\s\-']*zayed\b|\bmadeenat[\s\-']*zayed\b|\bzayed[\s\-']*city[\s\-']*west\b/i, "MADINAT ZAYED"],
   [/\bgh?a[iy]?y?a+th?i\b|\bgh?i[iy]a+th?i\b|\bghayathi\b|\bgayathi\b|\bghiyathi\b/i, "GHAYATHI"],
   [/\bh[ae]f?b?shan\b|\bhabshan\b|\bhafshan\b|\bhabsan\b/i, "HABSHAN"],
   [/\bsalam[\s\-']*city\b|\bmadinat[\s\-']*al[\s\-']*salam\b/i, "SALAM CITY"],
@@ -485,6 +488,7 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "ABUDHABI|HAMDAN STREET",
   "ABUDHABI|KHALIFA STREET",
   "ABUDHABI|ELECTRA STREET",
+  "ABUDHABI|MADINA ZAYED",
   "ABUDHABI|AL FALAH STREET",
   "ABUDHABI|NAJDA STREET",
   "ABUDHABI|REEM ISLAND",
