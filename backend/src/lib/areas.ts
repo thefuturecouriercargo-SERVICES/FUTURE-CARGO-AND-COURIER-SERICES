@@ -142,6 +142,8 @@ const SHARJAH: AreaRule[] = [
   [/\btilal[\s\-']*city\b/i, "TILAL CITY"],
   [/\b(?:al[\s\-]*)?mamsha\b/i, "AL MAMSHA"],
   [/\bmaryam[\s\-']*island\b/i, "MARYAM ISLAND"],
+  // Landmark: Thumbay Hospital Sharjah is in Muwaileh.
+  [/\bthumb[aeiy]{0,2}h?[iy]?[\s\-']*(?:hospital|hosp|clinic|medical|day[\s\-']*care)\b/i, "MUWAILEH"],
   [/\bmuwaileh\b|\bmuweilah\b|\bmuwailih\b|\bmuwaila\b|\buniversity[\s\-']*city\b|\buni[\s\-']*city\b|\bal[\s\-']*muwaileh[\s\-']*commercial\b|\bmuweleah?\b|\bmuwelah\b|\bmuwailah\b|\bmuwele?ia\b|\bmwaileh\b|\bmuwaleh\b|(?:\bmuwail\w*)|(?:\bmuweil\w*)/i, "MUWAILEH"],
   [/\bmusall?ah?\b|\bmusala\b/i, "AL MUSALLA"],
   [/\b(?:al[\s\-]*)?ghubaiba\b/i, "AL GHUBAIBA"],
@@ -311,6 +313,8 @@ const ALAIN: AreaRule[] = [
 const AJMAN: AreaRule[] = [
   [/\b(?:al[\s\-]*)?nuaimi?y?a\b|\bnuaimia\b|\bnuaimiyah\b/i, "AL NUAIMIYA"],
   [/\b(?:al[\s\-]*)?rashidiy?a\b/i, "AL RASHIDIYA (AJM)"],
+  // Landmark: Thumbay Hospital Ajman is in Al Jurf.
+  [/\bthumb[aeiy]{0,2}h?[iy]?[\s\-']*(?:hospital|hosp|clinic|medical|university|day[\s\-']*care)\b/i, "AL JURF"],
   [/\b(?:al[\s\-]*)?j[aeiou]{1,2}r+f+\b|\bal[\s\-]*j[aeiou]?r[aeiou]?f\b|\bj[aeiou]{1,2}r+f+[\s\-']*industrial\b/i, "AL JURF"],
   [/\bal[\s\-]*rawda\b/i, "AL RAWDA"],
   [/\b(?:al[\s\-]*)?mowaihat\b|\bmuwaihat\b/i, "AL MOWAIHAT"],
@@ -662,7 +666,7 @@ const allowed = (len: number) => (len <= 4 ? 0 : len <= 6 ? 1 : len <= 10 ? 2 : 
 
 /** Words that are never an area on their own. */
 const NOT_AREA = new Set(
-  "villa flat apt apartment room building bldg tower floor street road near opp opposite behind makani plot house no number office shop block sector zone area city new old the and dubai sharjah sharja ajman abu dhabi ain uae emirates united arab ras khaimah umm quwain fujairah call customer please deliver delivery before after morning evening night time phone mobile whatsapp location pin home work back front side next main metro station mall market masjid mosque school hospital clinic hotel park beach center centre madam maam mam sir madinat madina madinah madeena madeenat mdinat".split(" ")
+  "villa flat apt apartment room building bldg tower floor street road near opp opposite behind makani plot house no number office shop block sector zone area city new old the and dubai sharjah sharja ajman abu dhabi ain uae emirates united arab ras khaimah umm quwain fujairah call customer please deliver delivery before after morning evening night time phone mobile whatsapp location pin home work back front side next main metro station mall market masjid mosque school hospital clinic hotel park beach center centre madam maam mam sir madinat madina madinah madeena madeenat mdinat salon saloon ladies ladys gents gent beauty spa parlour parlor barber thumbay thumbai thumbhi thumbe".split(" ")
 );
 
 /** Road words are dropped when comparing, so "Al Khail road" isn't read as "Naif road". */
