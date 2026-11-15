@@ -116,14 +116,22 @@ function achievements(p: Props): Achievements {
     const l = qEvents[qEvents.length - 1];
     out.last = { name: byId.get(l.id)!.name, at: l.t };
     // Power hour: most deliveries one driver made inside any 60-minute stretch.
+    // A delivery only counts if it's at least 8 minutes after the last counted one,
+    // so tapping many CNs as delivered at once doesn't win it.
+    const GAP = 8 * 60000;
     let bestPh: Achievements["powerHour"];
     for (const d of qualified) {
       const ts = qEvents.filter((e) => e.id === d.id).map((e) => e.t);
-      let j = 0;
       for (let i = 0; i < ts.length; i++) {
-        while (ts[i] - ts[j] > 3600000) j++;
-        const n = i - j + 1;
-        if (!bestPh || n > bestPh.count) bestPh = { name: d.name, count: n, from: ts[j] };
+        let n = 1;
+        let lastT = ts[i];
+        for (let k = i + 1; k < ts.length && ts[k] - ts[i] <= 3600000; k++) {
+          if (ts[k] - lastT >= GAP) {
+            n++;
+            lastT = ts[k];
+          }
+        }
+        if (!bestPh || n > bestPh.count) bestPh = { name: d.name, count: n, from: ts[i] };
       }
     }
     out.powerHour = bestPh;
