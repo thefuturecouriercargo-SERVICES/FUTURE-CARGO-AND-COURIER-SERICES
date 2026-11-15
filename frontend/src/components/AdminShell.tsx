@@ -232,12 +232,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
         <main className="min-w-0 flex-1 p-4 pb-24 md:p-8 md:pb-10">
           {current && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-ink-soft">
-                <span>{current.group}</span>
-                <span aria-hidden>/</span>
-                <span className="font-medium text-navy">{current.label}</span>
-              </nav>
+            <div className={`mb-4 flex-wrap items-center justify-between gap-3 ${pathname === "/dashboard" ? "hidden md:flex" : "flex"}`}>
+              {pathname === "/dashboard" ? <span /> : (
+                <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-ink-soft">
+                  <span>{current.group}</span>
+                  <span aria-hidden>/</span>
+                  <span className="font-medium text-navy">{current.label}</span>
+                </nav>
+              )}
               <div id="shell-actions" className="hidden items-center gap-2 md:flex" />
             </div>
           )}

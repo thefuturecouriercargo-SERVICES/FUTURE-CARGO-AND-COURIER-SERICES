@@ -312,9 +312,7 @@ return (
           <div>
             {/* Phone view (layout 9): title, then one compact date row; Today / range / share sit under the KPI cards. */}
             <div className="mb-4 md:hidden">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
-              <h1 className="font-display text-[24px] font-semibold tracking-tight text-navy">DASHBOARD</h1>
-              <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-line bg-white p-1.5">
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-white p-1.5">
                 <button onClick={() => setDate(addDays(date, -1))} aria-label="Previous day" className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-ink-soft hover:border-brass">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 6l-6 6 6 6" /></svg>
                 </button>
@@ -335,12 +333,7 @@ return (
               </div>
             </div>
             <div className="mb-6 hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-end md:justify-between md:gap-4">
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
-          <h1 className="inline-flex items-center gap-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
-            DASHBOARD
-          </h1>
-       </div>
+        <div />
           <div id="date-nav" className="flex flex-wrap items-center gap-2">
             <button onClick={() => setDate(addDays(date, -1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             ← Prev
