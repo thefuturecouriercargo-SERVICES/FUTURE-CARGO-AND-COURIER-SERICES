@@ -693,125 +693,6 @@ return (
           </div>
 
        
-            <div className="border border-line bg-white p-5">
-           <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy flex items-center justify-between">
-             <span>
-  Consignment Ledger — {search.trim() ? "All dates (search)" : data.date}
-  {globalSearching && <span className="ml-2 text-xs text-ink-soft">searching…</span>}
-</span>
-                <span className="font-mono text-sm text-ink-soft">
-                  {filteredOrders.length} consignment{filteredOrders.length === 1 ? "" : "s"}
-                </span>
-              </h2> 
-            <div className="mb-3 flex flex-wrap gap-2.5">
-              <input
-                placeholder="Search CN No. or brand…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="rounded border border-line px-3 py-1.5 text-sm"
-              />
-              {voiceSearch.supported && (
-                <button
-                  onClick={voiceSearch.start}
-                  title="Search by voice"
-                  type="button"
-                  className={`rounded border px-2.5 py-1.5 text-sm ${
-                    voiceSearch.listening ? "border-cancelled bg-cancelled text-white animate-pulse" : "border-line bg-white text-ink-soft hover:border-brass"
-                  }`}
-                >
-                  🎤
-                </button>
-              )}
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")}
-                className="rounded border border-line px-3 py-1.5 text-sm"
-              >
-                <option value="">All statuses</option>
-                <option value="DELIVERED">Delivered</option>
-                <option value="PENDING">Pending</option>
-                <option value="TRANSFER">Transfer</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as "" | "CASH" | "BANK")} className="rounded border border-line px-3 py-1.5 text-sm">
-  <option value="">All payments</option>
-  <option value="CASH">Cash</option>
-  <option value="BANK">Bank</option>
-</select>
-<select value={emirateFilter} onChange={(e) => setEmirateFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
-  <option value="">All emirates</option>
-  {(data.emirateBreakdown ?? []).map((e) => (
-    <option key={e.emirate} value={e.emirate}>{e.emirate}</option>
-  ))}
-</select>
-<select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="rounded border border-line px-3 py-1.5 text-sm">
-  <option value="">All employees</option>
-  {employeeRows.map((r) => (
-    <option key={r.employee.id} value={r.employee.id}>{r.employee.name}</option>
-  ))}
-</select>
-<input type="number" placeholder="Min AED" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
-<input type="number" placeholder="Max AED" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="w-24 rounded border border-line px-3 py-1.5 text-sm" />
-            </div>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>SL</th>
-                    <th>CN No.</th>
-                    <th>Vendor</th>
-                    <th className="text-right">Total</th>
-                    <th className="text-right">DL Chg</th>
-                    <th>Payment</th>
-                    <th>Emirate</th>
-                    <th>Employee</th>
-                    <th>Status</th>
-                    <th>Entry Date</th>
-                    <th>Delivered / Cancelled</th>
-                    <th>Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={12} className="!static !shadow-none">
-                        <EmptyState compact icon="search" title="No consignments match this filter" hint="Try a different status, vendor or employee." />
-                      </td>
-                    </tr>
-                  ) : (
-                   filteredOrders.map((o, i) => (
-                <tr key={o.id}>
-                  <td className="font-mono">{i + 1}</td>
-                        <td className="font-mono">{o.cnNo}</td>
-                        <td>{o.brandName}</td>
-                        <td className="text-right font-mono">{fmtNumber(o.total)}</td>
-                        <td className="text-right font-mono">{fmtNumber(o.deliveryCharge)}</td>
-                        <td>{o.payment}</td>
-                        <td>{o.emirate}</td>
-                        <td>{o.employee.name}</td>
-                        <td>
-                          <StatusStamp status={o.status} date={o.date} />
-                        </td>
-                        <td className="whitespace-nowrap font-mono text-xs text-ink-soft">
-                          {fmtDate(o.createdAt)}
-                        </td>
-                        <td
-                          className={`whitespace-nowrap font-mono text-xs ${o.status === "CANCELLED" ? "text-cancelled" : o.status === "DELIVERED" ? "text-delivered" : "text-ink-soft"}`}
-                          title={o.resolvedAt ? fmtDateTime(o.resolvedAt) : ""}
-                        >
-                          {o.status === "DELIVERED" || o.status === "CANCELLED" ? fmtDayDate(o.resolvedAt) : "—"}
-                        </td>
-                        <td className="max-w-[160px] truncate text-ink-soft" title={o.remarks || ""}>
-                          {o.remarks || "—"}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           <div className="mt-5 border border-line bg-white p-5">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
@@ -836,7 +717,6 @@ return (
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Date</th>
                       <th>Vendor</th>
                       <th className="text-right">New Entries</th>
                       <th className="text-right">Total Amount</th>
@@ -845,7 +725,6 @@ return (
                   <tbody>
                     {newEntriesRows.map((r) => (
                       <tr key={`${r.date}-${r.vendorId}`}>
-                        <td>{fmtDate(r.date)}</td>
                         <td>{r.vendorName}</td>
                         <td className="text-right font-mono">{r.count}</td>
                         <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
@@ -854,7 +733,7 @@ return (
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold">
-                      <td colSpan={2}>TOTAL</td>
+                      <td>TOTAL</td>
                       <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
                       <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
                     </tr>
