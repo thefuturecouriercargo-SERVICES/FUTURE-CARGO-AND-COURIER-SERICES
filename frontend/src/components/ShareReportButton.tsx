@@ -256,7 +256,7 @@ export default function ShareReportButton(p: Props) {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 46, height: 46, borderRadius: 12, background: "#D4AF5A", padding: 3, boxSizing: "border-box", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><img src="/fc-logo-mark.png" alt="" width={40} height={40} style={{ width: 40, height: 40, borderRadius: 9, background: "#FFFFFF", objectFit: "contain" }} /></div>
+              <div style={{ width: 42, height: 42, borderRadius: 12, background: "#FFFFFF", overflow: "hidden", flexShrink: 0 }}><img src="/fc-logo-mark.png" alt="" width={42} height={42} style={{ width: 42, height: 42, objectFit: "contain", display: "block" }} /></div>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 17, fontWeight: 700 }}>FUTURE COURIER</span>
                 <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 10, letterSpacing: 2, color: "#D4AF5A", fontWeight: 700, marginTop: 3 }}>DAILY REPORT</span>
