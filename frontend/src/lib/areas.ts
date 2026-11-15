@@ -103,7 +103,7 @@ const DUBAI: AreaRule[] = [
   [/\bjumeirah[\s\-']*\d\b|\bjumeirah\b|\bjumeira\b|\bjum[ae]{1,2}i?ra+h?\b|\bjumair?ah?\b|\bla[\s\-']*mer\b|\bburj[\s\-']*al[\s\-']*arab\b/i, "JUMEIRAH"],
   // Al Khail Gate / Al Khail Heights are inside Al Quoz (customers write "Alkhile gate", "khail gate"…).
   [/\b(?:al[\s\-']*)?kh?[aeiy]{1,2}le?[\s\-']*(?:gates?|heights?)\b/i, "AL QUOZ"],
-  [/\bal[\s\-']*q[ou]{1,2}[sz]e?\b|\bal[\s\-']*koz\b|\bal[\s\-']*kouz\b|\balq[ou]{1,2}[sz]\b|\bquoz\b|\bqouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
+  [/\ball?[\s\-']*qu[iou]z\b|\bal[\s\-']*q[ou]{1,2}[sz]e?\b|\bal[\s\-']*koz\b|\bal[\s\-']*kouz\b|\balq[ou]{1,2}[sz]\b|\bquoz\b|\bqouz\b|\bquoz[\s\-']*industrial\b/i, "AL QUOZ"],
   [/\bsobha[\s\-']*hartland\b|\bshoba[\s\-']*hartland\b|\bsobha\b|\bshoba\b|\bhartland\b/i, "SOBHA HARTLAND"],
   [/\bnad[\s\-']*al[\s\-']*sheba\b|\bnad[\s\-']*alsheba\b|\bnadal[\s\-']*sheba\b|\bnadal[\s\-']*shiba\b|\bnad[\s\-']*al[\s\-']*shiba\b|\bnad[\s\-']*el[\s\-']*sheba\b|\bnadd[\s\-']*al[\s\-']*sheba\b/i, "NAD AL SHEBA"],
   // Not bare "Al Khail": Al Khail Road runs past many areas, so it alone doesn't mean Meydan.
@@ -727,11 +727,15 @@ function fuzzyArea(text: string, emirate: string, strict = false): string | unde
       const key = phon(piece.join(""));
       if (key.length < 3) continue;
       const after = tokens[i + len];
+      const rest = piece.some((w) => NOT_AREA.has(w)) ? piece.filter((w) => !NOT_AREA.has(w) && w !== "al").join("").length : null;
       for (const sp of list) {
         if (strict && (CAPITAL.has(emirate) ? !CAPITAL.has(sp.emirate) : CAPITAL.has(sp.emirate))) continue;
         if (Math.abs(sp.key.length - key.length) > 3) continue;
         const dist = editDist(key, sp.key);
         if (dist > allowed(Math.min(key.length, sp.key.length))) continue;
+        // A piece with "Dubai" / "city" etc. in it: the mistakes must fit in the other words alone,
+        // so "Cup Dubai" isn't read as "Bur Dubai" just because "Dubai" matches.
+        if (rest !== null && dist > allowed(rest)) continue;
         // Lower is better: mistakes per letter, small push for the parcel's own emirate and longer pieces.
         const score = dist / sp.key.length + (emirate && sp.emirate !== emirate ? 0.15 : 0) - sp.key.length * 0.002;
         if (!best || score < best.score) best = { score, area: sp.area, after };
