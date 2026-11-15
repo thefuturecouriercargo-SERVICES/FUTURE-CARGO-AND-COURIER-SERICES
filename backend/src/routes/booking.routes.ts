@@ -131,7 +131,7 @@ router.get(
         const area = outsideAreaOf(b.emirate, b.address);
         if (!area) continue;
         counts[area]++;
-        list.push({ cnNo: b.cnNo, vendorRef: b.vendorRef, customerName: b.customerName, address: b.address ?? "", area, codAmount: b.codAmount, scanned: b.status !== "AWAITING_PICKUP" });
+        list.push({ cnNo: b.cnNo, vendorRef: b.vendorRef, customerName: b.customerName, address: b.address ?? "", area, codAmount: b.codAmount, scanned: true });
       }
       list.sort((a, b) => a.area.localeCompare(b.area) || a.cnNo - b.cnNo);
       return { vendor: key, counts, total: Object.values(counts).reduce((t, n) => t + n, 0), list };
