@@ -538,6 +538,7 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "SHARJAH|INDUSTRIAL AREA",
 ];
 
+const DUBAI_INDUSTRIAL = new Set(["AL QUSAIS", "AL QUOZ", "RAS AL KHOR", "AL AWIR", "JEBEL ALI", "DIP", "DUBAI INDUSTRIAL CITY"]);
 const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
 const OUTSIDE_EM = new Set(["UMM AL QUWAIN", "FUJAIRAH", "RAS AL KHAIMAH", "AL AIN"]);
 const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHAIMAH", "FUJAIRAH"]);
@@ -552,6 +553,12 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   if (/\bnah[a]?d[h]?a\b/i.test(text)) {
     if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
     if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
+  }
+  // "Industrial area" next to a Dubai district (Al Qusais Industrial Area 1, Al Quoz Ind 3,
+  // Ras Al Khor Industrial…) is that Dubai district — not Sharjah's industrial areas,
+  // even when Sharjah was picked as the emirate. Only an address that writes "Sharjah" stays Sharjah.
+  if (/\bind(?:ustrial|\.)?\b/i.test(text) && !/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) {
+    for (const [re, name] of DUBAI) if (DUBAI_INDUSTRIAL.has(name) && re.test(text)) return name;
   }
   const em = (emirate ?? "").toUpperCase();
   // Known emirate → only that emirate's areas (no "Jumeirah" for an Abu Dhabi parcel).
