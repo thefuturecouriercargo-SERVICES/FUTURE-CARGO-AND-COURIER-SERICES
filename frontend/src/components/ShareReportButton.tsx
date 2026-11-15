@@ -148,12 +148,8 @@ export default function ShareReportButton(p: Props) {
   const tableRows = [...p.drivers].filter((d) => d.total > 0).sort((a, b) => b.delivered - a.delivered || a.name.localeCompare(b.name));
 
   // Shared with the employee WhatsApp group: no sales or delivery-charge figures.
-  const text =
-    `📦 *FUTURE COURIER — ${prettyDate(p.date).toUpperCase()}*\n\n` +
-    `DELIVERED: ${p.delivered}\nPENDING: ${p.pending}\nTRANSFER: ${p.transferred}\nCANCELLED: ${p.cancelled}` +
-    (ach.top ? `\n\n🏆 MOST DELIVERIES: ${ach.top.name.toUpperCase()} (${ach.top.value})` : "") +
-    (ach.rate ? `\n🎯 BEST SUCCESS RATE: ${ach.rate.name.toUpperCase()} (${Math.round(ach.rate.value)}%)` : "") +
-    (ach.lead ? `\n🥇 LONGEST IN 1ST PLACE: ${ach.lead.name.toUpperCase()} (${dur(ach.lead.ms)})` : "");
+  // Caption sent with the image: just the date — the image carries the rest.
+  const text = prettyDate(p.date).toUpperCase();
 
   async function share() {
     if (!cardRef.current) return;
@@ -173,7 +169,7 @@ export default function ShareReportButton(p: Props) {
 
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare && nav.canShare({ files: [file] })) {
-        await nav.share({ files: [file], title: `Future Courier — ${p.date}`, text });
+        await nav.share({ files: [file], title: text, text });
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -230,17 +226,17 @@ export default function ShareReportButton(p: Props) {
       <div aria-hidden style={{ position: "fixed", left: -10000, top: 0, pointerEvents: "none" }}>
         <div
           ref={cardRef}
-          style={{ width: 460, padding: 26, background: "#0A1020", border: "1px solid #3A3220", borderRadius: 24, color: "#E8ECF4", fontFamily: "Inter, Arial, sans-serif", display: "flex", flexDirection: "column", gap: 16 }}
+          style={{ width: 460, padding: 26, background: "#0A1020", border: "1px solid #3A3220", borderRadius: 24, color: "#E8ECF4", fontFamily: "Inter, Arial, sans-serif", lineHeight: 1.3, display: "flex", flexDirection: "column", gap: 16 }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 42, height: 42, borderRadius: 12, background: "#D4AF5A", color: "#0A1020", fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>FC</div>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>FUTURE COURIER</span>
-                <span style={{ fontSize: 10, letterSpacing: 2, color: "#D4AF5A", fontWeight: 700 }}>DAILY REPORT</span>
+                <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 17, fontWeight: 700 }}>FUTURE COURIER</span>
+                <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 10, letterSpacing: 2, color: "#D4AF5A", fontWeight: 700, marginTop: 3 }}>DAILY REPORT</span>
               </div>
             </div>
-            <span style={{ fontSize: 13, color: "#9AA5BA" }}>{prettyDate(p.date).toUpperCase()}</span>
+            <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 12, color: "#9AA5BA" }}>{prettyDate(p.date).toUpperCase()}</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {[{ label: "TOTAL", value: total, color: "#E8ECF4" }, ...stats.filter((s) => s.label !== "Transfer" || s.value > 0)].slice(0, 4).map((s) => (
@@ -279,7 +275,7 @@ export default function ShareReportButton(p: Props) {
                         <span style={{ fontSize: 10, letterSpacing: 1, color: "#9AA5BA", fontWeight: 600 }}>{x.title}</span>
                         <span style={{ fontSize: 15, fontWeight: 700 }}>{x.name.toUpperCase()}</span>
                       </div>
-                      <span style={{ fontSize: 18, fontWeight: 700, color: x.color }}>{x.value}</span>
+                      <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, flexShrink: 0, fontSize: 18, fontWeight: 700, color: x.color }}>{x.value}</span>
                     </div>
                   );
                 })
@@ -299,7 +295,7 @@ export default function ShareReportButton(p: Props) {
 
           {agentTotal > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111827", borderRadius: 12, padding: "10px 12px", fontSize: 12 }}>
-              <span style={{ color: "#9AA5BA" }}>📤 SCANNED TO {p.agents.filter((a) => a.count > 0).map((a) => a.name.toUpperCase()).join(" & ")}</span>
+              <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, color: "#9AA5BA" }}>📤 SCANNED TO {p.agents.filter((a) => a.count > 0).map((a) => a.name.toUpperCase()).join(" & ")}</span>
               <span style={{ fontSize: 16, fontWeight: 700 }}>{fmt(agentTotal)}</span>
             </div>
           )}
@@ -332,8 +328,8 @@ export default function ShareReportButton(p: Props) {
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#6F7B93" }}>
-            <span>THE FUTURE COURIER SERVICE L.L.C</span>
-            <span>{fmt(total)} CONSIGNMENTS</span>
+            <span style={{ whiteSpace: "nowrap", lineHeight: 1.2,  }}>THE FUTURE COURIER SERVICE L.L.C</span>
+            <span style={{ whiteSpace: "nowrap", lineHeight: 1.2,  }}>{fmt(total)} CONSIGNMENTS</span>
           </div>
         </div>
       </div>
