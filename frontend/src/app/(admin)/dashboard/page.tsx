@@ -229,9 +229,6 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
     }
   }, [newEntriesMonth]);
 
-  useEffect(() => {
-    loadNewEntries();
-  }, [loadNewEntries]);
 
   const employeeRows = data?.employeeBreakdown ?? [];
 
@@ -289,8 +286,9 @@ const shareButton = data ? (
   <ShareReportButton
       iconOnly={!!headerSlot}
               date={useRange ? `${fromDate} → ${toDate}` : date}
-              sales={Number(data.summary.totalSales) || 0}
-              dlCharge={Number(data.summary.totalDeliveryCharge) || 0}
+              drivers={leaderRows}
+              orders={data.orders}
+              agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
               delivered={data.summary.delivered}
               pending={data.summary.pending + nonAgentPendingCarryover.length}
               transferred={data.summary.transferred}
@@ -414,8 +412,9 @@ return (
                                   <ShareReportButton
                                     whatsapp
                                     date={useRange ? `${fromDate} → ${toDate}` : date}
-                                    sales={sales}
-                                    dlCharge={dl}
+                                    drivers={leaderRows}
+                                    orders={data.orders}
+                                    agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
                                     delivered={data.summary.delivered}
                                     pending={pendingAll}
                                     transferred={data.summary.transferred}
@@ -693,55 +692,6 @@ return (
           </div>
 
        
-          <div className="mt-5 border border-line bg-white p-5">
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
-              <input
-                type="month"
-                value={newEntriesMonth}
-                onChange={(e) => setNewEntriesMonth(e.target.value)}
-                className="rounded border border-line px-2.5 py-1.5 text-sm"
-              />
-            </div>
-            <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-              How many genuinely new consignments each vendor got, per day. Counts an order only on the day it
-              was actually entered — not carried-over or resolved days.
-            </p>
-
-            {loadingNewEntries ? (
-              <PageSkeleton rows={6} />
-            ) : newEntriesRows.length === 0 ? (
-              <EmptyState compact title="No new entries this month" icon="inbox" />
-            ) : (
-              <div className="table-scroll">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Vendor</th>
-                      <th className="text-right">New Entries</th>
-                      <th className="text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {newEntriesRows.map((r) => (
-                      <tr key={`${r.date}-${r.vendorId}`}>
-                        <td>{r.vendorName}</td>
-                        <td className="text-right font-mono">{r.count}</td>
-                        <td className="text-right font-mono">{fmtNumber(r.totalAmount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold">
-                      <td>TOTAL</td>
-                      <td className="text-right font-mono">{newEntriesRows.reduce((s, r) => s + r.count, 0)}</td>
-                      <td className="text-right font-mono">{fmtNumber(newEntriesRows.reduce((s, r) => s + r.totalAmount, 0))}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
         </>
       ) : null}
     </div>
