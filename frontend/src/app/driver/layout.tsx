@@ -20,6 +20,9 @@ function DriverTopbar() {
   return (
     <div className="border-b-[3px] border-brass bg-navy px-4 pb-3 pt-2.5 uppercase text-paper">
       <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
+          <img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" />
+        </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="font-display text-lg font-bold tracking-wide">Future Courier</div>
           <div className="truncate font-mono text-[10.5px] uppercase tracking-wide text-brass-light">{user?.name}</div>
