@@ -67,7 +67,15 @@ export function correctEmirate(emirate: string, address?: string | null): string
   const em = (emirate ?? "").toUpperCase().trim();
   const place = outsidePlaceInText(address);
   // No outside emirate in the address → check Dubai / Sharjah / Ajman / Abu Dhabi against the area named.
-  if (!place || !(OUTSIDE_EMIRATES as readonly string[]).includes(place)) return emirateFromAddress(em, address);
+  if (!place || !(OUTSIDE_EMIRATES as readonly string[]).includes(place)) {
+    // Outside emirate picked, but the address names no outside place and writes one city emirate
+    // ("…Ra's Al Khor, Dubai" saved as Umm Al Quwain) → the address wins.
+    if (!place && (OUTSIDE_EMIRATES as readonly string[]).includes(em)) {
+      const named = Object.keys(EMIRATE_WORD).filter((k) => EMIRATE_WORD[k].test(address ?? ""));
+      if (named.length === 1) return named[0];
+    }
+    return emirateFromAddress(em, address);
+  }
   if (place === em) return em;
   const own = EMIRATE_WORD[em];
   if (own && own.test(address ?? "")) return em; // address names both → keep what was chosen

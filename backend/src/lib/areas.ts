@@ -65,7 +65,7 @@ const DUBAI: AreaRule[] = [
   [/\binternational[\s\-']*city\b|\bint'?l[\s\-']*city\b|\bintl[\s\-']*city\b|\bdragon[\s\-']*mart\b|\bcbd[\s\-']*\d+\b|\bfrance[\s\-']*cluster\b|\bchina[\s\-']*cluster\b|\bengland[\s\-']*cluster\b|\bitaly[\s\-']*cluster\b|\bpersia[\s\-']*cluster\b|\brussia[\s\-']*cluster\b|\bspain[\s\-']*cluster\b|\bgreece[\s\-']*cluster\b|\bmorocco[\s\-']*cluster\b|\bemirates[\s\-']*cluster\b/i, "INTERNATIONAL CITY"],
   [/\bwarsan\b/i, "WARSAN"],
   [/\b(?:al[\s\-]*)?aweer\b|\bal[\s\-]*awir\b|\bras[\s\-']*al[\s\-']*khor[\s\-']*industrial\b/i, "AL AWIR"],
-  [/\bras[\s\-']*al[\s\-']*khor\b/i, "RAS AL KHOR"],
+  [/\bra'?s[\s\-']*al[\s\-']*khor\b|\bdubai[\s\-']*auto[\s\-']*(?:free[\s\-']*)?zone\b|\bducamz\b|\bauto[\s\-']*market[\s\-']*ras\b/i, "RAS AL KHOR"],
   [/\bnad[\s\-']*al[\s\-']*hamm?ar\b|\bnadd[\s\-']*al[\s\-']*hamm?ar\b|\bnadal[\s\-']*hamm?ar\b|\bnad[\s\-']*alhamm?ar\b/i, "NAD AL HAMAR"],
   [/\b(?:al[\s\-]*)?warqa'?a?\b|\bwarqaa\b|\bal[\s\-']*war[kq]\b|\bwarqa[\s\-']*\d\b/i, "AL WARQA"],
   [/\bmirdif+\b|\bmirdiff\b|\buptown[\s\-']*mirdif\b|\bmirdif[\s\-']*city[\s\-']*cent(re|er)\b/i, "MIRDIF"],
@@ -540,12 +540,15 @@ export const DEFAULT_AREA_ROUTE: string[] = [
 
 const DUBAI_INDUSTRIAL = new Set(["AL QUSAIS", "AL QUOZ", "RAS AL KHOR", "AL AWIR", "JEBEL ALI", "DIP", "DUBAI INDUSTRIAL CITY"]);
 const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
+/** Outside emirates written in an address (any spelling the office sees). */
+const OUTSIDE_NAME = /\bumm?[\s\-']*al[\s\-']*q[ua]{1,2}[iy]?w[ae]?[iy]n\b|\bumm?[\s\-']*al[\s\-']*quin\b|\buaq\b|\bfuj[ae]?[iy]?rah?\b|\bra'?s[\s\-']*al[\s\-']*kh?[ae]i?mah?\b|\brak\b|\bal[\s\-']*ain\b/i;
 const OUTSIDE_EM = new Set(["UMM AL QUWAIN", "FUJAIRAH", "RAS AL KHAIMAH", "AL AIN"]);
 const NORTH = new Set(["DUBAI", "SHARJAH", "AJMAN", "UMM AL QUWAIN", "RAS AL KHAIMAH", "FUJAIRAH"]);
 
 /** Best-guess area name, or the first part of the address when no known area matches. */
 export function detectArea(address?: string | null, emirate?: string | null): string {
-  const text = (address ?? "").replace(/\s+/g, " ").trim();
+  // "Ra's Al Khor" / "Ra's Al Khaimah" → "Ras …", so the apostrophe doesn't hide the name.
+  const text = (address ?? "").replace(/\b(ra)['’`]s\b/gi, "$1s").replace(/\s+/g, " ").trim();
   if (!text) return "NO ADDRESS";
   // Saif Zone (Sharjah Airport Free Zone) is its own area, whatever else the address mentions.
   if (/\bsa[iy]e?f[\s\-']*(?:free[\s\-']*)?zone\b|\bsaifzone\b|\bsharj?a?h?a?[\s\-']*airport[\s\-']*(?:international[\s\-']*)?free[\s\-']*zone\b/i.test(text)) return "SAIF ZONE";
@@ -560,7 +563,13 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   if (/\bind(?:ustrial|\.)?\b/i.test(text) && !/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) {
     for (const [re, name] of DUBAI) if (DUBAI_INDUSTRIAL.has(name) && re.test(text)) return name;
   }
-  const em = (emirate ?? "").toUpperCase();
+  let em = (emirate ?? "").toUpperCase();
+  // Outside emirate picked but the address writes Dubai / Sharjah / Ajman / Abu Dhabi and no
+  // outside-emirate name → use the emirate the address names ("Ra's Al Khor, Dubai" saved as UAQ).
+  if (OUTSIDE_EM.has(em) && !OUTSIDE_NAME.test(text)) {
+    const named = Object.keys(EMIRATE_WORDS).filter((k) => EMIRATE_WORDS[k].test(text));
+    if (named.length === 1) em = named[0];
+  }
   // Known emirate → only that emirate's areas (no "Jumeirah" for an Abu Dhabi parcel).
   // Unknown emirate → every emirate.
   const own = BY_EMIRATE[em];
