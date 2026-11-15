@@ -300,12 +300,35 @@ const shareButton = data ? (
 
 return (
           <div>
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4 md:grid md:grid-cols-[1fr_auto_1fr]">
+            {/* Phone view (layout 9): title, then one compact date row; Today / range / share sit under the KPI cards. */}
+            <div className="mb-4 md:hidden">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
+              <h1 className="font-display text-[24px] font-semibold tracking-tight text-navy">DASHBOARD</h1>
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-line bg-white p-1.5">
+                <button onClick={() => setDate(addDays(date, -1))} aria-label="Previous day" className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-ink-soft hover:border-brass">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 6l-6 6 6 6" /></svg>
+                </button>
+                <label className="relative flex flex-1 cursor-pointer flex-col items-center leading-tight">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">
+                    {useRange ? "Date range" : new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" })}
+                  </span>
+                  <span className="text-[15px] font-semibold uppercase text-brass">
+                    {useRange ? `${fmtDate(fromDate)} – ${fmtDate(toDate)}` : fmtDate(date)}
+                  </span>
+                  {!useRange && (
+                    <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Pick date" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                  )}
+                </label>
+                <button onClick={() => setDate(addDays(date, 1))} aria-label="Next day" className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-ink-soft hover:border-brass">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
+                </button>
+              </div>
+            </div>
+            <div className="mb-6 hidden md:grid md:grid-cols-[1fr_auto_1fr] md:items-end md:justify-between md:gap-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Manifest Summary</p>
           <h1 className="inline-flex items-center gap-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">
             DASHBOARD
-            <span id="assistant-anchor" className="inline-flex" />
           </h1>
        </div>
           <div id="date-nav" className="flex flex-wrap items-center gap-2">
@@ -321,9 +344,6 @@ return (
           <button onClick={() => setDate(addDays(date, 1))} className="touch-target rounded-xl border border-line bg-white px-3.5 text-sm hover:border-brass">
             Next →
           </button>
-          {!headerSlot && todayButton}
-          {!headerSlot && <ManagerReminder />}
-          {!headerSlot && shareButton}
           {headerSlot && createPortal(<>{todayButton}<ManagerReminder compact />{shareButton}</>, headerSlot)}
         </div>
         <div className="flex flex-wrap items-center gap-2 md:justify-self-end">
@@ -370,6 +390,31 @@ return (
               />
             );
           })()}
+
+          {!headerSlot && (
+            <div className="-mt-3 mb-6 md:hidden">
+              <div className="flex items-center gap-2">
+                {todayButton}
+                <button
+                  onClick={() => setUseRange(!useRange)}
+                  aria-label="Use date range"
+                  title="Use date range"
+                  className={`touch-target flex w-12 items-center justify-center rounded-xl border ${useRange ? "border-brass bg-brass text-navy" : "border-line bg-white text-ink-soft"}`}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M16 3v4M8 3v4M4 11h16M8 15h3" /></svg>
+                </button>
+                <ManagerReminder />
+                <div className="flex-1 [&>button]:w-full [&>button]:justify-center">{shareButton}</div>
+              </div>
+              {useRange && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm" />
+                  <span className="text-xs uppercase text-ink-soft">to</span>
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm" />
+                </div>
+              )}
+            </div>
+          )}
 
           <LiveFlowPanel
             pending={data.summary.pending + nonAgentPendingCarryover.length}
