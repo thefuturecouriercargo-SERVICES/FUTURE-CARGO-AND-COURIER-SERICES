@@ -26,6 +26,8 @@ interface Props {
   orders: { employeeId: string; status: string; resolvedAt?: string | null }[];
   /** Consignments handed to each agent that day (count only, no other agent details). */
   agents: { name: string; count: number }[];
+  /** Records before this day — feeds the personal-best / team-record highlight. */
+  records?: { driverBest: { employeeId: string; value: number }[]; teamBest: number; teamBestMonth: number; teamTop: number[] } | null;
   /** Small square icon-only button (desktop header). */
   iconOnly?: boolean;
   /** Phone dashboard: icon-only WhatsApp button that fills its box. */
@@ -56,8 +58,9 @@ interface Achievements {
   rate?: { name: string; value: number };
   lead?: { name: string; ms: number; share: number };
   first?: { name: string; at: number };
-  powerHour?: { name: string; count: number; from: number };
+  finished?: { name: string; at: number; count: number };
   last?: { name: string; at: number };
+  record?: string;
   leadChanges: number;
 }
 
@@ -115,28 +118,43 @@ function achievements(p: Props): Achievements {
     out.first = { name: byId.get(qEvents[0].id)!.name, at: qEvents[0].t };
     const l = qEvents[qEvents.length - 1];
     out.last = { name: byId.get(l.id)!.name, at: l.t };
-    // Power hour: most deliveries one driver made inside any 60-minute stretch.
-    // A delivery only counts if it's at least 8 minutes after the last counted one,
-    // so tapping many CNs as delivered at once doesn't win it.
-    const GAP = 8 * 60000;
-    let bestPh: Achievements["powerHour"];
+    // First completed: of the drivers past the award line, whose final Delivered
+    // tap came earliest (pending / cancelled left over doesn't matter).
+    let fin: Achievements["finished"];
     for (const d of qualified) {
-      const ts = qEvents.filter((e) => e.id === d.id).map((e) => e.t);
-      for (let i = 0; i < ts.length; i++) {
-        let n = 1;
-        let lastT = ts[i];
-        for (let k = i + 1; k < ts.length && ts[k] - ts[i] <= 3600000; k++) {
-          if (ts[k] - lastT >= GAP) {
-            n++;
-            lastT = ts[k];
-          }
-        }
-        if (!bestPh || n > bestPh.count) bestPh = { name: d.name, count: n, from: ts[i] };
-      }
+      const ts = qEvents.filter((e) => e.id === d.id);
+      if (!ts.length) continue;
+      const at = ts[ts.length - 1].t;
+      if (!fin || at < fin.at) fin = { name: d.name, at, count: d.delivered };
     }
-    out.powerHour = bestPh;
+    out.finished = fin;
   }
+  out.record = recordLine(p, qualified);
   return out;
+}
+
+/** Personal best or team record — when both apply, alternate by day. */
+function recordLine(p: Props, qualified: ShareDriverRow[]): string | undefined {
+  const r = p.records;
+  if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(p.date)) return undefined;
+  const prevBest = new Map(r.driverBest.map((x) => [x.employeeId, x.value]));
+  const pb = qualified
+    .filter((d) => prevBest.has(d.id) && d.delivered > (prevBest.get(d.id) ?? 0))
+    .sort((a, b) => b.delivered - a.delivered)[0];
+  const pbLine = pb ? `🏅 PERSONAL BEST · <b>${pb.name.toUpperCase().replace(/[<>&"]/g, "")}</b> — ${pb.delivered} DELIVERIES (OLD BEST ${prevBest.get(pb.id)})` : undefined;
+
+  const team = p.drivers.reduce((s2, d) => s2 + d.delivered, 0);
+  let teamLine: string | undefined;
+  if (team > 0 && r.teamTop.length) {
+    if (team > r.teamBest) teamLine = `🚀 TEAM RECORD · BEST DAY EVER — ${team} DELIVERED`;
+    else if (team > r.teamBestMonth) teamLine = `🚀 TEAM · BEST DAY THIS MONTH — ${team} DELIVERED`;
+    else {
+      const rank = r.teamTop.filter((n) => n > team).length + 1;
+      if (rank <= 3) teamLine = `🚀 TEAM · ${rank === 2 ? "2ND" : "3RD"} BEST DAY EVER — ${team} DELIVERED`;
+    }
+  }
+  if (pbLine && teamLine) return Number(p.date.slice(8, 10)) % 2 === 0 ? pbLine : teamLine;
+  return pbLine ?? teamLine;
 }
 
 /**
@@ -238,7 +256,7 @@ export default function ShareReportButton(p: Props) {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 12, background: "#D4AF5A", color: "#0A1020", fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>FC</div>
+              <div style={{ width: 46, height: 46, borderRadius: 12, background: "#FFFFFF", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><img src="/fc-logo-mark.png" alt="" width={44} height={44} style={{ width: 44, height: 44, objectFit: "contain" }} /></div>
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 17, fontWeight: 700 }}>FUTURE COURIER</span>
                 <span style={{ whiteSpace: "nowrap", lineHeight: 1.2, fontSize: 10, letterSpacing: 2, color: "#D4AF5A", fontWeight: 700, marginTop: 3 }}>DAILY REPORT</span>
@@ -290,14 +308,13 @@ export default function ShareReportButton(p: Props) {
             )}
           </div>
 
-          {(ach.first || ach.powerHour || ach.last || ach.leadChanges > 0) && (
+          {(ach.first || ach.finished || ach.last || ach.record) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "#111827", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "#C9D1E0" }}>
               <span style={{ fontSize: 11, letterSpacing: 2, color: "#D4AF5A", fontWeight: 700 }}>HIGHLIGHTS</span>
               {ach.first && <span>⚡ FIRST DELIVERY · <b>{ach.first.name.toUpperCase()}</b> AT {timeFmt(ach.first.at)}</span>}
-              {ach.powerHour && ach.powerHour.count > 1 && <span>🔥 POWER HOUR · <b>{ach.powerHour.name.toUpperCase()}</b> — {ach.powerHour.count} DELIVERIES FROM {timeFmt(ach.powerHour.from)}</span>}
-              {ach.leadChanges > 0 && <span>🔄 1ST PLACE CHANGED HANDS {ach.leadChanges} TIME{ach.leadChanges === 1 ? "" : "S"}</span>}
+              {ach.finished && <span>🏁 FIRST COMPLETED · <b>{ach.finished.name.toUpperCase()}</b> — {ach.finished.count} DONE BY {timeFmt(ach.finished.at)}</span>}
               {ach.last && <span>🌙 LAST DELIVERY · <b>{ach.last.name.toUpperCase()}</b> AT {timeFmt(ach.last.at)}</span>}
-              <span>👥 {ach.qualified.length} DRIVER{ach.qualified.length === 1 ? "" : "S"} CROSSED {MIN_FOR_AWARD} DELIVERIES</span>
+              {ach.record && <span dangerouslySetInnerHTML={{ __html: ach.record }} />}
             </div>
           )}
 

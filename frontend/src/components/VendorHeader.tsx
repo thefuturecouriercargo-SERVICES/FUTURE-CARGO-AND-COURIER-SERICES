@@ -13,7 +13,7 @@ export default function VendorHeader({ name, onLogout }: { name: string; onLogou
       <LiveBridge />
       <div className="flex h-[68px] items-center justify-between gap-3 border-b border-[#1B2438] bg-[#0A1020] px-4 md:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF5A] font-display text-[15px] font-bold text-[#0A1020] shadow-[0_0_24px_rgba(212,175,90,0.25)]">FC</div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_24px_rgba(212,175,90,0.25)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain p-0.5" /></div>
           <div className="flex flex-col leading-tight">
             <span className="font-display text-base font-semibold text-white">Future Courier</span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Vendor Portal</span>

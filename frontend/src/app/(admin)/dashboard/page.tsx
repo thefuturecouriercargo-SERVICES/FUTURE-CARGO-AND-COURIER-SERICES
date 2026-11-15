@@ -230,6 +230,17 @@ const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
   }, [newEntriesMonth]);
 
 
+  // Records before the shown day (personal bests, team best days) for the share image.
+  const [records, setRecords] = useState<{ driverBest: { employeeId: string; value: number }[]; teamBest: number; teamBestMonth: number; teamTop: number[] } | null>(null);
+  useEffect(() => {
+    if (useRange) { setRecords(null); return; }
+    let alive = true;
+    apiFetch<NonNullable<typeof records>>("/dashboard/records", { query: { date } })
+      .then((r) => { if (alive) setRecords(r); })
+      .catch(() => { if (alive) setRecords(null); });
+    return () => { alive = false; };
+  }, [date, useRange]);
+
   const employeeRows = data?.employeeBreakdown ?? [];
 
   // Agent IDs, so we can exclude their carryover from every top-level total below —
@@ -289,6 +300,7 @@ const shareButton = data ? (
               drivers={leaderRows}
               orders={data.orders}
               agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
+              records={records}
               delivered={data.summary.delivered}
               pending={data.summary.pending + nonAgentPendingCarryover.length}
               transferred={data.summary.transferred}
@@ -415,6 +427,7 @@ return (
                                     drivers={leaderRows}
                                     orders={data.orders}
                                     agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
+              records={records}
                                     delivered={data.summary.delivered}
                                     pending={pendingAll}
                                     transferred={data.summary.transferred}

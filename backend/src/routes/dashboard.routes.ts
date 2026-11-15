@@ -39,6 +39,33 @@ function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
     .reduce((s, o) => s + o.deliveryCharge, 0);
 }
 
+// Records before a day, for the shared daily report: each driver's best day so
+// far, and the team's best day ever / this month (delivered counts, drivers only).
+router.get(
+  "/records",
+  asyncHandler(async (req, res) => {
+    const { start } = dayRange(req.query.date as string | undefined);
+    const where = { status: "DELIVERED" as const, date: { lt: start }, employee: { isAgent: false } };
+    const perDriver = await prisma.order.groupBy({ by: ["employeeId", "date"], where, _count: { _all: true } });
+    const best = new Map<string, number>();
+    const team = new Map<string, number>();
+    for (const r of perDriver) {
+      const n = r._count._all;
+      if (n > (best.get(r.employeeId) ?? 0)) best.set(r.employeeId, n);
+      const k = r.date.toISOString().slice(0, 10);
+      team.set(k, (team.get(k) ?? 0) + n);
+    }
+    const month = start.toISOString().slice(0, 7);
+    const teamDays = [...team.entries()];
+    res.json({
+      driverBest: [...best.entries()].map(([employeeId, value]) => ({ employeeId, value })),
+      teamBest: Math.max(0, ...teamDays.map(([, n]) => n)),
+      teamBestMonth: Math.max(0, ...teamDays.filter(([d]) => d.startsWith(month)).map(([, n]) => n)),
+      teamTop: teamDays.map(([, n]) => n).sort((a, b) => b - a).slice(0, 5),
+    });
+  })
+);
+
  router.get(
   "/daily",
   asyncHandler(async (req, res) => {
