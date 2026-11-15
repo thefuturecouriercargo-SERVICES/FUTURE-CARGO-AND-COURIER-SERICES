@@ -15,7 +15,7 @@ export default function AuthSplit({ eyebrow, children }: { eyebrow: string; chil
         <div className="pointer-events-none absolute -bottom-40 -left-40 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(212,175,90,0.12),transparent_65%)]" aria-hidden />
 
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_28px_rgba(212,175,90,0.3)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain p-0.5" /></div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#D4AF5A] p-[3px] shadow-[0_0_28px_rgba(212,175,90,0.3)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full rounded-[9px] bg-white object-contain p-0.5" /></div>
           <div className="flex flex-col leading-tight">
             <span className="font-display text-lg font-semibold text-white">Future Courier</span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D4AF5A]">{eyebrow}</span>
@@ -50,7 +50,7 @@ export default function AuthSplit({ eyebrow, children }: { eyebrow: string; chil
       <main className="relative flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(212,175,90,0.08),transparent_60%)] px-4 py-10">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain p-0.5" /></div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#D4AF5A] p-[3px]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full rounded-[9px] bg-white object-contain p-0.5" /></div>
             <div className="flex flex-col leading-tight">
               <span className="font-display text-lg font-semibold text-white">Future Courier</span>
               <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D4AF5A]">{eyebrow}</span>

@@ -122,7 +122,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <AdminVoiceAssistant />
       <div ref={headerRef} className="relative z-40 flex h-[72px] items-center justify-between gap-4 border-b border-[#1B2438] bg-[#0A1020] px-4 md:sticky md:top-0 md:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_24px_rgba(212,175,90,0.25)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain p-0.5" /></div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#D4AF5A] p-[3px] shadow-[0_0_24px_rgba(212,175,90,0.25)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full rounded-[9px] bg-white object-contain p-0.5" /></div>
           <div className="flex flex-col leading-tight">
             <span className="font-display text-base font-semibold text-white md:text-[17px]">Future Courier</span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Operations</span>
