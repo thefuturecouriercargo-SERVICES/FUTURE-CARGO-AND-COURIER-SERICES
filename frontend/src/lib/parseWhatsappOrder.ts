@@ -592,6 +592,20 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
   if (out.customerName) out.customerName = out.customerName.replace(/^(?:order\s+for|for|customer|name)\s*[:\-]?\s+/i, "").replace(/[,.\-–:]+$/, "").trim();
   addressParts.push(...leftovers.map((l) => l.t));
 
+  // "Al Quos 3" read as the item "3 × Al Quos": when the address names no known area and an
+  // "item" (no price) is just an area name, it is the area — move it to the address.
+  // Only when another item is left, so a product that shares an area name ("Palm") isn't lost.
+  if (items.length > 1 && !isKnownArea(addressParts.join(" "))) {
+    for (let k = items.length - 1; k >= 0; k--) {
+      const m = items[k].match(/^(\d+)\s*×\s*([a-z'’\s\-]+)$/i);
+      if (!m || !isKnownArea(m[2]) || m[2].trim().split(/\s+/).length > 3) continue;
+      addressParts.push(Number(m[1]) > 1 ? `${m[2].trim()} ${m[1]}` : m[2].trim());
+      items.splice(k, 1);
+      itemLi.splice(k, 1);
+      break;
+    }
+  }
+
   if (addressParts.length) out.address = tidyAddress(addressParts);
   // An "item" that is only a price/size word ("Pirce", "Price", "Size") is not a product.
   for (let k = items.length - 1; k >= 0; k--) {

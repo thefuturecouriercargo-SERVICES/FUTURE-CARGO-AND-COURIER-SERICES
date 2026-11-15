@@ -556,6 +556,8 @@ export function detectArea(address?: string | null, emirate?: string | null): st
   if (/\bnah[a]?d[h]?a\b/i.test(text)) {
     if (/\b(dubai|dxb|qusais|stadium)\b/i.test(text)) return "AL NAHDA (DXB)";
     if (/\b(sharjah|sharja|sharjha|shj)\b/i.test(text)) return "AL NAHDA (SHJ)";
+    // "Al Nahda 1" / "Al Nahda 2" are Dubai's (Sharjah's Al Nahda has no numbers).
+    if (/\bnah[a]?d[h]?a[\s\-]*[12]\b/i.test(text)) return "AL NAHDA (DXB)";
   }
   // "Industrial area" next to a Dubai district (Al Qusais Industrial Area 1, Al Quoz Ind 3,
   // Ras Al Khor Industrial…) is that Dubai district — not Sharjah's industrial areas,
