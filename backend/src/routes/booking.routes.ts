@@ -124,17 +124,16 @@ router.get(
     // parcels can be pulled out for the outside run while scanning.
     const outside = ["INSPIRED", "ESCALO"].map((key) => {
       const counts = Object.fromEntries(OUTSIDE_AREAS.map((a) => [a, 0])) as Record<string, number>;
-      // Each outside parcel, so tapping the count shows which CNs they are and which are still to scan.
+      // Only parcels already scanned (by office or driver) — the ones in hand to pull out.
       const list: { cnNo: number; vendorRef: string | null; customerName: string; address: string; area: string; codAmount: number; scanned: boolean }[] = [];
       for (const b of batchBookings) {
-        if (b.status === "REJECTED" || !b.vendor.name.toUpperCase().includes(key)) continue;
+        if (b.status === "REJECTED" || b.status === "AWAITING_PICKUP" || !b.vendor.name.toUpperCase().includes(key)) continue;
         const area = outsideAreaOf(b.emirate, b.address);
         if (!area) continue;
         counts[area]++;
         list.push({ cnNo: b.cnNo, vendorRef: b.vendorRef, customerName: b.customerName, address: b.address ?? "", area, codAmount: b.codAmount, scanned: b.status !== "AWAITING_PICKUP" });
       }
-      // Still-to-scan first, then by area.
-      list.sort((a, b) => Number(a.scanned) - Number(b.scanned) || a.area.localeCompare(b.area) || a.cnNo - b.cnNo);
+      list.sort((a, b) => a.area.localeCompare(b.area) || a.cnNo - b.cnNo);
       return { vendor: key, counts, total: Object.values(counts).reduce((t, n) => t + n, 0), list };
     });
 

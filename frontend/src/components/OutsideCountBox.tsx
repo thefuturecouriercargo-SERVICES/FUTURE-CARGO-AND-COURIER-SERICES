@@ -23,8 +23,8 @@ interface OutsideRow {
 const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 
 /**
- * Beside the camera on Scan & Assign: Inspired & Escalo parcels going to outside
- * areas, per scan day (orders booked the day before) — so they can be pulled out.
+ * Beside the camera on Scan & Assign: Inspired & Escalo parcels already scanned
+ * (office or driver) that go to outside areas, per scan day — so they can be pulled out.
  */
 export default function OutsideCountBox({ refreshKey }: { refreshKey: number }) {
   const [day, setDay] = useState(todayStr());
@@ -52,7 +52,6 @@ export default function OutsideCountBox({ refreshKey }: { refreshKey: number }) 
   ];
   const shown = open ? list.filter((r) => open === "TOTAL" || r.vendor === open) : [];
   const parcels = shown.flatMap((r) => (r.list ?? []).map((p) => ({ ...p, vendor: r.vendor })));
-  const leftCount = parcels.filter((p) => !p.scanned).length;
 
   return (
     <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-line bg-white px-3 py-2">
@@ -102,11 +101,11 @@ export default function OutsideCountBox({ refreshKey }: { refreshKey: number }) 
               </button>
             </div>
             <div className="mb-3 font-mono text-[11px] uppercase text-ink-soft">
-              {batchDay ? fmtDay(batchDay) : ""} · {parcels.length} parcels · <span className="font-bold text-cancelled">{leftCount} to scan</span> · {parcels.length - leftCount} scanned
+              {batchDay ? fmtDay(batchDay) : ""} · {parcels.length} scanned parcels
             </div>
             <div className="-mx-1 flex-1 overflow-y-auto px-1">
               {parcels.map((p) => (
-                <div key={`${p.vendor}-${p.cnNo}`} className={`mb-1.5 flex items-center gap-3 rounded-xl border px-3 py-2 ${p.scanned ? "border-line opacity-60" : "border-cancelled/40"}`}>
+                <div key={`${p.vendor}-${p.cnNo}`} className="mb-1.5 flex items-center gap-3 rounded-xl border border-line px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
                       <span className="font-mono text-sm font-bold text-ink">{p.cnNo}</span>
@@ -117,10 +116,7 @@ export default function OutsideCountBox({ refreshKey }: { refreshKey: number }) 
                       {p.customerName} · {p.address}
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="rounded-md bg-navy px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">{p.area}</span>
-                    <span className={`text-[10px] font-bold uppercase ${p.scanned ? "text-ink-soft" : "text-cancelled"}`}>{p.scanned ? "Scanned" : "To scan"}</span>
-                  </div>
+                  <span className="shrink-0 rounded-md bg-navy px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">{p.area}</span>
                 </div>
               ))}
             </div>
