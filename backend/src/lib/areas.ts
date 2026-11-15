@@ -35,6 +35,9 @@ const DUBAI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?barsha\b|\bmall[\s\-']*of[\s\-']*the[\s\-']*emirates\b|\bmoe\b|\bbarsha[\s\-']*\d\b/i, "AL BARSHA"],
   [/\bdic\b|\bd[\s.]*i[\s.]*c\b\.?|\b(?:dubai[\s\-']*)?internet[\s\-']*city\b|\bintrnet[\s\-']*city\b/i, "DIC"],
   [/\bdubai[\s\-']*industrial[\s\-']*city\b|\bindustrial[\s\-']*city[\s\-']*dubai\b/i, "DUBAI INDUSTRIAL CITY"],
+  // "DMC" next to Port Rashid / Mina Rashid is Dubai Maritime City, not Media City — so this comes first.
+  [/\b(?:dubai[\s\-']*)?mar[ia]time[\s\-']*city\b|\b(?:port|mina|meena)[\s\-']*rash[ie]{1,2}d\b|\brash[ie]{1,2}d[\s\-']*port\b/i, "MARITIME CITY"],
+  // Bare "DMC" (no Port Rashid / Maritime nearby) stays Media City, the usual meaning.
   [/\b(?:dubai[\s\-']*)?media[\s\-']*city\b|\bdmc\b/i, "MEDIA CITY"],
   [/\b(?:al[\s\-]*)?sufouh\b|\bal[\s\-]*sufuh\b|\bsufuh\b|\bsoufouh\b|\bknowledge[\s\-']*village\b/i, "AL SUFOUH"],
   [/\bprod[ue]ction[\s\-']*city\b|\bimpz\b|\bdpc\b/i, "DUBAI PRODUCTION CITY"],
