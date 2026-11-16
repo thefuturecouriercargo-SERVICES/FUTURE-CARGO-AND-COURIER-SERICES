@@ -240,7 +240,7 @@ router.get(
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (_req, res) => {
     const drivers = await prisma.user.findMany({ where: { role: "DRIVER", active: true, isAgent: false }, select: { id: true, name: true, kmTracking: true }, orderBy: { name: "asc" } });
-    res.json(drivers.map((d) => ({ ...d, kmTracking: Boolean(d.kmTracking) })));
+    res.json(drivers.map((d) => ({ ...d, kmTracking: d.kmTracking !== false })));
   })
 );
 
@@ -280,7 +280,7 @@ router.get(
       prisma.kmLog.findMany({ where: { date: { gte: prevDay, lte: end } }, orderBy: [{ employeeId: "asc" }, { date: "asc" }] }),
       prisma.fuelLog.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { createdAt: "asc" } }),
       prisma.order.groupBy({ by: ["employeeId", "date"], where: { date: { gte: start, lte: end }, status: "DELIVERED" }, _count: { _all: true } }),
-      prisma.user.findMany({ where: { OR: [{ kmTracking: true }, { kmLogs: { some: { date: { gte: start, lte: end } } } }] }, select: { id: true, name: true, kmTracking: true } }),
+      prisma.user.findMany({ where: { OR: [{ role: "DRIVER", active: true, isAgent: false, OR: [{ kmTracking: true }, { kmTracking: null }] }, { kmLogs: { some: { date: { gte: start, lte: end } } } }] }, select: { id: true, name: true, kmTracking: true } }),
     ]);
     const key = (id: string | null, d: Date) => `${id}|${d.toISOString().slice(0, 10)}`;
     const delMap = new Map(delivered.map((g) => [key(g.employeeId, g.date), g._count._all]));
@@ -324,7 +324,7 @@ router.get(
       return {
         id: u.id,
         name: u.name,
-        kmTracking: Boolean(u.kmTracking),
+        kmTracking: u.kmTracking !== false,
         totalKm,
         gapKm,
         deliveries,

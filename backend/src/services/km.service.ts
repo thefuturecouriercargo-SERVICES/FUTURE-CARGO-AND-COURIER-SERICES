@@ -18,7 +18,7 @@ const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 export async function initKmTracking(): Promise<void> {
   try {
     await prisma.$executeRawUnsafe(
-      `UPDATE "users" SET "kmTracking" = ("role" = 'DRIVER' AND UPPER("name") LIKE '%NOUSHAD%') WHERE "kmTracking" IS NULL`
+      `UPDATE "users" SET "kmTracking" = ("role" = 'DRIVER' AND NOT COALESCE("isAgent", false)) WHERE "kmTracking" IS NULL`
     );
     // One-time switch-ons requested later (skipped once done, so admin can still switch them off).
     for (const name of ["SAVAD"]) {
@@ -31,14 +31,26 @@ export async function initKmTracking(): Promise<void> {
       if (admin) await prisma.auditLog.create({ data: { userId: admin.id, action: "KM_TRACKING_SET", entity: "Init", entityId: marker } });
       console.log(`[km] tracking switched on for ${name} (${users.length})`);
     }
+    // 2026-11-16: rolled out to every driver (once — admin can still switch a driver off afterwards).
+    {
+      const marker = "km-on:ALL-DRIVERS";
+      const done = await prisma.auditLog.findFirst({ where: { action: "KM_TRACKING_SET", entity: "Init", entityId: marker } });
+      if (!done) {
+        const r = await prisma.user.updateMany({ where: { role: "DRIVER", isAgent: false }, data: { kmTracking: true } });
+        const admin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" }, select: { id: true } });
+        if (admin) await prisma.auditLog.create({ data: { userId: admin.id, action: "KM_TRACKING_SET", entity: "Init", entityId: marker } });
+        console.log(`[km] tracking switched on for all drivers (${r.count})`);
+      }
+    }
   } catch (err) {
     console.error("[km] init failed", err);
   }
 }
 
 export async function kmEnabled(userId: string): Promise<boolean> {
-  const u = await prisma.user.findUnique({ where: { id: userId }, select: { kmTracking: true, role: true } });
-  return Boolean(u && u.role === "DRIVER" && u.kmTracking);
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { kmTracking: true, role: true, isAgent: true } });
+  // On for every driver (not the agent) unless admin switched it off (null = never set = on).
+  return Boolean(u && u.role === "DRIVER" && !u.isAgent && u.kmTracking !== false);
 }
 
 /** The day still open (started, no End KM), if any. */
