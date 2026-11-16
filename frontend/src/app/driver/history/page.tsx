@@ -84,7 +84,8 @@ export default function DriverHistoryPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-8 pt-1">
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <button type="button" onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/driver"))} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
         <input
           type="month"
           value={month}

@@ -1007,6 +1007,7 @@ export default function DriverPortalPage() {
     <div>
       <div className="mb-3">
         <div className="flex items-center gap-3">
+                      <button type="button" onClick={goHome} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
           <div className="min-w-0 flex-1">
             <div className="font-mono text-[11px] font-bold uppercase tracking-wide text-navy">
               {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
@@ -1259,16 +1260,6 @@ export default function DriverPortalPage() {
         return (
           <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
             <div className="flex items-stretch gap-2">
-              {view !== "home" && (
-                <button
-                  type="button"
-                  onClick={goHome}
-                  aria-label="Back"
-                  className="flex w-11 shrink-0 items-center justify-center rounded-2xl bg-navy text-xl font-bold text-white shadow active:scale-95"
-                >
-                  ←
-                </button>
-              )}
               <div className="min-w-0 flex-1">
                 <div key={raceShown ? "race" : "count"} className="flip-in h-full">
                   {raceShown ? (
@@ -1420,11 +1411,13 @@ export default function DriverPortalPage() {
           Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
         </p>
       )}
-      <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onSubmitted={() => showToast("Cash closing submitted", "success")} />
+      <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onBack={goHome} onSubmitted={() => showToast("Cash closing submitted", "success")} />
         </>
       ) : (
         <>
-      <div className="mb-4 flex items-center gap-2 rounded-full bg-white py-1 pl-4 pr-1 shadow-sm ring-1 ring-line">
+      <div className="mb-4 flex items-center gap-2">
+      <button type="button" onClick={goHome} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
+      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white py-1 pl-4 pr-1 shadow-sm ring-1 ring-line">
         <span className="text-ink-soft">🔎</span>
         <input
           value={search}
@@ -1448,6 +1441,7 @@ export default function DriverPortalPage() {
             🎙
           </button>
         )}
+      </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -1933,7 +1927,7 @@ function StatusModal({
   );
 }
 
-function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readOnly?: boolean; onSubmitted: () => void }) {
+function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: string; readOnly?: boolean; onSubmitted: () => void; onBack?: () => void }) {
   interface PurchaseEntry {
     id: string;
     amount: number;
@@ -2033,8 +2027,11 @@ function CashClosingPanel({ date, readOnly, onSubmitted }: { date: string; readO
   if (!preview) return null;
 
   return (
-    <div className={`mt-10 border p-6 ${readOnly ? "border-pending bg-pending-bg" : "border-line bg-white"}`}>
-      <h2 className="mb-1 font-display text-lg font-semibold text-navy">Day-End Cash Closing</h2>
+    <div className={`mt-2 rounded-2xl border p-5 ${readOnly ? "border-pending bg-pending-bg" : "border-line bg-white"}`}>
+      <div className="mb-1 flex items-center gap-2.5">
+        {onBack && <button type="button" onClick={onBack} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>}
+        <h2 className="font-display text-lg font-semibold text-navy">Day-End Cash Closing</h2>
+      </div>
       {readOnly && (
         <p className="mb-3 inline-block rounded border border-pending bg-white px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-pending">
           🔒 Read-only — yesterday&apos;s closing, locked
