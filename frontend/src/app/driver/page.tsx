@@ -368,7 +368,7 @@ export default function DriverPortalPage() {
       const el = homeBoxesRef.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
-      setHomeBoxesH(Math.max(8 * 46 + 7 * 8, window.innerHeight - top - 12));
+      setHomeBoxesH(Math.max(8 * 46 + 7 * 8, window.innerHeight - top - 32));
     };
     fit();
     const t = setTimeout(fit, 300);
