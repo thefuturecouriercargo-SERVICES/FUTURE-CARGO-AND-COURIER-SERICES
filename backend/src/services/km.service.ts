@@ -60,7 +60,7 @@ export async function assertDeliveryStarted(userId: string): Promise<void> {
 
 // ---------- Photos ----------
 
-export async function storePhoto(employeeId: string, kind: "METER" | "RECEIPT", dataUrl: string): Promise<{ id: string; mime: string; base64: string }> {
+export async function storePhoto(employeeId: string, kind: "METER" | "RECEIPT" | "EXPENSE", dataUrl: string): Promise<{ id: string; mime: string; base64: string }> {
   const m = String(dataUrl ?? "").match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
   if (!m) throw new ApiError(400, "Photo is not a valid image");
   const buf = Buffer.from(m[2], "base64");
@@ -219,4 +219,17 @@ export function startKmScheduler() {
   }, 60_000);
   void pruneKmPhotos();
   setInterval(() => void pruneKmPhotos(), 6 * 60 * 60 * 1000);
+}
+
+/** Any expense bill (fuel, parking, Salik top-up, car wash…): total paid, litres if fuel. */
+export async function readBill(base64: string, mime: string): Promise<{ amount: number | null; litres: number | null; station: string | null } | null> {
+  const r = await callReader<ReceiptRead>(
+    base64,
+    mime,
+    RECEIPT_TOOL,
+    "This is a photo of a receipt or bill paid in the UAE (AED) — fuel, parking, Salik, car wash, workshop, stationery or other. Read the TOTAL amount paid (including VAT). If it is a fuel receipt also read litres. Put the shop/station name in station. Use null for anything not clearly printed."
+  );
+  if (!r) return null;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null);
+  return { amount: num(r.amount), litres: num(r.litres), station: r.station ? String(r.station).toUpperCase().slice(0, 60) : null };
 }

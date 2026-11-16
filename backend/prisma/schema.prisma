@@ -306,6 +306,8 @@ model ExpenseEntry {
   amount       Int
   remarks      String?
   source       String          @default("ADMIN") // "ADMIN" or "DRIVER"
+  enteredBy    String?         // "DRIVER" when the driver added it from Cash closing (still counted like admin entries)
+  photoId      String?         // receipt photo (KmPhoto, kept 7 days)
   employeeId   String?
   employee     User?           @relation(fields: [employeeId], references: [id])
   createdAt    DateTime        @default(now())

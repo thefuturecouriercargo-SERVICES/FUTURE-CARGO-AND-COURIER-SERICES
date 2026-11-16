@@ -61,7 +61,7 @@ export function useKmStatus() {
 }
 
 /** Shrink a phone photo before upload. */
-async function shrink(file: Blob, maxSide = 1280, quality = 0.8): Promise<string> {
+export async function shrink(file: Blob, maxSide = 1280, quality = 0.8): Promise<string> {
   let bitmap: ImageBitmap | HTMLImageElement;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);

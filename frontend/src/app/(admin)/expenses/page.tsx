@@ -20,6 +20,8 @@ interface ExpenseEntry {
   amount: number;
   remarks?: string | null;
   source: string;
+  enteredBy?: string | null;
+  photoId?: string | null;
   employee?: { id: string; name: string } | null;
 }
 interface Employee {
@@ -283,7 +285,14 @@ export default function ExpensesPage() {
                 <td>{e.date.slice(0, 10)}</td>
                 <td>{e.category}</td>
                 <td className="text-right font-mono">{e.amount}</td>
-                <td>{e.source}</td>
+                <td>
+                  {e.enteredBy === "DRIVER" ? "DRIVER" : e.source}
+                  {e.photoId && (
+                    <a href={`/api/km/photo/${e.photoId}`} target="_blank" rel="noreferrer" className="ml-1.5 text-brass underline" title="Receipt photo (kept 7 days)">
+                      Photo
+                    </a>
+                  )}
+                </td>
                 <td>{e.employee?.name ?? "-"}</td>
                 <td>{e.remarks ?? "-"}</td>
                 <td className="whitespace-nowrap text-right">
