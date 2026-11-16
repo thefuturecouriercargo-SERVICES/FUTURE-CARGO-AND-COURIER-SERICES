@@ -36,7 +36,11 @@ router.post(
     const user = await prisma.user.findFirst({
       where: {
         active: true,
-        OR: [{ username: username.trim() }, { email: username.trim() }],
+        // Usernames show in capitals everywhere, so match them in any case.
+        OR: [
+          { username: { equals: username.trim(), mode: "insensitive" } },
+          { email: { equals: username.trim(), mode: "insensitive" } },
+        ],
       },
     });
 

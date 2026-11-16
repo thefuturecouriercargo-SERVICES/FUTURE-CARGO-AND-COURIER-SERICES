@@ -42,6 +42,8 @@ export default function LoginPage() {
               id="login-user"
               data-keep-case
               autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="h-12 w-full rounded-xl border border-line px-3.5 text-[15px] outline-none focus:border-brass"

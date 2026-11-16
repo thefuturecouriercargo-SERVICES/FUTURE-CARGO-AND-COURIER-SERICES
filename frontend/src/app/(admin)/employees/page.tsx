@@ -121,6 +121,8 @@ export default function EmployeesPage() {
             <input
               required
               disabled={!!editingId}
+              data-keep-case
+              autoCapitalize="none"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="w-full rounded border border-line px-2.5 py-2 text-sm disabled:bg-paper-2"
@@ -205,7 +207,10 @@ export default function EmployeesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="font-mono">{e.username}</td>
+                  <td className="font-mono">
+                    <span data-keep-case>{e.username}</span>
+                    <PasswordReveal id={e.id} />
+                  </td>
                   <td className="text-ink-soft">{e.email || e.phone || "—"}</td>
                   <td className="text-right font-mono">{fmtNumber(e.baseSalary ?? 0)}</td>
                   <td className="text-right font-mono">{p?.delivered ?? "—"}</td>
@@ -232,5 +237,41 @@ export default function EmployeesPage() {
      </div>
     </div>
     </AuthGate>
+  );
+}
+
+
+/** Admin taps the key to see the employee's password (passwords set/changed from now on). */
+function PasswordReveal({ id }: { id: string }) {
+  const [pw, setPw] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  async function toggle() {
+    if (pw !== undefined) {
+      setPw(undefined);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await apiFetch<{ password: string | null }>(`/employees/${id}/password`);
+      setPw(r.password);
+    } catch {
+      setPw(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-0.5 flex items-center gap-1.5">
+      <button type="button" onClick={toggle} className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-soft hover:border-brass hover:text-brass" title="Show password">
+        {busy ? "…" : pw !== undefined ? "Hide" : "Password"}
+      </button>
+      {pw !== undefined && (
+        pw ? (
+          <span data-keep-case className="select-all font-mono text-xs font-bold text-brass">{pw}</span>
+        ) : (
+          <span className="text-[10px] text-ink-soft">Not saved — set a new password to see it</span>
+        )
+      )}
+    </div>
   );
 }

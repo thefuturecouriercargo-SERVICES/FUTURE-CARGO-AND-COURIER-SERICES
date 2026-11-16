@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { hashPassword } from "../utils/password";
+import { seal, open as unseal } from "../utils/secretBox";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 import { monthRange } from "../utils/dates";
@@ -58,6 +59,7 @@ router.post(
        phone: data.phone,
         role: data.role ?? "DRIVER",
         passwordHash,
+        passwordEnc: seal(data.password),
         baseSalary: data.baseSalary ?? 0,
         isAgent: data.isAgent ?? false,
       },
@@ -82,6 +84,18 @@ const updateSchema = z.object({
   salaryEffectiveFrom: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
 });
 
+// Admin views a staff password (only passwords set/changed after this feature exist).
+router.get(
+  "/:id/password",
+  requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req, res) => {
+    const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, username: true, passwordEnc: true } });
+    if (!u) throw new ApiError(404, "Employee not found");
+    await writeAuditLog({ userId: req.user!.sub, action: "VIEW_PASSWORD", entity: "Employee", entityId: u.id });
+    res.json({ username: u.username, password: unseal(u.passwordEnc) });
+  })
+);
+
 router.put(
   "/:id",
   requireRole("SUPER_ADMIN"),
@@ -104,7 +118,7 @@ router.put(
 
     const employee = await prisma.user.update({
       where: { id: req.params.id },
-      data: { ...rest, ...(password ? { passwordHash: await hashPassword(password) } : {}) },
+      data: { ...rest, ...(password ? { passwordHash: await hashPassword(password), passwordEnc: seal(password) } : {}) },
      select: { id: true, name: true, username: true, email: true, phone: true, active: true, baseSalary: true, isAgent: true },
     });
     await writeAuditLog({ userId: req.user!.sub, action: "UPDATE", entity: "Employee", entityId: employee.id });

@@ -69,6 +69,7 @@ model User {
   username      String   @unique
   email         String?  @unique
   passwordHash  String
+  passwordEnc   String?  // encrypted copy so SUPER_ADMIN can view it (set when the password is set/changed)
   role          Role     @default(DRIVER)
   active        Boolean  @default(true)
 phone         String?
