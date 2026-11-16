@@ -2224,7 +2224,8 @@ function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: strin
 // Opens full-screen in black & gold: the gold Assign button flies up and turns
 // into the camera's scan box. Each scanned parcel can get a short comment.
 function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | null }) {
-  const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date; orderId?: string; cnNo?: number }[]>([]);
+  const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date; orderId?: string; cnNo?: number; note?: string }[]>([]);
+  const [histOpen, setHistOpen] = useState(false);
   const [note, setNote] = useState("");
   const [noteState, setNoteState] = useState<"" | "saving" | "saved" | "error">("");
   const shellRef = useRef<HTMLDivElement>(null);
@@ -2241,11 +2242,12 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
       m.style.display = "none";
       return;
     }
+    // Lands on the 2:1 camera strip (full width less the side padding).
     const W = Math.min(window.innerWidth, 448);
-    const width = W * 0.86;
-    const left = (window.innerWidth - W) / 2 + (W - width) / 2;
-    const height = Math.min(window.innerHeight * 0.24, width * 0.6);
-    const top = window.innerHeight * 0.45 - height / 2;
+    const width = W - 24;
+    const left = (window.innerWidth - W) / 2 + 12;
+    const height = width / 2;
+    const top = window.innerHeight * 0.4 - height / 2;
     const box = { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, borderRadius: "8px" };
     const a = m.animate(
       [
@@ -2296,7 +2298,9 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
     if (!target?.orderId || !note.trim()) return;
     setNoteState("saving");
     try {
-      await apiFetch(`/driver/orders/${target.orderId}/note`, { method: "PATCH", body: { note: note.trim() } });
+      const saved = note.trim();
+      await apiFetch(`/driver/orders/${target.orderId}/note`, { method: "PATCH", body: { note: saved } });
+      setLog((prev) => prev.map((l) => (l === target ? { ...l, note: saved } : l)));
       setNoteState("saved");
     } catch {
       setNoteState("error");
@@ -2333,9 +2337,14 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
                     <p key={last?.at.getTime() ?? 0} className="fc-result min-w-0 truncate font-mono text-xs font-bold uppercase tracking-wider" style={{ color: tone }}>
                       {last ? `${last.ok ? (last.already ? "• " : "✓ ") : "✕ "}${last.text}` : "Waiting for scan…"}
                     </p>
-                    <span className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] font-bold uppercase" style={{ background: GOLD, color: "#141e33" }}>
-                      {added} added
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHistOpen(true)}
+                      className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] font-bold uppercase active:scale-95"
+                      style={{ background: GOLD, color: "#141e33" }}
+                    >
+                      {added} added ›
+                    </button>
                   </div>
                   <div className="mt-2 flex gap-2">
                     <input
@@ -2377,6 +2386,40 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
           />
         </div>
       </div>
+      {/* History of this session's scans — opened from the "added" count. */}
+      {histOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center p-3" style={{ background: "rgba(5,8,15,.75)" }} onClick={() => setHistOpen(false)}>
+          <div
+            className="max-h-[70vh] w-full max-w-md overflow-y-auto rounded-2xl border-2 p-3"
+            style={{ borderColor: "#b08a35", background: "#0b111d" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider" style={{ color: "#e9c46a" }}>
+              <span>Scanned this session · {added} added</span>
+              <button type="button" onClick={() => setHistOpen(false)} aria-label="Close" className="px-2 text-base">
+                ✕
+              </button>
+            </div>
+            {log.length === 0 && (
+              <p className="py-4 text-center font-mono text-xs uppercase" style={{ color: "#8d8163" }}>
+                Nothing scanned yet
+              </p>
+            )}
+            {log.map((l, i) => (
+              <div key={i} className="flex items-start justify-between gap-2 border-b py-2 font-mono text-xs uppercase last:border-0" style={{ borderColor: "#1d2433" }}>
+                <span className="min-w-0" style={{ color: !l.ok ? "#f09595" : l.already ? "#cfc6b0" : "#e9c46a" }}>
+                  {l.ok ? (l.already ? "• " : "✓ ") : "✕ "}
+                  {l.text}
+                  {l.note && <span className="mt-0.5 block" style={{ color: "#cfc6b0" }}>💬 {l.note}</span>}
+                </span>
+                <span className="shrink-0" style={{ color: "#8d8163" }}>
+                  {l.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* The gold Assign button that flies up and becomes the scan box. */}
       <div ref={morphRef} className="pointer-events-none fixed z-[60] border-2" style={{ borderColor: "transparent" }} />
     </>

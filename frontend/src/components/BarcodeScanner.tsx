@@ -191,11 +191,25 @@ export default function BarcodeScanner({
         if (busy || !video.videoWidth) return;
         busy = true;
         try {
-          // Crop to the guide rectangle: 86% of the width, 40% of the height, centred.
           const vw = video.videoWidth;
           const vh = video.videoHeight;
-          const cw = Math.round(vw * 0.86);
-          const ch = Math.round(vh * 0.4);
+          let cw: number;
+          let ch: number;
+          if (variant === "gold") {
+            // Gold scanner: the whole 2:1 camera strip is the scan area, so read
+            // exactly the part of the picture that is shown in it.
+            if (vw / vh > 2) {
+              ch = vh;
+              cw = Math.round(vh * 2);
+            } else {
+              cw = vw;
+              ch = Math.round(vw / 2);
+            }
+          } else {
+            // Crop to the guide rectangle: 86% of the width, 40% of the height, centred.
+            cw = Math.round(vw * 0.86);
+            ch = Math.round(vh * 0.4);
+          }
           canvas.width = cw;
           canvas.height = ch;
           ctx.drawImage(video, (vw - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, cw, ch);
@@ -247,17 +261,14 @@ export default function BarcodeScanner({
 
   if (variant === "gold") {
     const GOLD = "#b08a35";
-    const corner = "pointer-events-none absolute h-6 w-6 fc-corner";
     return (
       <div className="flex h-full min-h-0 flex-col">
         <style>{`
           @keyframes fcgoldin{from{opacity:0}to{opacity:1}}
-          @keyframes fccorner{from{opacity:0;transform:scale(1.35)}to{opacity:1;transform:none}}
           @keyframes fcgoldline{0%{top:10%}50%{top:88%}100%{top:10%}}
           .fc-gold-in{animation:fcgoldin .3s ease-out .35s both}
-          .fc-corner{animation:fccorner .45s cubic-bezier(.3,1.5,.5,1) .4s both}
           .fc-gold-line{animation:fcgoldline 1.8s ease-in-out infinite}
-          @media (prefers-reduced-motion: reduce){.fc-gold-in,.fc-corner{animation:none}}
+          @media (prefers-reduced-motion: reduce){.fc-gold-in{animation:none}}
         `}</style>
         <div className="flex items-center gap-2 px-3 pt-3">
           {leading}
@@ -285,29 +296,19 @@ export default function BarcodeScanner({
             🔦
           </button>
         </div>
-        <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-3">
-          <div className="fc-gold-in relative overflow-hidden rounded-lg">
-            <video ref={videoRef} className="block max-h-[calc(100dvh-260px)] max-w-full bg-black object-contain" muted playsInline />
-            {cameraOn && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                {/* Guide rectangle = the area that is decoded */}
-                <div className="relative" style={{ width: "86%", height: "40%", boxShadow: "0 0 0 9999px rgba(5,8,15,0.55)", borderRadius: 8 }}>
-                  <span className={`${corner} left-0 top-0 rounded-tl-lg border-l-[3px] border-t-[3px]`} style={{ borderColor: "#e9c46a" }} />
-                  <span className={`${corner} right-0 top-0 rounded-tr-lg border-r-[3px] border-t-[3px]`} style={{ borderColor: "#e9c46a" }} />
-                  <span className={`${corner} bottom-0 left-0 rounded-bl-lg border-b-[3px] border-l-[3px]`} style={{ borderColor: "#e9c46a" }} />
-                  <span className={`${corner} bottom-0 right-0 rounded-br-lg border-b-[3px] border-r-[3px]`} style={{ borderColor: "#e9c46a" }} />
-                  <div className="fc-gold-line absolute left-2 right-2 h-0.5" style={{ top: "50%", background: "#e9c46a" }} />
-                </div>
-              </div>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3">
+          {/* 2:1 camera strip — everything shown inside it is what gets read. */}
+          <div className="fc-gold-in relative w-full overflow-hidden rounded-lg border-2 bg-black" style={{ borderColor: GOLD, aspectRatio: "2 / 1" }}>
+            <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+            {cameraOn && <div className="fc-gold-line pointer-events-none absolute left-3 right-3 h-0.5" style={{ top: "50%", background: "#e9c46a" }} />}
+            {!cameraOn && !error && (
+              <p className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest" style={{ color: "#8d8163" }}>
+                Starting camera…
+              </p>
             )}
           </div>
-          {!cameraOn && !error && (
-            <p className="absolute font-mono text-xs uppercase tracking-widest" style={{ color: "#8d8163" }}>
-              Starting camera…
-            </p>
-          )}
           {error && (
-            <div className="absolute inset-x-6 text-center">
+            <div className="mt-3 text-center">
               <p className="text-sm uppercase text-red-300">{error}</p>
               <button
                 type="button"
