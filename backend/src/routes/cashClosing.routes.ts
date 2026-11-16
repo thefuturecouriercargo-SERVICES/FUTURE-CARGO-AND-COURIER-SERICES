@@ -141,7 +141,7 @@ router.post(
         date: z.string(),
         category: z.enum(DRIVER_EXPENSE_TYPES),
         amount: z.coerce.number().int().positive().max(5000),
-        photoId: z.string().nullable().optional(),
+        photoId: z.string({ required_error: "Take a photo of the bill" }).min(1, "Take a photo of the bill"),
         litres: z.coerce.number().positive().max(300).nullable().optional(),
         station: z.string().max(60).nullable().optional(),
         note: z.string().max(200).nullable().optional(),
@@ -151,6 +151,9 @@ router.post(
     const { start } = dayRange(d.date);
     if (!driverExpenseDayOk(start)) throw new ApiError(400, "Expenses can only be added for today");
     await assertClosingOpen(userId, start);
+    // No bill, no expense: the photo must be one this driver just uploaded.
+    const photo = await prisma.kmPhoto.findFirst({ where: { id: d.photoId, employeeId: userId }, select: { id: true } });
+    if (!photo) throw new ApiError(400, "Take a photo of the bill");
     const entry = await prisma.expenseEntry.create({
       data: {
         date: start,

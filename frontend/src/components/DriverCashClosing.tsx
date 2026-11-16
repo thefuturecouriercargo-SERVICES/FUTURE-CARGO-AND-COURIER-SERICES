@@ -74,6 +74,16 @@ function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
     </svg>
   );
 }
+function StoreIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 9l1.5-5h15L21 9" />
+      <path d="M3 9h18v1a3 3 0 01-6 0 3 3 0 01-6 0 3 3 0 01-6 0V9z" />
+      <path d="M5 13v7h14v-7" />
+      <path d="M10 20v-4h4v4" />
+    </svg>
+  );
+}
 function CameraIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -141,7 +151,8 @@ function AddExpenseSheet({ date, onClose, onSaved }: { date: string; onClose: ()
   async function save() {
     const a = Math.round(Number(amount));
     if (!type) return setPicking(true);
-    if (!a || a <= 0) return setError("Enter the amount or take a receipt photo");
+    if (!photoId) return setError("Take a photo of the bill first");
+    if (!a || a <= 0) return setError("Enter the amount");
     setBusy(true);
     setError(null);
     try {
@@ -208,18 +219,19 @@ function AddExpenseSheet({ date, onClose, onSaved }: { date: string; onClose: ()
         <input
           inputMode="numeric"
           value={amount}
+          disabled={!photoId}
           onChange={(e) => {
             setAmount(e.target.value.replace(/[^\d.]/g, ""));
             setError(null);
           }}
-          placeholder="0"
-          className="min-w-0 flex-1 bg-transparent py-3 text-center font-mono text-3xl font-bold text-navy outline-none"
+          placeholder={photoId ? "0" : "Bill photo first"}
+          className="min-w-0 flex-1 bg-transparent py-3 placeholder:text-base disabled:opacity-50 text-center font-mono text-3xl font-bold text-navy outline-none"
         />
         <span className="font-mono text-xs font-bold text-ink-soft">AED</span>
       </div>
       {error && <p className="mt-2 font-mono text-[11px] font-bold uppercase text-cancelled">{error}</p>}
-      <button type="button" onClick={save} disabled={busy || reading} className="mt-4 w-full rounded-xl py-3.5 font-mono text-sm font-extrabold uppercase tracking-wide text-white active:scale-[0.98] disabled:opacity-60" style={{ background: NAVY }}>
-        {busy ? "Saving…" : "Save expense"}
+      <button type="button" onClick={save} disabled={busy || reading || !photoId} className="mt-4 w-full rounded-xl py-3.5 font-mono text-sm font-extrabold uppercase tracking-wide text-white active:scale-[0.98] disabled:opacity-60" style={{ background: NAVY }}>
+        {busy ? "Saving…" : photoId ? "Save expense" : "Bill photo needed"}
       </button>
     </Sheet>
   );
@@ -421,44 +433,47 @@ export default function DriverCashClosing({
         )}
       </div>
 
-      {/* Vendors + balance */}
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-line">
-          <div className="flex items-center justify-between">
-            <span className={lab}>Paid to vendors</span>
+      {/* Paid to vendors */}
+      <div className="mt-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-line">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[11px] font-extrabold uppercase text-navy">Paid to vendors</span>
+          <span className="font-mono text-[12px] font-extrabold text-cancelled">{preview.totalPurchases ? `−${fmtNumber(preview.totalPurchases)}` : "0"}</span>
+        </div>
+        {preview.purchases.map((p) => (
+          <div key={p.id} className="flex items-center gap-2 border-b border-line py-2 last:border-0">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#EFE3C4] text-navy">
+              <StoreIcon size={15} />
+            </span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] font-bold uppercase text-navy">
+              {p.vendor ? p.vendor.name : "General deduction"}
+              {p.note && <span className="font-normal text-ink-soft"> · {p.note}</span>}
+            </span>
+            <span className="font-mono text-[13px] font-extrabold text-navy">{fmtNumber(p.amount)}</span>
             {!readOnly && (
-              <button type="button" onClick={() => setSheet("vendor")} className="font-mono text-[10px] font-extrabold uppercase text-[#A07E25]">
-                + Add
+              <button type="button" onClick={() => removePurchase(p.id)} aria-label="Remove payment" className="ml-1 flex h-6 w-6 items-center justify-center rounded-full text-ink-soft ring-1 ring-line">
+                ×
               </button>
             )}
           </div>
-          <div className={num}>{fmtNumber(preview.totalPurchases)}</div>
-        </div>
-        <div className="rounded-2xl px-3.5 py-2.5 shadow-sm" style={{ background: NAVY }}>
-          <div className="font-mono text-[9.5px] font-bold uppercase tracking-wide" style={{ color: GOLD }}>Balance cash</div>
-          <div className="mt-0.5 font-mono text-[19px] font-extrabold leading-tight" style={{ color: GOLD }}>
-            {fmtNumber(balance)} <span className="text-[11px] font-bold opacity-80">AED</span>
-          </div>
-        </div>
+        ))}
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setSheet("vendor")}
+            className="mt-2 w-full rounded-xl border border-dashed border-[#C9A13B] py-2.5 font-mono text-[11.5px] font-extrabold uppercase text-[#A07E25] active:scale-[0.98]"
+          >
+            + Add vendor payment
+          </button>
+        )}
       </div>
-      {preview.purchases.length > 0 && (
-        <div className="mt-2 rounded-2xl bg-white px-3 py-1 shadow-sm ring-1 ring-line">
-          {preview.purchases.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 border-b border-line py-2 font-mono text-[11px] uppercase text-navy last:border-0">
-              <span className="min-w-0 flex-1 truncate font-bold">
-                {p.vendor ? p.vendor.name : "General deduction"}
-                {p.note && <span className="font-normal text-ink-soft"> · {p.note}</span>}
-              </span>
-              <span className="font-extrabold">{fmtNumber(p.amount)}</span>
-              {!readOnly && (
-                <button type="button" onClick={() => removePurchase(p.id)} aria-label="Remove payment" className="flex h-6 w-6 items-center justify-center rounded-full text-ink-soft ring-1 ring-line">
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+
+      {/* Balance cash */}
+      <div className="mt-2 flex items-center justify-between rounded-2xl px-4 py-3 shadow-sm" style={{ background: NAVY }}>
+        <span className="font-mono text-[11px] font-bold uppercase tracking-wide" style={{ color: GOLD }}>Balance cash</span>
+        <span className="font-mono text-[22px] font-extrabold leading-tight" style={{ color: GOLD }}>
+          {fmtNumber(balance)} <span className="text-[11px] font-bold opacity-80">AED</span>
+        </span>
+      </div>
 
       {error && <p className="mt-2 font-mono text-[11px] font-bold uppercase text-cancelled">{error}</p>}
 
@@ -482,7 +497,7 @@ export default function DriverCashClosing({
               className="w-full rounded-xl py-3.5 font-mono text-sm font-extrabold uppercase tracking-wide text-[#14203A] shadow active:scale-[0.98] disabled:opacity-60"
               style={{ background: GOLD }}
             >
-              {busy ? "Submitting…" : existing ? "Re-submit cash closing" : "Submit cash closing"}
+              {busy ? "Ending…" : existing ? "End delivery again" : "End delivery"}
             </button>
           )
         )}
