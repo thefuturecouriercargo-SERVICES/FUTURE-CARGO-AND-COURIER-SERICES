@@ -112,7 +112,7 @@ const DUBAI: AreaRule[] = [
   [/\bdiscovery[\s\-']*gardens?\b/i, "DISCOVERY GARDENS"],
   [/\b(?:al[\s\-]*)?furjan\b|\bfurjan[\s\-']*west\b|\bfurjan[\s\-']*east\b/i, "AL FURJAN"],
   [/\bibn[\s\-']*bat+uta\b/i, "IBN BATTUTA"],
-  [/\bjebel[\s\-']*ali\b|\bjabal[\s\-']*ali\b|\bjafza\b|\bjebel[\s\-']*ali[\s\-']*free[\s\-']*zone\b|\bjebel[\s\-']*ali[\s\-']*village\b|\bjebal[\s\-']*ali\b/i, "JEBEL ALI"],
+  [/\bj[aeiu]?b[aeiu]?l[\s\-']*al[iy]\b|\bjebel[\s\-']*ali\b|\bjabal[\s\-']*ali\b|\bjafza\b|\bjebel[\s\-']*ali[\s\-']*free[\s\-']*zone\b|\bjebel[\s\-']*ali[\s\-']*village\b|\bjebal[\s\-']*ali\b/i, "JEBEL ALI"],
   [/\bdip\b|\bdip[\s\-']*\d\b|\binvestment[\s\-']*park\b|\bdubai[\s\-']*investment[\s\-']*park\b|\bdubai[\s\-']*investments[\s\-']*park\b/i, "DIP"],
   [/\bgreen[\s\-']*community[\s\-']*dip\b/i, "GREEN COMMUNITY"],
   [/\b(?:al[\s\-]*)?lisaili\b|\b(?:al[\s\-]*)?lehbab\b/i, "AL LISAILI"],
