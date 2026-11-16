@@ -20,7 +20,7 @@ import DriverReturns from "@/components/DriverReturns";
 import DriverTargets from "@/components/DriverTargets";
 import DriverIcon from "@/components/DriverIcon";
 import DriverCashClosing from "@/components/DriverCashClosing";
-import { useKmStatus, KmStartCover, KmEntrySheet, DriverFuel } from "@/components/DriverKm";
+import { useKmStatus, KmStartCover, KmEntrySheet } from "@/components/DriverKm";
 import Icon from "@/components/Icon";
 
 interface Summary {
@@ -301,16 +301,16 @@ export default function DriverPortalPage() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [claimFrom, setClaimFrom] = useState<DOMRect | null>(null);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
-  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets" | "fuel";
+  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets";
   const [view, setViewState] = useState<DriverView>("home");
   // Home is a launcher; Deliveries (#deliveries), By area (#areas) and Cash closing (#cash)
   // are their own pages, so the phone's Back button returns to home.
-  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll", returns: "#returns", targets: "#targets", fuel: "#fuel" };
+  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll", returns: "#returns", targets: "#targets" };
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash;
       setViewState(
-        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : h === "#returns" ? "returns" : h === "#targets" ? "targets" : h === "#fuel" ? "fuel" : "home"
+        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : h === "#returns" ? "returns" : h === "#targets" ? "targets" : h === "#fuel" ? "cash" : "home"
       );
     };
     sync();
@@ -1463,18 +1463,6 @@ export default function DriverPortalPage() {
           <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
           <span className="text-lg opacity-40" aria-hidden>›</span>
         </button>
-        {km?.enabled && (
-          <button
-            onClick={() => setView("fuel")}
-            className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
-              <DriverIcon name="fuel" />
-            </span>
-            <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Fuel</span>
-            <span className="text-lg opacity-40" aria-hidden>›</span>
-          </button>
-        )}
         <button
           onClick={() => setView("cash")}
           className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-navy text-white shadow px-3.5 text-left active:scale-[0.98]"
@@ -1487,8 +1475,6 @@ export default function DriverPortalPage() {
         </button>
       </div>
         </>
-      ) : view === "fuel" && km?.enabled ? (
-        <DriverFuel km={km} onBack={goHome} onChanged={reloadKm} />
       ) : view === "returns" ? (
         <DriverReturns onBack={goHome} />
       ) : view === "targets" ? (
