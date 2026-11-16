@@ -22,9 +22,6 @@ interface Ach {
   daysWorkedMonth: number;
   badges: { key: string; group: "month" | "overall"; label: string; got: boolean }[];
 }
-interface Stats {
-  daysLeft: number;
-}
 
 const monName = (m: string) =>
   new Date(m + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short", year: "numeric" }).toUpperCase();
@@ -32,14 +29,11 @@ const monName = (m: string) =>
 /** Monthly target, personal records and badges for the driver. */
 export default function DriverTargets({ onBack }: { onBack: () => void }) {
   const [a, setA] = useState<Ach | null>(null);
-  const [st, setSt] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [x, y] = await Promise.all([apiFetch<Ach>("/driver/achievements"), apiFetch<Stats>("/driver/race-stats").catch(() => null)]);
-      setA(x);
-      if (y) setSt(y);
+      setA(await apiFetch<Ach>("/driver/achievements"));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load");
@@ -53,7 +47,7 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
   const left = a ? Math.max(0, a.target - a.monthDelivered) : 0;
   const extra = a ? Math.max(0, a.monthDelivered - a.target) : 0;
   const pct = a ? Math.min(100, Math.round((a.monthDelivered / a.target) * 100)) : 0;
-  const daysLeft = st?.daysLeft ?? 0;
+  const workDays = workDaysLeft();
   const nextTen = a ? Math.ceil((a.today + 1) / 10) * 10 : 10;
 
   return (
@@ -74,7 +68,6 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
               <span className="font-mono text-[10.5px] font-bold uppercase tracking-widest text-brass-light">
                 {monName(a.month)} target {fmtNumber(a.target)}
               </span>
-              {daysLeft > 0 && <span className="font-mono text-[10px] uppercase text-white/60">{daysLeft} days left</span>}
             </div>
             <div className="mt-1 flex items-end gap-2">
               <span className="text-[40px] font-extrabold leading-none">{fmtNumber(a.monthDelivered)}</span>
@@ -87,7 +80,7 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
               {left > 0 ? (
                 <>
                   <MiniTile label="To target" value={fmtNumber(left)} />
-                  <MiniTile label="Per day" value={String(Math.ceil(left / Math.max(1, daysLeft)))} />
+                  <MiniTile label="Work days left" value={String(workDays)} />
                   <MiniTile label="Days worked" value={String(a.daysWorkedMonth)} />
                 </>
               ) : (
@@ -99,10 +92,7 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
               )}
             </div>
             <div className="mt-3 rounded-xl bg-white/10 px-3 py-2.5">
-              <div className="flex items-baseline justify-between font-mono text-[10px] font-bold uppercase tracking-wide text-white/70">
-                <span>Bonus calculation</span>
-                <span>AED {a.bonusPer} per delivery after {fmtNumber(a.target)}</span>
-              </div>
+              <div className="font-mono text-[10px] font-bold uppercase tracking-wide text-white/70">Bonus</div>
               <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[13px] font-bold uppercase">
                 <span>
                   {extra > 0 ? (
@@ -117,11 +107,6 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
                   {fmtNumber(extra)} × {a.bonusPer} = <span className="text-[16px] text-brass-light">AED {fmtNumber(extra * a.bonusPer)}</span>
                 </span>
               </div>
-              {left > 0 && (
-                <div className="mt-1 font-mono text-[10px] uppercase text-white/60">
-                  Bonus starts after {fmtNumber(left)} more · 100 extra = AED {fmtNumber(100 * a.bonusPer)}
-                </div>
-              )}
             </div>
           </section>
 
@@ -145,9 +130,9 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
             <Record label="Best day ever" value={a.bestDay ? String(a.bestDay.n) : "—"} sub={a.bestDay ? fmtDate(a.bestDay.d) : ""} />
             <Record label="Best day this month" value={a.bestDayMonth ? String(a.bestDayMonth.n) : "—"} sub={a.bestDayMonth ? fmtDate(a.bestDayMonth.d) : ""} />
             <Record label="Best month" value={a.bestMonth ? fmtNumber(a.bestMonth.n) : "—"} sub={a.bestMonth ? monName(a.bestMonth.m) : ""} />
-            <Record label="All-time delivered" value={fmtNumber(a.lifetime)} sub="Future Courier" />
-            <Record label="20+ day streak" value={String(a.streak)} sub={a.streak === 1 ? "day in a row" : "days in a row"} />
-            <Record label="30+ days" value={String(a.days30)} sub="this month" />
+            <Record label="All-time delivered" value={fmtNumber(a.lifetime)} sub="" />
+            <Record label="20+ day streak" value={String(a.streak)} sub="" />
+            <Record label="30+ days" value={String(a.days30)} sub="" />
           </section>
 
           {/* Badges */}
@@ -187,6 +172,15 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
   );
 }
 
+/** Days left this month from today (Dubai time), Sundays not counted. */
+function workDaysLeft() {
+  const [y, m, d] = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dubai" }).split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let n = 0;
+  for (let i = d; i <= last; i++) if (new Date(Date.UTC(y, m - 1, i)).getUTCDay() !== 0) n++;
+  return n;
+}
+
 function MiniTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white/10 px-1 py-2">
@@ -201,7 +195,7 @@ function Record({ label, value, sub }: { label: string; value: string; sub: stri
     <div className="rounded-2xl bg-white px-3.5 py-3 shadow ring-1 ring-line">
       <div className="font-mono text-[9.5px] font-bold uppercase tracking-wide text-ink-soft">{label}</div>
       <div className="text-[24px] font-extrabold leading-tight text-navy">{value}</div>
-      <div className="font-mono text-[9.5px] uppercase text-brass">{sub}</div>
+      {sub && <div className="font-mono text-[9.5px] uppercase text-brass">{sub}</div>}
     </div>
   );
 }
