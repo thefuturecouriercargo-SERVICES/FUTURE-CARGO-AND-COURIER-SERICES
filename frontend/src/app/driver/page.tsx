@@ -13,8 +13,9 @@ import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScann
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
-import Link from "next/link";
 import DriverRace from "@/components/DriverRace";
+import DriverHistoryPage from "./history/page";
+import DriverPayrollPage from "./payroll/page";
 
 interface Summary {
   assigned: number;
@@ -246,14 +247,15 @@ export default function DriverPortalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [raceShown, setRaceShown] = useState(false);
-  // Counters and live race take turns on the flip card: 20 s each.
+  // Counters and live race take turns on the flip card: 20 s each. A tap flips it and restarts the 20 s.
+  const [flipTick, setFlipTick] = useState(0);
   useEffect(() => {
-    const i = setInterval(() => {
-      if (document.hidden) return;
-      setRaceShown((v) => !v);
+    const t = setTimeout(() => {
+      if (!document.hidden) setRaceShown((v) => !v);
+      else setFlipTick((n) => n + 1);
     }, 20000);
-    return () => clearInterval(i);
-  }, []);
+    return () => clearTimeout(t);
+  }, [raceShown, flipTick]);
   const [search, setSearch] = useState("");
   // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
   const [areaFilter, setAreaFilter] = useState("");
@@ -264,15 +266,17 @@ export default function DriverPortalPage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
-  type DriverView = "home" | "list" | "area" | "cash";
+  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll";
   const [view, setViewState] = useState<DriverView>("home");
   // Home is a launcher; Deliveries (#deliveries), By area (#areas) and Cash closing (#cash)
   // are their own pages, so the phone's Back button returns to home.
-  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash" };
+  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll" };
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash;
-      setViewState(h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : "home");
+      setViewState(
+        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : "home"
+      );
     };
     sync();
     window.addEventListener("popstate", sync);
@@ -1001,14 +1005,10 @@ export default function DriverPortalPage() {
 
   const areaPage = (
     <div>
-      <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-2 backdrop-blur">
-        <div className="flex items-center gap-3 rounded-2xl bg-navy px-3 py-3 text-paper shadow-md">
-          <button onClick={goHome} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg" aria-label="Back">
-            ←
-          </button>
+      <div className="mb-3">
+        <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <div className="font-display text-lg font-semibold leading-tight">By area</div>
-            <div className="font-mono text-[10.5px] uppercase tracking-wide text-brass-light">
+            <div className="font-mono text-[11px] font-bold uppercase tracking-wide text-navy">
               {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
             </div>
           </div>
@@ -1244,6 +1244,67 @@ export default function DriverPortalPage() {
         </button>
       )}
 
+      {(() => {
+        const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
+        const nDel = orders.filter((o) => o.status === "DELIVERED").length;
+        const nCan = orders.filter((o) => o.status === "CANCELLED").length;
+        const pct = orders.length ? Math.round((nDel / orders.length) * 100) : 0;
+        const tiles = [
+          ["ALL", "Total", orders.length, "text-navy"],
+          ["PENDING", "Pending", nPend, "text-brass"],
+          ["DELIVERED", "Delivered", nDel, "text-delivered"],
+          ["CANCELLED", "Cancelled", nCan, "text-cancelled"],
+        ] as const;
+        const hl = view === "list" ? statusTab : view === "home" ? "ALL" : null;
+        return (
+          <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
+            <div className="flex items-stretch gap-2">
+              {view !== "home" && (
+                <button
+                  type="button"
+                  onClick={goHome}
+                  aria-label="Back"
+                  className="flex w-11 shrink-0 items-center justify-center rounded-2xl bg-navy text-xl font-bold text-white shadow active:scale-95"
+                >
+                  ←
+                </button>
+              )}
+              <div className="min-w-0 flex-1">
+                <div key={raceShown ? "race" : "count"} className="flip-in h-full">
+                  {raceShown ? (
+                    <DriverRace embedded />
+                  ) : (
+                    <div className="h-full rounded-2xl bg-white p-3 shadow ring-1 ring-line">
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {tiles.map(([k, label, n, color]) => (
+                          <button
+                            key={k}
+                            onClick={() => {
+                              setStatusTab(k);
+                              if (view !== "list") setView("list");
+                            }}
+                            className={`rounded-xl px-1 py-2 text-center transition ${hl === k ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
+                          >
+                            <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
+                            <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-ink-soft">{label}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${pct}% delivered`}>
+                        <div className="h-full rounded-full bg-delivered transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <style>{`.flip-in{animation:flipIn .55s cubic-bezier(.3,.7,.3,1);transform-origin:50% 50%}
+@keyframes flipIn{0%{transform:perspective(700px) rotateX(-90deg);opacity:.3}100%{transform:perspective(700px) rotateX(0);opacity:1}}
+@media (prefers-reduced-motion:reduce){.flip-in{animation:none}}`}</style>
+          </div>
+        );
+      })()}
+
       {view === "area" ? (
         areaPage
       ) : view === "home" ? (
@@ -1266,61 +1327,6 @@ export default function DriverPortalPage() {
           </div>
         </div>
       )}
-
-      {(() => {
-        const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
-        const nDel = orders.filter((o) => o.status === "DELIVERED").length;
-        const nCan = orders.filter((o) => o.status === "CANCELLED").length;
-        const pct = orders.length ? Math.round((nDel / orders.length) * 100) : 0;
-        const tiles = [
-          ["ALL", "Total", orders.length, "text-navy"],
-          ["PENDING", "Pending", nPend, "text-brass"],
-          ["DELIVERED", "Delivered", nDel, "text-delivered"],
-          ["CANCELLED", "Cancelled", nCan, "text-cancelled"],
-        ] as const;
-        return (
-          <div className="mb-3">
-            <div className="flip-wrap">
-              <div className={`flip-inner ${raceShown ? "is-flipped" : ""}`}>
-                <div className="flip-face" aria-hidden={raceShown}>
-                  <div className="h-full rounded-2xl bg-white p-3 shadow ring-1 ring-line">
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {tiles.map(([k, label, n, color]) => (
-                        <button
-                          key={k}
-                          tabIndex={raceShown ? -1 : 0}
-                          onClick={() => {
-                            setStatusTab(k);
-                            setView("list");
-                          }}
-                          className={`rounded-xl px-1 py-2 text-center transition ${k === "ALL" ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
-                        >
-                          <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
-                          <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-ink-soft">{label}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${pct}% delivered`}>
-                      <div className="h-full rounded-full bg-delivered transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                </div>
-                <div className="flip-face flip-back" aria-hidden={!raceShown}>
-                  <DriverRace embedded />
-                </div>
-              </div>
-            </div>
-            <style>{`.flip-wrap{perspective:900px}
-.flip-inner{display:grid;transition:transform .6s cubic-bezier(.3,.7,.3,1);transform-style:preserve-3d}
-.flip-inner.is-flipped{transform:rotateX(180deg)}
-.flip-face{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden}
-.flip-back{transform:rotateX(180deg)}
-.flip-inner:not(.is-flipped) .flip-back,.flip-inner.is-flipped>.flip-face:first-child{pointer-events:none}
-.flip-live{animation:flipLive 1.2s infinite}@keyframes flipLive{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){.flip-inner{transition:none}.flip-live{animation:none}}`}</style>
-          </div>
-        );
-      })()}
 
       {(() => {
         const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
@@ -1373,33 +1379,42 @@ export default function DriverPortalPage() {
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
-          <div className="grid grid-cols-2 gap-2.5">
-            <Link href="/driver/history" className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-3 text-navy shadow ring-1 ring-line active:scale-[0.98]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-base text-white">🕘</span>
-              <span className="font-mono text-[12px] font-bold uppercase">History</span>
-            </Link>
-            <Link href="/driver/payroll" className="flex items-center gap-2.5 rounded-2xl bg-white px-3 py-3 text-navy shadow ring-1 ring-line active:scale-[0.98]">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-base text-white">🧾</span>
-              <span className="font-mono text-[12px] font-bold uppercase">Payroll</span>
-            </Link>
-          </div>
+          <button
+            onClick={() => setView("history")}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🕘</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">History</span>
+              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Past days</span>
+            </span>
+            <span className="text-lg opacity-50" aria-hidden>›</span>
+          </button>
+          <button
+            onClick={() => setView("payroll")}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🧾</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
+              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Salary &amp; bonus</span>
+            </span>
+            <span className="text-lg opacity-50" aria-hidden>›</span>
+          </button>
         </div>
         );
       })()}
         </>
+      ) : view === "history" ? (
+        <div className="-mx-4">
+          <DriverHistoryPage />
+        </div>
+      ) : view === "payroll" ? (
+        <div className="-mx-4">
+          <DriverPayrollPage />
+        </div>
       ) : view === "cash" ? (
         <>
-      <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-2 backdrop-blur">
-        <div className="flex items-center gap-3 rounded-2xl bg-navy px-3 py-3 text-paper shadow-md">
-          <button onClick={goHome} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg" aria-label="Back">
-            ←
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="font-display text-lg font-semibold leading-tight">Cash closing</div>
-            <div className="font-mono text-[10.5px] uppercase tracking-wide text-brass-light">In hand AED {fmtNumber(summary?.cashCollected ?? 0)} · bank AED {fmtNumber(summary?.bankCollected ?? 0)}</div>
-          </div>
-        </div>
-      </div>
       {isShowingYesterday && (
         <p className="mb-2 rounded border border-pending bg-pending-bg px-3 py-2 text-xs text-pending">
           Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
@@ -1409,28 +1424,6 @@ export default function DriverPortalPage() {
         </>
       ) : (
         <>
-      <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-2 backdrop-blur">
-        <div className="flex items-center gap-3 rounded-2xl bg-navy px-3 py-3 text-paper shadow-md">
-          <button onClick={goHome} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg" aria-label="Back">
-            ←
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="font-display text-lg font-semibold leading-tight">Deliveries</div>
-            <div className="font-mono text-[10.5px] uppercase tracking-wide text-brass-light">{filtered.length} shown · {statusTab === "ALL" ? "all" : statusTab.toLowerCase()}</div>
-          </div>
-        </div>
-      </div>
-      <div className="mb-3 flex gap-1.5 overflow-x-auto">
-        {(["ALL", "PENDING", "DELIVERED", "CANCELLED"] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setStatusTab(k)}
-            className={`shrink-0 rounded-full px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase ${statusTab === k ? "bg-navy text-white" : "bg-white text-navy ring-1 ring-line"}`}
-          >
-            {k === "ALL" ? "All" : k.toLowerCase()}
-          </button>
-        ))}
-      </div>
       <div className="mb-4 flex items-center gap-2 rounded-full bg-white py-1 pl-4 pr-1 shadow-sm ring-1 ring-line">
         <span className="text-ink-soft">🔎</span>
         <input

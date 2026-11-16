@@ -47,12 +47,8 @@ export default function DriverPayrollPage() {
   const balance = proratedSalary + bonus - short - paid;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-brass">My Payroll</p>
-          <h1 className="font-display text-2xl font-semibold text-navy">Payroll Statement</h1>
-        </div>
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-1">
+      <div className="mb-4 flex justify-end">
         <input
           type="month"
           value={month}

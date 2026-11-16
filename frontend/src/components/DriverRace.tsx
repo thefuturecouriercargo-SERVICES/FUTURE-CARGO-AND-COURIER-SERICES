@@ -190,9 +190,14 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
     ro.observe(el);
     setWidth(el.clientWidth);
     return () => ro.disconnect();
-  }, [data !== null]);
+  }, [data !== null && data.drivers.length > 0]);
 
-  if (!data || data.drivers.length === 0) return null;
+  if (!data || data.drivers.length === 0)
+    return L ? (
+      <div className="flex h-full min-h-[92px] items-center justify-center rounded-2xl bg-white p-3 text-center font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft shadow ring-1 ring-line">
+        {data ? "Race starts with the first delivery" : "Loading race…"}
+      </div>
+    ) : null;
 
   // One row, race order. Tied drivers share one spot: the latest to reach that count sits
   // on top, the others peek out underneath as stacked circles. Separate spots never overlap.
