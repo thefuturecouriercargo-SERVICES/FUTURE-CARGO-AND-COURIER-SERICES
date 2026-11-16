@@ -19,7 +19,7 @@ interface Ach {
   streak: number;
   days30: number;
   daysWorkedMonth: number;
-  badges: { key: string; label: string; got: boolean }[];
+  badges: { key: string; group: "month" | "overall"; label: string; got: boolean }[];
 }
 interface Stats {
   daysLeft: number;
@@ -128,24 +128,36 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
           </section>
 
           {/* Badges */}
-          <section className="rounded-2xl bg-white p-4 shadow ring-1 ring-line">
-            <div className="mb-2.5 font-mono text-[10.5px] font-bold uppercase tracking-widest text-ink-soft">
-              Badges · {a.badges.filter((b) => b.got).length}/{a.badges.length}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {a.badges.map((b) => (
-                <div
-                  key={b.key}
-                  className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center ${b.got ? "bg-brass/15 ring-1 ring-brass/50" : "bg-paper opacity-60"}`}
-                >
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-full text-base ${b.got ? "bg-brass text-white" : "bg-line text-ink-soft"}`}>
-                    {b.got ? "★" : "🔒"}
+          {([
+            ["month", `${monName(a.month)} badges`],
+            ["overall", "Overall badges"],
+          ] as const).map(([g, title]) => {
+            const list = a.badges.filter((b) => (b.group ?? "overall") === g);
+            if (!list.length) return null;
+            return (
+              <section key={g} className="rounded-2xl bg-white p-4 shadow ring-1 ring-line">
+                <div className="mb-2.5 flex items-baseline justify-between font-mono text-[10.5px] font-bold uppercase tracking-widest text-ink-soft">
+                  <span>{title}</span>
+                  <span className="text-brass">
+                    {list.filter((b) => b.got).length}/{list.length}
                   </span>
-                  <span className={`font-mono text-[9.5px] font-bold uppercase leading-tight ${b.got ? "text-navy" : "text-ink-soft"}`}>{b.label}</span>
                 </div>
-              ))}
-            </div>
-          </section>
+                <div className="grid grid-cols-3 gap-2">
+                  {list.map((b) => (
+                    <div
+                      key={b.key}
+                      className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center ${b.got ? "bg-brass/15 ring-1 ring-brass/50" : "bg-paper opacity-60"}`}
+                    >
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-full text-base ${b.got ? (g === "month" ? "bg-brass text-white" : "bg-navy text-brass-light") : "bg-line text-ink-soft"}`}>
+                        {b.got ? "★" : "🔒"}
+                      </span>
+                      <span className={`font-mono text-[9.5px] font-bold uppercase leading-tight ${b.got ? "text-navy" : "text-ink-soft"}`}>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </div>

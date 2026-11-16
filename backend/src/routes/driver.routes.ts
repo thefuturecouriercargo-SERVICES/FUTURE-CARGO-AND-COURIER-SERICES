@@ -438,16 +438,30 @@ router.get(
     }
     const days30 = monthRows.filter((r) => r.n >= 30).length;
     const monthDelivered = byMonth.get(thisMonth) ?? 0;
+    const bd = bestDay?.n ?? 0;
+    const bdm = bestDayMonth?.n ?? 0;
+    const bm = bestMonth?.n ?? 0;
     const badges = [
-      { key: "d20", label: "20 in a day", got: (bestDay?.n ?? 0) >= 20 },
-      { key: "d30", label: "30 in a day", got: (bestDay?.n ?? 0) >= 30 },
-      { key: "d40", label: "40 in a day", got: (bestDay?.n ?? 0) >= 40 },
-      { key: "d50", label: "50 in a day", got: (bestDay?.n ?? 0) >= 50 },
-      { key: "m350", label: "Half target", got: monthDelivered >= MONTH_TARGET / 2 },
-      { key: "m700", label: "Target hit", got: monthDelivered >= MONTH_TARGET },
-      { key: "l1000", label: "1,000 delivered", got: lifetime >= 1000 },
-      { key: "l5000", label: "5,000 delivered", got: lifetime >= 5000 },
-      { key: "s5", label: "5-day streak", got: streak >= 5 },
+      // This month
+      { key: "m-d20", group: "month", label: "20 in a day", got: bdm >= 20 },
+      { key: "m-d30", group: "month", label: "30 in a day", got: bdm >= 30 },
+      { key: "m-d40", group: "month", label: "40 in a day", got: bdm >= 40 },
+      { key: "m-d50", group: "month", label: "50 in a day", got: bdm >= 50 },
+      { key: "m-half", group: "month", label: "Half target", got: monthDelivered >= MONTH_TARGET / 2 },
+      { key: "m-target", group: "month", label: "Target hit", got: monthDelivered >= MONTH_TARGET },
+      { key: "m-30x5", group: "month", label: "5 days of 30+", got: days30 >= 5 },
+      { key: "m-30x10", group: "month", label: "10 days of 30+", got: days30 >= 10 },
+      { key: "m-streak5", group: "month", label: "5-day streak", got: streak >= 5 },
+      // Overall
+      { key: "o-d30", group: "overall", label: "30 in a day", got: bd >= 30 },
+      { key: "o-d40", group: "overall", label: "40 in a day", got: bd >= 40 },
+      { key: "o-d50", group: "overall", label: "50 in a day", got: bd >= 50 },
+      { key: "o-m700", group: "overall", label: "700 month", got: bm >= MONTH_TARGET },
+      { key: "o-m900", group: "overall", label: "900 month", got: bm >= 900 },
+      { key: "o-l1000", group: "overall", label: "1,000 delivered", got: lifetime >= 1000 },
+      { key: "o-l2500", group: "overall", label: "2,500 delivered", got: lifetime >= 2500 },
+      { key: "o-l5000", group: "overall", label: "5,000 delivered", got: lifetime >= 5000 },
+      { key: "o-l10000", group: "overall", label: "10,000 delivered", got: lifetime >= 10000 },
     ];
     res.json({
       today: todayN,

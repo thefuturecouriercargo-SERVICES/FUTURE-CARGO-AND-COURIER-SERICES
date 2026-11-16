@@ -1342,97 +1342,85 @@ export default function DriverPortalPage() {
       )}
 
       {(() => {
-        const nPend = orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length;
-        const toCollect = orders
-          .filter((o) => (o.status === "PENDING" || o.status === "TRANSFER") && o.payment === "CASH" && !isPrepaid(o) && o.total > 0)
-          .reduce((t, o) => t + o.total, 0);
         return (
-        <div className="mb-4 space-y-2.5">
+        <div className="space-y-2">
           <button
             onClick={() => setClaimOpen(true)}
-            className="flex w-full items-center gap-3 rounded-2xl bg-brass text-white shadow px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-brass text-white shadow px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-xl">📦</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg">📦</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Assign</span>
-              <span className="block text-[11px] uppercase leading-tight opacity-85">Scan new parcel</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => { setStatusTab("ALL"); setView("list"); }}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">📋</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">📋</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Deliveries</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">{nPend} pending · {orders.length} total</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("area")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">📍</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">📍</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">By area</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Route &amp; order</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("cash")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-navy text-white shadow px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-navy text-white shadow px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brass text-navy text-xl">💵</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brass text-navy text-lg">💵</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Cash closing</span>
-              <span className="block text-[11px] uppercase leading-tight text-brass-light">In hand AED {fmtNumber(summary?.cashCollected ?? 0)} · to collect {fmtNumber(toCollect)}</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("returns")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">↩️</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">↩️</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Pickups &amp; cancels</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">To hand back to office</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("targets")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🏆</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🏆</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Targets &amp; achievements</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Monthly target · records · badges</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("history")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🕘</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🕘</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">History</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Past days</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
             onClick={() => setView("payroll")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🧾</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🧾</span>
             <span className="min-w-0 flex-1">
               <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
-              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Salary &amp; bonus</span>
             </span>
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
