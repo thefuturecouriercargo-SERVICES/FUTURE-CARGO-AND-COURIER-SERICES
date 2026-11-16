@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { saveBlob, savePdf } from "@/lib/savePdf";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
@@ -406,14 +407,14 @@ export default function ScanHistory({ view = "list", inTab = false }: { view?: "
             disabled={making || shown.length === 0}
             className="rounded border border-navy bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-navy hover:bg-paper-2 disabled:opacity-50"
           >
-            {making ? "Making PDF…" : `⬇ PDF (${shown.length})`}
+            {making ? "Making PDF…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />{`PDF (${shown.length})`}</>}
           </button>
           <button
             onClick={downloadExcel}
             disabled={makingXl || shown.length === 0}
             className="rounded border border-green-700 bg-white px-3 py-2 font-mono text-xs font-bold uppercase text-green-800 hover:bg-green-50 disabled:opacity-50"
           >
-            {makingXl ? "Making Excel…" : `⬇ Excel (${shown.length})`}
+            {makingXl ? "Making Excel…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />{`Excel (${shown.length})`}</>}
           </button>
         </div>
       </div>
@@ -663,10 +664,10 @@ export function DriverScanExport({
         ))}
       </select>
       <button onClick={() => run("pdf")} disabled={!!making || mine.length === 0} className={pdfBtn}>
-        {making === "pdf" ? "Making PDF…" : `⬇ PDF · ${mine.length}`}
+        {making === "pdf" ? "Making PDF…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />{`PDF · ${mine.length}`}</>}
       </button>
       <button onClick={() => run("xl")} disabled={!!making || mine.length === 0} className={xlBtn}>
-        {making === "xl" ? "Making Excel…" : `⬇ Excel · ${mine.length}`}
+        {making === "xl" ? "Making Excel…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />{`Excel · ${mine.length}`}</>}
       </button>
     </div>
   );

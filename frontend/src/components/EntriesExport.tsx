@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { saveBlob, savePdf } from "@/lib/savePdf";
 import { useState } from "react";
 import { fmtNumber, fmtDate } from "@/lib/format";
@@ -214,7 +215,7 @@ export default function EntriesExport({
         title="Download this one's PDF"
         className="rounded border border-navy bg-white px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-navy disabled:opacity-40"
       >
-        {busy ? "…" : "⬇ PDF"}
+        {busy ? "…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />PDF</>}
       </button>
     );
 
@@ -237,10 +238,10 @@ export default function EntriesExport({
         ))}
       </select>
       <button onClick={pdf} disabled={busy || !list.length} className="rounded border border-navy bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold uppercase text-navy disabled:opacity-40">
-        ⬇ PDF
+        <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />PDF
       </button>
       <button onClick={excel} disabled={busy || !list.length} className="rounded border border-green-700 bg-white px-2.5 py-1.5 font-mono text-[11px] font-bold uppercase text-green-800 disabled:opacity-40">
-        ⬇ Excel
+        <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />Excel
       </button>
     </div>
   );

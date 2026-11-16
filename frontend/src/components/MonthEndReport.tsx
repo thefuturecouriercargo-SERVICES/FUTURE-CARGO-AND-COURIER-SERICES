@@ -824,7 +824,7 @@ export default function MonthEndReport({ month }: { month: string }) {
             </button>
           )}
           <button disabled={busy || !notes} onClick={() => makePdf("download")} className={`${btn} bg-brass text-[#0A1020] hover:opacity-90`}>
-            {busy ? "Making PDF…" : "⬇ Team report PDF"}
+            {busy ? "Making PDF…" : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />Team report PDF</>}
           </button>
         </div>
       </div>

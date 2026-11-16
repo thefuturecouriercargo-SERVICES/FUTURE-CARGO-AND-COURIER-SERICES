@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/components/ui/Feedback";
@@ -78,7 +79,7 @@ export default function NightlyBackups() {
                     {fmtDay(f.date)} <span className="text-xs text-ink-soft">· {f.sizeKb} KB</span>
                   </span>
                   <a href={`/api/settings/backup/nightly/download?key=${encodeURIComponent(f.key)}`} className="font-mono text-xs uppercase text-brass hover:underline">
-                    ⬇ Download
+                    <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />Download
                   </a>
                 </li>
               ))}

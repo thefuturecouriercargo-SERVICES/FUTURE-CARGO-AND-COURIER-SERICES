@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import EntriesExport, { EntryRow } from "@/components/EntriesExport";
 
 import { Fragment, FormEvent, useCallback, useEffect, useState } from "react";
@@ -252,7 +253,7 @@ export default function VendorCreditPage() {
         <div className="mb-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date &amp; Vendor</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <button onClick={() => setNewEntriesDate(addDaysStr(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
               </button>
@@ -267,8 +268,8 @@ export default function VendorCreditPage() {
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            Everything each vendor gave us on <b>{newEntriesDate}</b> — scanned, typed in, or still waiting for pickup —
-            with delivery charge and balance. Each entry counts on the day the vendor entered it. ⬇ PDF on a row = that
+            Everything each vendor gave us on <b>{fmtDate(newEntriesDate)}</b> — scanned, typed in, or still waiting for pickup —
+            with delivery charge and balance. Each entry counts on the day the vendor entered it. The PDF button on a row = that
             vendor&apos;s full list for the day.
           </p>
 

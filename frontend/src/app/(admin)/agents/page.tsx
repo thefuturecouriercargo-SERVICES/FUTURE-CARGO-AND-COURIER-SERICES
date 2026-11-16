@@ -7,7 +7,7 @@ import AuthGate from "@/components/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, ApiClientError, agentCreditExportUrl } from "@/lib/api";
 import { revealEditForm } from "@/lib/editForm";
-import { fmtNumber, todayStr, addDays, currentMonthStr } from "@/lib/format";
+import { fmtNumber, todayStr, addDays, currentMonthStr, fmtDate } from "@/lib/format";
 import { Employee } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
@@ -756,7 +756,7 @@ export default function AgentsPage() {
         <div className="mt-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-[18px] font-semibold text-navy">New Entries by Date</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <button onClick={() => setNewEntriesDate(addDays(newEntriesDate, -1))} className="rounded border border-line bg-white px-2.5 py-1.5 text-xs hover:border-brass">
                 ← Prev
               </button>
@@ -771,7 +771,7 @@ export default function AgentsPage() {
             </div>
           </div>
           <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            Every consignment each agent got on <b>{newEntriesDate}</b>: newly entered (by scan or typed in Daily
+            Every consignment each agent got on <b>{fmtDate(newEntriesDate)}</b>: newly entered (by scan or typed in Daily
             Entry) plus transferred to them that day. Orders only carried over from earlier days aren&apos;t counted.
           </p>
 

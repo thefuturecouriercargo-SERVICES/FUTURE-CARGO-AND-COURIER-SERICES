@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate, fmtDateTime } from "@/lib/format";
@@ -214,7 +215,7 @@ function PickupBox({ type, list, onUndo }: { type: PickupType; list?: PickupList
         </div>
         {view === "pending" && pending.length > 0 && (
           <button onClick={downloadCsv} className="rounded border border-line bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-navy">
-            ⬇ CSV
+            <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />CSV
           </button>
         )}
       </div>

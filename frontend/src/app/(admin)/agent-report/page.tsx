@@ -383,7 +383,7 @@ function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string 
         </div>
         {rows.length > 0 && (
           <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">
-            ⬇ Download CSV
+            <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />Download CSV
           </button>
         )}
       </div>

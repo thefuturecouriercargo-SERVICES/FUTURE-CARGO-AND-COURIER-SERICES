@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, settingsBackupUrl } from "@/lib/api";
 
@@ -115,7 +116,7 @@ export default function SettingsPage() {
           href={settingsBackupUrl()}
           className="inline-block rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2"
         >
-          ⬇ Download Backup
+          <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />Download Backup
         </a>
 
         <NightlyBackups />

@@ -121,7 +121,7 @@ export default function LabelSheet({
           disabled={bookings.length === 0 || pdfProgress !== null}
           className="ml-auto rounded border border-navy bg-white px-4 py-2 font-mono text-xs uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-60"
         >
-          {pdfProgress ? `Making PDF… ${pdfProgress}` : `⬇ Download PDF (${bookings.length})`}
+          {pdfProgress ? `Making PDF… ${pdfProgress}` : <><Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />{`Download PDF (${bookings.length})`}</>}
         </button>
         <button
           onClick={print}

@@ -156,7 +156,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
     <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded border border-navy/30 bg-paper px-2 py-1">
       <span className="font-mono text-[10px] uppercase text-ink-soft">Driver sheet</span>
       <button onClick={() => make("download")} disabled={busy || !orders.length} className="rounded border border-navy bg-white px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-navy disabled:opacity-40">
-        ⬇ PDF
+        <Icon name="download" size={12} className="mr-1 inline-block align-[-2px]" />PDF
       </button>
       <button onClick={() => make("print")} disabled={busy || !orders.length} className="rounded bg-navy px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-paper disabled:opacity-40">
         <Icon name="printer" className="mr-1" />Print
