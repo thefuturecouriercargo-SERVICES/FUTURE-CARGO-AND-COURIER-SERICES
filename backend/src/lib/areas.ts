@@ -249,6 +249,8 @@ const ABUDHABI: AreaRule[] = [
   [/\b(?:al[\s\-]*)?shahama\b|\bshahamah\b/i, "AL SHAHAMA"],
   [/\b(?:al[\s\-]*)?shamkha\b|\bshamka\b|\bshamkhah\b/i, "AL SHAMKHA"],
   [/\b(?:al[\s\-]*)?shawamekh\b|\bshawamikh\b/i, "AL SHAWAMEKH"],
+  // "Al Wathba Al Nahda" is Al Wathba's Al Nahda district (Abu Dhabi) — not Al Nahda Sharjah / Dubai, not Baniyas.
+  [/\bwathb[h]?a[h]?\b[\s,\-']*(?:al[\s\-']*)?nah[a]?d[h]?a\b|\bnah[a]?d[h]?a\b[\s,\-']*(?:al[\s\-']*)?wathb[h]?a[h]?\b/i, "AL WATHBA"],
   [/\bbaniyas\b|\bbani[\s\-']*yas\b|\bbaniyas[\s\-']*east\b|\bbaniyas[\s\-']*west\b/i, "BANIYAS"],
   [/\b(?:al[\s\-]*)?wathba\b|\bwathbha\b|\bwathbah\b/i, "AL WATHBA"],
   [/\b(?:al[\s\-]*)?mafraq\b|\bmafreq\b|\bmafraq\b/i, "AL MAFRAQ"],
