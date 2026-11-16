@@ -10,7 +10,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
   return (
     <AuthGate allow={["DRIVER"]}>
       <LiveBridge />
-      <UpdatePopup />
+      <UpdatePopup portal="driver" />
       <DriverTopbar />
       {children}
     </AuthGate>

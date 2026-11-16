@@ -3,48 +3,46 @@
 import { useEffect, useState } from "react";
 
 /**
- * Full-screen "update required" popup for the driver portal.
- * Shows from 16 Nov 2026, 8 PM Dubai time until the driver taps UPDATE NOW;
- * then a bar fills to 100% and the app reloads with the new version.
+ * Full-screen "UPDATE REQUIRED" popup for the driver and admin portals.
+ * Opens automatically whenever a new version is deployed: the page's own build
+ * ID is compared with the server's (/app-version) every minute and when the
+ * app comes back to the screen. UPDATE NOW fills a bar to 100% and reloads.
+ * The feature lines come from src/lib/releaseNotes.ts (served by the new build).
  */
-const SHOW_FROM = Date.parse("2026-11-16T20:00:00+04:00");
-const KEY = "fc-update-2026-11-16";
-
+const MY_BUILD = process.env.NEXT_PUBLIC_BUILD_ID || "";
 const GOLD = "#C9A24A";
 
-const FEATURES = [
-  "START / END KM TRACKING",
-  "ADD EXPENSE WITH BILL PHOTO",
-  "NEW HOME SCREEN",
-  "FULL-SCREEN SCANNER",
-];
-
-function seen() {
-  try {
-    return localStorage.getItem(KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export default function UpdatePopup() {
+export default function UpdatePopup({ portal }: { portal: "driver" | "admin" }) {
   const [open, setOpen] = useState(false);
+  const [features, setFeatures] = useState<string[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
 
   useEffect(() => {
-    const check = () => {
-      if (!seen() && Date.now() >= SHOW_FROM) setOpen(true);
+    if (!MY_BUILD) return;
+    let stop = false;
+    const check = async () => {
+      try {
+        const r = await fetch(`/app-version?t=${Date.now()}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (stop || !j?.build || j.build === MY_BUILD) return;
+        setFeatures(Array.isArray(j.notes?.[portal]) ? j.notes[portal] : []);
+        setOpen(true);
+      } catch {}
     };
     check();
-    const t = setInterval(check, 15000);
-    return () => clearInterval(t);
-  }, []);
+    const t = setInterval(check, 60000);
+    const onVis = () => document.visibilityState === "visible" && check();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [portal]);
 
   const startUpdate = () => {
     if (progress !== null) return;
-    try {
-      localStorage.setItem(KEY, "1");
-    } catch {}
     setProgress(0);
     const started = Date.now();
     const DURATION = 2600;
@@ -87,11 +85,11 @@ export default function UpdatePopup() {
       </div>
 
       <div className="mt-7 w-full max-w-[300px] text-left">
-        {FEATURES.map((f, i) => (
+        {features.map((f, i) => (
           <div key={f} className="flex gap-3">
             <div className="flex flex-col items-center">
               <div className="h-3 w-3 shrink-0 rounded-full" style={{ border: `2px solid ${GOLD}` }} />
-              {i < FEATURES.length - 1 && <div className="w-[2px] flex-1" style={{ background: GOLD, opacity: 0.5, minHeight: 22 }} />}
+              {i < features.length - 1 && <div className="w-[2px] flex-1" style={{ background: GOLD, opacity: 0.5, minHeight: 22 }} />}
             </div>
             <div className="-mt-[3px] pb-4 text-[13px] tracking-wide">{f}</div>
           </div>
