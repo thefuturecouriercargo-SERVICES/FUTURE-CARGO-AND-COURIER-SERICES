@@ -3,12 +3,14 @@
 import AuthGate from "@/components/AuthGate";
 import LiveBridge from "@/components/LiveBridge";
 import PrayerReminder from "@/components/PrayerReminder";
+import UpdatePopup from "@/components/UpdatePopup";
 import { useAuth } from "@/context/AuthContext";
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGate allow={["DRIVER"]}>
       <LiveBridge />
+      <UpdatePopup />
       <DriverTopbar />
       {children}
     </AuthGate>
