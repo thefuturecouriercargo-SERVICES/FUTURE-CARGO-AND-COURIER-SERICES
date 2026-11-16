@@ -2231,6 +2231,21 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
   const shellRef = useRef<HTMLDivElement>(null);
   const morphRef = useRef<HTMLDivElement>(null);
 
+  // Phone Back button closes the scanner (back to home) instead of leaving the app
+  // for the sign-in page: opening adds a history step that Back removes.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    window.history.pushState({ fcClaim: true }, "", window.location.pathname + window.location.search + "#assign");
+    const onPop = () => onCloseRef.current();
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  function close() {
+    if ((window.history.state as { fcClaim?: boolean } | null)?.fcClaim) window.history.back();
+    else onClose();
+  }
+
   // Opening animation: Assign button → scan box.
   useEffect(() => {
     const shell = shellRef.current;
@@ -2322,7 +2337,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
             leading={
               <button
                 type="button"
-                onClick={onClose}
+                onClick={close}
                 aria-label="Close"
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-lg"
                 style={{ borderColor: GOLD, color: "#e9c46a" }}
@@ -2374,7 +2389,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
                   </div>
                 </div>
                 <button
-                  onClick={onClose}
+                  onClick={close}
                   className="mt-2 h-11 w-full rounded-xl border-2 font-mono text-xs font-bold uppercase tracking-widest"
                   style={{ borderColor: GOLD, color: "#e9c46a" }}
                 >
