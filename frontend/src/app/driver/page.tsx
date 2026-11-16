@@ -284,6 +284,7 @@ export default function DriverPortalPage() {
   const [statusOrder, setStatusOrder] = useState<Order | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
+  const [claimFrom, setClaimFrom] = useState<DOMRect | null>(null);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
   type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets";
   const [view, setViewState] = useState<DriverView>("home");
@@ -1345,7 +1346,10 @@ export default function DriverPortalPage() {
         return (
         <div className="space-y-2">
           <button
-            onClick={() => setClaimOpen(true)}
+            onClick={(e) => {
+              setClaimFrom(e.currentTarget.getBoundingClientRect());
+              setClaimOpen(true);
+            }}
             className="flex w-full items-center gap-3 rounded-2xl bg-brass text-white shadow px-3.5 py-2 text-left active:scale-[0.98]"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg">📦</span>
@@ -1535,8 +1539,10 @@ export default function DriverPortalPage() {
 
       {claimOpen && (
         <ClaimModal
+          from={claimFrom}
           onClose={() => {
             setClaimOpen(false);
+            setClaimFrom(null);
             load();
           }}
         />
@@ -2199,17 +2205,56 @@ function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: strin
 
 // Driver scans parcels to take them. Each good scan becomes one of his Pending
 // orders straight away; only the office can remove or move an order afterwards.
-function ClaimModal({ onClose }: { onClose: () => void }) {
-  const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date }[]>([]);
+// Opens full-screen in black & gold: the gold Assign button flies up and turns
+// into the camera's scan box. Each scanned parcel can get a short comment.
+function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | null }) {
+  const [log, setLog] = useState<{ ok: boolean; already?: boolean; text: string; at: Date; orderId?: string; cnNo?: number }[]>([]);
+  const [note, setNote] = useState("");
+  const [noteState, setNoteState] = useState<"" | "saving" | "saved" | "error">("");
+  const shellRef = useRef<HTMLDivElement>(null);
+  const morphRef = useRef<HTMLDivElement>(null);
+
+  // Opening animation: Assign button → scan box.
+  useEffect(() => {
+    const shell = shellRef.current;
+    const m = morphRef.current;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    shell?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: reduce ? 120 : 260, easing: "ease-out" });
+    if (!m) return;
+    if (!from || reduce || !m.animate) {
+      m.style.display = "none";
+      return;
+    }
+    const W = Math.min(window.innerWidth, 448);
+    const width = W * 0.86;
+    const left = (window.innerWidth - W) / 2 + (W - width) / 2;
+    const height = Math.min(window.innerHeight * 0.24, width * 0.6);
+    const top = window.innerHeight * 0.45 - height / 2;
+    const box = { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, borderRadius: "8px" };
+    const a = m.animate(
+      [
+        { left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`, borderRadius: "16px", backgroundColor: "rgba(176,138,53,1)", borderColor: "rgba(233,196,106,0)", opacity: 1 },
+        { ...box, offset: 0.65, backgroundColor: "rgba(176,138,53,0.18)", borderColor: "rgba(233,196,106,1)", opacity: 1 },
+        { ...box, backgroundColor: "rgba(176,138,53,0)", borderColor: "rgba(233,196,106,1)", opacity: 0 },
+      ],
+      { duration: 700, easing: "cubic-bezier(.3,1.15,.5,1)", fill: "forwards" }
+    );
+    a.onfinish = () => {
+      m.style.display = "none";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onCode(code: string, confirm = false, vendorId?: string): Promise<void> {
     try {
-      const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string }>("/driver/scan-claim", {
+      const r = await apiFetch<{ result: "ACCEPTED" | "REASSIGNED" | "ALREADY"; message: string; order?: { id: string; cnNo: number } }>("/driver/scan-claim", {
         method: "POST",
         body: { code, ...(vendorId ? { vendorId } : {}), ...(confirm ? { confirm: true } : {}) },
       });
       beep(r.result !== "ALREADY");
-      setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date() }, ...prev]);
+      setNote("");
+      setNoteState("");
+      setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date(), orderId: r.order?.id, cnNo: r.order?.cnNo }, ...prev]);
     } catch (err) {
       // Matched only by the vendor's own bill No. — show what it is and ask.
       if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
@@ -2227,40 +2272,97 @@ function ClaimModal({ onClose }: { onClose: () => void }) {
   }
 
   const added = log.filter((l) => l.ok && !l.already).length;
+  const last = log[0];
+  // The comment goes on the latest parcel that scanned in fine.
+  const target = log.find((l) => l.ok && l.orderId);
+
+  async function saveNote() {
+    if (!target?.orderId || !note.trim()) return;
+    setNoteState("saving");
+    try {
+      await apiFetch(`/driver/orders/${target.orderId}/note`, { method: "PATCH", body: { note: note.trim() } });
+      setNoteState("saved");
+    } catch {
+      setNoteState("error");
+    }
+  }
+
+  const GOLD = "#b08a35";
+  const tone = !last ? "#8d8163" : !last.ok ? "#f09595" : last.already ? "#cfc6b0" : "#e9c46a";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-lg bg-white p-5 sm:rounded-lg">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-xl font-semibold text-navy">Assign orders to me</h2>
-          <span className="rounded bg-delivered-bg px-2 py-1 font-mono text-xs font-bold text-delivered">{added} added</span>
+    <>
+      <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
+        <div className="flex h-full w-full max-w-md flex-col">
+          <BarcodeScanner
+            variant="gold"
+            onCode={(c) => onCode(c)}
+            autoCamera
+            placeholder="Type CN number"
+            leading={
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-lg"
+                style={{ borderColor: GOLD, color: "#e9c46a" }}
+              >
+                ✕
+              </button>
+            }
+            footer={
+              <div className="px-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+                <div className="fc-gold-in rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p key={last?.at.getTime() ?? 0} className="fc-result min-w-0 truncate font-mono text-xs font-bold uppercase tracking-wider" style={{ color: tone }}>
+                      {last ? `${last.ok ? (last.already ? "• " : "✓ ") : "✕ "}${last.text}` : "Waiting for scan…"}
+                    </p>
+                    <span className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] font-bold uppercase" style={{ background: GOLD, color: "#141e33" }}>
+                      {added} added
+                    </span>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={note}
+                      onChange={(e) => {
+                        setNote(e.target.value);
+                        if (noteState) setNoteState("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveNote();
+                      }}
+                      disabled={!target}
+                      maxLength={200}
+                      placeholder={target ? `Comment for CN ${target.cnNo ?? ""}` : "Scan a parcel to add a comment"}
+                      className="h-10 min-w-0 flex-1 rounded-lg border px-3 text-sm uppercase outline-none placeholder:text-[#8d8163] disabled:opacity-50"
+                      style={{ borderColor: "#3a3322", background: "#05080f", color: "#f1efe8" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={saveNote}
+                      disabled={!target || !note.trim() || noteState === "saving"}
+                      className="h-10 shrink-0 rounded-lg px-3 font-mono text-xs font-bold uppercase disabled:opacity-40"
+                      style={{ background: noteState === "saved" ? "#97c459" : GOLD, color: "#141e33" }}
+                    >
+                      {noteState === "saving" ? "…" : noteState === "saved" ? "✓ Saved" : noteState === "error" ? "Retry" : "Save"}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="mt-2 h-11 w-full rounded-xl border-2 font-mono text-xs font-bold uppercase tracking-widest"
+                  style={{ borderColor: GOLD, color: "#e9c46a" }}
+                >
+                  Done
+                </button>
+                <style>{`@keyframes fcresult{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:none}} .fc-result{animation:fcresult .3s ease-out}`}</style>
+              </div>
+            }
+          />
         </div>
-        <p className="mb-4 text-sm text-ink-soft">Scan each parcel&apos;s barcode. It is added to your Pending list straight away.</p>
-
-        <BarcodeScanner
-          onCode={(c) => onCode(c)}
-          autoCamera
-          lastResult={log[0] ? { text: log[0].text, tone: !log[0].ok ? "bad" : log[0].already ? "warn" : "ok", id: log[0].at.getTime() } : null}
-        />
-
-        <div className="mt-4 space-y-1.5">
-          {log.map((l, i) => (
-            <div
-              key={i}
-              className={`rounded border px-3 py-2 text-sm ${
-                !l.ok ? "border-cancelled bg-cancelled-bg text-cancelled" : l.already ? "border-line bg-paper text-ink-soft" : "border-delivered bg-delivered-bg text-delivered"
-              }`}
-            >
-              {l.ok ? (l.already ? "• " : "✓ ") : "✕ "}
-              {l.text}
-            </div>
-          ))}
-        </div>
-
-        <button onClick={onClose} className="mt-5 w-full rounded bg-navy px-4 py-3 font-mono text-xs uppercase tracking-wide text-paper">
-          Done
-        </button>
       </div>
-    </div>
+      {/* The gold Assign button that flies up and becomes the scan box. */}
+      <div ref={morphRef} className="pointer-events-none fixed z-[60] border-2" style={{ borderColor: "transparent" }} />
+    </>
   );
 }

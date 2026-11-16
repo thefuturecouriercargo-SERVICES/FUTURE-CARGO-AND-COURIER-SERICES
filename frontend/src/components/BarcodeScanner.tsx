@@ -56,6 +56,8 @@ export default function BarcodeScanner({
   lastResult,
   leading,
   big,
+  variant = "default",
+  footer,
 }: {
   onCode: (code: string) => Promise<void> | void;
   disabled?: boolean;
@@ -67,6 +69,10 @@ export default function BarcodeScanner({
   leading?: ReactNode;
   /** Taller scan box and camera button. */
   big?: boolean;
+  /** "gold": full-screen black & gold scanner (CN box on top, camera in the middle). */
+  variant?: "default" | "gold";
+  /** Gold variant only: shown under the camera (result + comment box). */
+  footer?: ReactNode;
 }) {
   const [typed, setTyped] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
@@ -237,6 +243,86 @@ export default function BarcodeScanner({
     } catch {
       setTorch(null);
     }
+  }
+
+  if (variant === "gold") {
+    const GOLD = "#b08a35";
+    const corner = "pointer-events-none absolute h-6 w-6 fc-corner";
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <style>{`
+          @keyframes fcgoldin{from{opacity:0}to{opacity:1}}
+          @keyframes fccorner{from{opacity:0;transform:scale(1.35)}to{opacity:1;transform:none}}
+          @keyframes fcgoldline{0%{top:10%}50%{top:88%}100%{top:10%}}
+          .fc-gold-in{animation:fcgoldin .3s ease-out .35s both}
+          .fc-corner{animation:fccorner .45s cubic-bezier(.3,1.5,.5,1) .4s both}
+          .fc-gold-line{animation:fcgoldline 1.8s ease-in-out infinite}
+          @media (prefers-reduced-motion: reduce){.fc-gold-in,.fc-corner{animation:none}}
+        `}</style>
+        <div className="flex items-center gap-2 px-3 pt-3">
+          {leading}
+          <form onSubmit={onSubmit} className="min-w-0 flex-1">
+            <input
+              ref={inputRef}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              disabled={disabled}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={placeholder}
+              className="h-11 w-full rounded-xl border-2 px-3 font-mono text-sm uppercase tracking-wider outline-none placeholder:text-[#8d8163]"
+              style={{ borderColor: GOLD, background: "#0b111d", color: "#e9c46a" }}
+            />
+          </form>
+          <button
+            type="button"
+            onClick={toggleTorch}
+            disabled={torch === null}
+            aria-label="Light"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-lg disabled:opacity-30"
+            style={{ borderColor: GOLD, background: torch ? "#e9c46a" : "transparent" }}
+          >
+            🔦
+          </button>
+        </div>
+        <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-3">
+          <div className="fc-gold-in relative overflow-hidden rounded-lg">
+            <video ref={videoRef} className="block max-h-[calc(100dvh-260px)] max-w-full bg-black object-contain" muted playsInline />
+            {cameraOn && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                {/* Guide rectangle = the area that is decoded */}
+                <div className="relative" style={{ width: "86%", height: "40%", boxShadow: "0 0 0 9999px rgba(5,8,15,0.55)", borderRadius: 8 }}>
+                  <span className={`${corner} left-0 top-0 rounded-tl-lg border-l-[3px] border-t-[3px]`} style={{ borderColor: "#e9c46a" }} />
+                  <span className={`${corner} right-0 top-0 rounded-tr-lg border-r-[3px] border-t-[3px]`} style={{ borderColor: "#e9c46a" }} />
+                  <span className={`${corner} bottom-0 left-0 rounded-bl-lg border-b-[3px] border-l-[3px]`} style={{ borderColor: "#e9c46a" }} />
+                  <span className={`${corner} bottom-0 right-0 rounded-br-lg border-b-[3px] border-r-[3px]`} style={{ borderColor: "#e9c46a" }} />
+                  <div className="fc-gold-line absolute left-2 right-2 h-0.5" style={{ top: "50%", background: "#e9c46a" }} />
+                </div>
+              </div>
+            )}
+          </div>
+          {!cameraOn && !error && (
+            <p className="absolute font-mono text-xs uppercase tracking-widest" style={{ color: "#8d8163" }}>
+              Starting camera…
+            </p>
+          )}
+          {error && (
+            <div className="absolute inset-x-6 text-center">
+              <p className="text-sm uppercase text-red-300">{error}</p>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="mt-3 rounded-lg px-4 py-2 font-mono text-xs font-bold uppercase"
+                style={{ background: GOLD, color: "#141e33" }}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+        </div>
+        {footer}
+      </div>
+    );
   }
 
   return (
