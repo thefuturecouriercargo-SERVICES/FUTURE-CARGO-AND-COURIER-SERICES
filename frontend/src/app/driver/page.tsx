@@ -16,6 +16,8 @@ import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import DriverRace from "@/components/DriverRace";
 import DriverHistoryPage from "./history/page";
 import DriverPayrollPage from "./payroll/page";
+import DriverReturns from "@/components/DriverReturns";
+import DriverTargets from "@/components/DriverTargets";
 
 interface Summary {
   assigned: number;
@@ -247,15 +249,32 @@ export default function DriverPortalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [raceShown, setRaceShown] = useState(false);
-  // Counters and live race take turns on the flip card: 20 s each. A tap flips it and restarts the 20 s.
-  const [flipTick, setFlipTick] = useState(0);
+  // The counter box shows counters; a tap flips it to the live race and a tap on the race flips back.
+  // Only on the Deliveries page does it also auto-flip to the race for 15 s every 2 minutes.
+  const [autoOn, setAutoOn] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (!document.hidden) setRaceShown((v) => !v);
-      else setFlipTick((n) => n + 1);
-    }, 20000);
-    return () => clearTimeout(t);
-  }, [raceShown, flipTick]);
+    const sync = () => setAutoOn(window.location.hash === "#deliveries");
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, []);
+  useEffect(() => {
+    if (!autoOn) return;
+    let back: ReturnType<typeof setTimeout> | null = null;
+    const i = setInterval(() => {
+      if (document.hidden) return;
+      setRaceShown(true);
+      back = setTimeout(() => setRaceShown(false), 15000);
+    }, 120000);
+    return () => {
+      clearInterval(i);
+      if (back) clearTimeout(back);
+    };
+  }, [autoOn]);
   const [search, setSearch] = useState("");
   // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
   const [areaFilter, setAreaFilter] = useState("");
@@ -266,16 +285,16 @@ export default function DriverPortalPage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [claimOpen, setClaimOpen] = useState(false);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
-  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll";
+  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets";
   const [view, setViewState] = useState<DriverView>("home");
   // Home is a launcher; Deliveries (#deliveries), By area (#areas) and Cash closing (#cash)
   // are their own pages, so the phone's Back button returns to home.
-  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll" };
+  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll", returns: "#returns", targets: "#targets" };
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash;
       setViewState(
-        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : "home"
+        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : h === "#returns" ? "returns" : h === "#targets" ? "targets" : "home"
       );
     };
     sync();
@@ -289,6 +308,8 @@ export default function DriverPortalPage() {
       else window.history.pushState(null, "", want);
     }
     setViewState(v);
+    setAutoOn(v === "list");
+    setRaceShown(false);
     window.scrollTo(0, 0);
   }
   function goHome() {
@@ -1256,23 +1277,24 @@ export default function DriverPortalPage() {
           ["DELIVERED", "Delivered", nDel, "text-delivered"],
           ["CANCELLED", "Cancelled", nCan, "text-cancelled"],
         ] as const;
-        const hl = view === "list" ? statusTab : view === "home" ? "ALL" : null;
+        const hl = view === "list" ? statusTab : "ALL";
         return (
           <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
             <div className="flex items-stretch gap-2">
               <div className="min-w-0 flex-1">
                 <div key={raceShown ? "race" : "count"} className="flip-in h-full">
                   {raceShown ? (
-                    <DriverRace embedded />
+                    <DriverRace embedded onTap={() => setRaceShown(false)} />
                   ) : (
-                    <div className="h-full rounded-2xl bg-white p-3 shadow ring-1 ring-line">
+                    <div className="h-full cursor-pointer rounded-2xl bg-white p-3 shadow ring-1 ring-line" onClick={() => setRaceShown(true)}>
                       <div className="grid grid-cols-4 gap-1.5">
                         {tiles.map(([k, label, n, color]) => (
                           <button
                             key={k}
-                            onClick={() => {
+                            onClick={(e) => {
+                              if (view !== "list") return; // bubbles up → flips to the race
+                              e.stopPropagation();
                               setStatusTab(k);
-                              if (view !== "list") setView("list");
                             }}
                             className={`rounded-xl px-1 py-2 text-center transition ${hl === k ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
                           >
@@ -1371,6 +1393,28 @@ export default function DriverPortalPage() {
             <span className="text-lg opacity-50" aria-hidden>›</span>
           </button>
           <button
+            onClick={() => setView("returns")}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">↩️</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Pickups &amp; cancels</span>
+              <span className="block text-[11px] uppercase leading-tight text-ink-soft">To hand back to office</span>
+            </span>
+            <span className="text-lg opacity-50" aria-hidden>›</span>
+          </button>
+          <button
+            onClick={() => setView("targets")}
+            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-white text-xl">🏆</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Targets &amp; achievements</span>
+              <span className="block text-[11px] uppercase leading-tight text-ink-soft">Monthly target · records · badges</span>
+            </span>
+            <span className="text-lg opacity-50" aria-hidden>›</span>
+          </button>
+          <button
             onClick={() => setView("history")}
             className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-4 py-3.5 text-left active:scale-[0.98]"
           >
@@ -1396,6 +1440,10 @@ export default function DriverPortalPage() {
         );
       })()}
         </>
+      ) : view === "returns" ? (
+        <DriverReturns onBack={goHome} />
+      ) : view === "targets" ? (
+        <DriverTargets onBack={goHome} />
       ) : view === "history" ? (
         <div className="-mx-4">
           <DriverHistoryPage />

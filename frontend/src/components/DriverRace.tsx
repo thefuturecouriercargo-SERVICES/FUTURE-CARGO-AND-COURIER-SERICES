@@ -87,7 +87,7 @@ function ambient(me: RaceMe, now: Date, st: RaceStats | null, today: Today | nul
 }
 
 /** One-line live race to 12 midnight. Shows places only — never other drivers' counts. */
-export default function DriverRace({ embedded = false }: { embedded?: boolean } = {}) {
+export default function DriverRace({ embedded = false, onTap }: { embedded?: boolean; onTap?: () => void } = {}) {
   const L = embedded; // light card that sits on the back of the counters
   const [data, setData] = useState<RaceData | null>(null);
   const [width, setWidth] = useState(0);
@@ -194,7 +194,7 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
 
   if (!data || data.drivers.length === 0)
     return L ? (
-      <div className="flex h-full min-h-[92px] items-center justify-center rounded-2xl bg-white p-3 text-center font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft shadow ring-1 ring-line">
+      <div onClick={onTap} className="flex h-full min-h-[92px] items-center justify-center rounded-2xl bg-white p-3 text-center font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft shadow ring-1 ring-line">
         {data ? "Race starts with the first delivery" : "Loading race…"}
       </div>
     ) : null;
@@ -246,8 +246,8 @@ export default function DriverRace({ embedded = false }: { embedded?: boolean } 
     <div className={L ? "h-full" : "mb-3"}>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open my month"
+        onClick={() => (embedded ? onTap?.() : setOpen(true))}
+        aria-label={embedded ? "Show counters" : "Open my month"}
         className={`block w-full text-left active:scale-[0.99] ${L ? "h-full rounded-2xl bg-white p-3 text-navy shadow ring-1 ring-line" : "rounded-2xl bg-navy p-3 text-paper shadow-md"}`}
       >
         <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">

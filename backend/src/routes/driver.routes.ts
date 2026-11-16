@@ -12,6 +12,7 @@ import { emitGlobal, emitToUser } from "../lib/socket";
 import { salariesForMonth } from "../lib/salary";
 import { updateOrderContact, withContact } from "../lib/orderContact";
 import { EMIRATE_LABEL, prayerTimesFor } from "../lib/prayerTimes";
+import { collectList } from "./agentReport.routes";
 import { driverEmirate, pushConfigured, vapidPublicKey } from "../services/azanPush.service";
 const router = Router();
 router.use(authenticate, requireRole("DRIVER"));
@@ -379,6 +380,90 @@ router.get(
       daysLeft: Math.max(0, daysInMonth - dayOfMonth + 1),
       salary: { month: prevMonth, earned: Math.max(0, earned), received, pending: Math.max(0, earned - received), hasSalary: base > 0 },
       nextPrayer: { name: next.name, at: next.at },
+    });
+  })
+);
+
+// Driver's own cancelled and pickup parcels that must come back to the office.
+router.get(
+  "/returns",
+  asyncHandler(async (req, res) => {
+    const me = req.user!.sub;
+    const list = (await collectList()).filter((e) => e.order.employeeId === me);
+    const pack = (t: "CANCEL" | "PICKUP") =>
+      list
+        .filter((e) => e.type === t)
+        .sort((a, b) => Number(!!a.received) - Number(!!b.received) || b.since.getTime() - a.since.getTime())
+        .slice(0, 150)
+        .map((e) => ({
+          cn: e.cn,
+          on: new Date(e.since.getTime() + 4 * 3600 * 1000).toISOString().slice(0, 10),
+          receivedAt: e.received?.firstSeenAt.toISOString() ?? null,
+          vendor: e.order.vendor.name,
+          customer: e.order.booking?.customerName ?? null,
+          total: e.order.total,
+        }));
+    res.json({ cancel: pack("CANCEL"), pickup: pack("PICKUP") });
+  })
+);
+
+// Targets & achievements: this month's target plus personal records and badges.
+router.get(
+  "/achievements",
+  asyncHandler(async (req, res) => {
+    const me = req.user!.sub;
+    const rows: { d: string; n: number }[] = await prisma.$queryRaw<{ d: string; n: number }[]>`
+      SELECT to_char("resolvedAt" + interval '4 hours', 'YYYY-MM-DD') AS d, count(*)::int AS n
+      FROM orders WHERE "employeeId" = ${me} AND status = 'DELIVERED' AND "resolvedAt" IS NOT NULL
+      GROUP BY 1 ORDER BY 1`;
+    const today = new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+    const thisMonth = today.slice(0, 7);
+    const lifetime = rows.reduce((a, r) => a + r.n, 0);
+    const byMonth = new Map<string, number>();
+    for (const r of rows) byMonth.set(r.d.slice(0, 7), (byMonth.get(r.d.slice(0, 7)) ?? 0) + r.n);
+    const bestDay = rows.reduce<{ d: string; n: number } | null>((b, r) => (!b || r.n > b.n ? r : b), null);
+    const monthRows = rows.filter((r) => r.d.startsWith(thisMonth));
+    const bestDayMonth = monthRows.reduce<{ d: string; n: number } | null>((b, r) => (!b || r.n > b.n ? r : b), null);
+    let bestMonth: { m: string; n: number } | null = null;
+    for (const [m, n] of byMonth) if (!bestMonth || n > bestMonth.n) bestMonth = { m, n };
+    const todayN = rows.find((r) => r.d === today)?.n ?? 0;
+    // Days in a row (ending today or yesterday) with 20+ deliveries.
+    const set = new Map<string, number>(rows.map((r) => [r.d, r.n]));
+    let streak = 0;
+    const cur = new Date(today + "T00:00:00Z");
+    if ((set.get(today) ?? 0) < 20) cur.setUTCDate(cur.getUTCDate() - 1);
+    while ((set.get(cur.toISOString().slice(0, 10)) ?? 0) >= 20) {
+      streak++;
+      cur.setUTCDate(cur.getUTCDate() - 1);
+    }
+    const days30 = monthRows.filter((r) => r.n >= 30).length;
+    const monthDelivered = byMonth.get(thisMonth) ?? 0;
+    const badges = [
+      { key: "d20", label: "20 in a day", got: (bestDay?.n ?? 0) >= 20 },
+      { key: "d30", label: "30 in a day", got: (bestDay?.n ?? 0) >= 30 },
+      { key: "d40", label: "40 in a day", got: (bestDay?.n ?? 0) >= 40 },
+      { key: "d50", label: "50 in a day", got: (bestDay?.n ?? 0) >= 50 },
+      { key: "m350", label: "Half target", got: monthDelivered >= MONTH_TARGET / 2 },
+      { key: "m700", label: "Target hit", got: monthDelivered >= MONTH_TARGET },
+      { key: "l1000", label: "1,000 delivered", got: lifetime >= 1000 },
+      { key: "l5000", label: "5,000 delivered", got: lifetime >= 5000 },
+      { key: "s5", label: "5-day streak", got: streak >= 5 },
+    ];
+    res.json({
+      today: todayN,
+      month: thisMonth,
+      monthDelivered,
+      target: MONTH_TARGET,
+      bonusPer: EXTRA_BONUS,
+      bonus: Math.max(0, monthDelivered - MONTH_TARGET) * EXTRA_BONUS,
+      lifetime,
+      bestDay,
+      bestDayMonth,
+      bestMonth,
+      streak,
+      days30,
+      daysWorkedMonth: monthRows.length,
+      badges,
     });
   })
 );

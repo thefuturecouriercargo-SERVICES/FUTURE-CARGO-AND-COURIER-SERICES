@@ -494,6 +494,7 @@ async function pickupOrders(cns: string[]) {
     select: {
       cnNo: true,
       date: true,
+      employeeId: true,
       status: true,
       total: true,
       resolvedAt: true,
@@ -528,7 +529,7 @@ const orderOut = (o: PickupOrderRow) => ({
  *  - CANCEL: order Cancelled since the start (or RTO on the agent's Excel), not a pickup delivery.
  *  - PICKUP: pickup delivery done — Delivered since the start, or the agent's Excel/PDF shows it done.
  */
-async function collectList() {
+export async function collectList() {
   const since = pickupStartTs();
   const rto = await prisma.agentRecon.findMany({ where: { kind: "RTO_PICKUP", firstSeenAt: { gte: since } } });
   const done = await prisma.agentRecon.findMany({ where: { kind: { in: ["EXCEL_DELIVERED", "PDF_PAID"] }, firstSeenAt: { gte: since } } });
