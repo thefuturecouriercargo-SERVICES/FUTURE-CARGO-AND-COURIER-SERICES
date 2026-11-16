@@ -104,7 +104,13 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[13px] font-bold uppercase">
                 <span>
-                  {fmtNumber(a.monthDelivered)} − {fmtNumber(a.target)} = <span className="text-brass-light">{fmtNumber(extra)}</span> extra
+                  {extra > 0 ? (
+                    <>
+                      {fmtNumber(a.monthDelivered)} − {fmtNumber(a.target)} = <span className="text-brass-light">{fmtNumber(extra)}</span> extra
+                    </>
+                  ) : (
+                    <>0 extra</>
+                  )}
                 </span>
                 <span>
                   {fmtNumber(extra)} × {a.bonusPer} = <span className="text-[16px] text-brass-light">AED {fmtNumber(extra * a.bonusPer)}</span>
