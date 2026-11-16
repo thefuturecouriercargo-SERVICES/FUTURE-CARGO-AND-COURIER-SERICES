@@ -74,6 +74,9 @@ model User {
 phone         String?
   baseSalary    Int      @default(0)
   isAgent       Boolean  @default(false)
+  // KM & fuel tracking: driver must enter Start KM before deliveries and End KM at cash closing.
+  // null = never set (filled once on boot: on for Noushad, off for others).
+  kmTracking    Boolean?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -90,6 +93,8 @@ expenseEntries ExpenseEntry[]
   agentPayments  AgentPayment[] @relation("AgentPayments")
   cashHandovers  CashHandover[]
   pushSubscriptions PushSubscription[]
+  kmLogs         KmLog[]
+  fuelLogs       FuelLog[]
   @@map("users")
 }
 // A deduction from a driver's collected cash. Optionally tagged with the vendor
@@ -631,4 +636,60 @@ model ExpenseReminder {
 
   @@index([status])
   @@map("expense_reminders")
+}
+
+// One row per driver per duty day: odometer at start (before deliveries) and at end (cash closing).
+model KmLog {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      User      @relation(fields: [employeeId], references: [id])
+  date          DateTime  @db.Date
+  startKm       Int
+  startAt       DateTime  @default(now())
+  startPhotoId  String?
+  startReadKm   Int?      // what the photo reader saw on the meter
+  endKm         Int?
+  endAt         DateTime?
+  endPhotoId    String?
+  endReadKm     Int?
+  endMissed     Boolean   @default(false) // driver forgot End delivery; filled from next morning's Start KM
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("km_logs")
+}
+
+// Every fuel fill a driver adds (receipt photo read automatically when possible).
+model FuelLog {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      User     @relation(fields: [employeeId], references: [id])
+  date          DateTime @db.Date
+  amount        Float
+  litres        Float?
+  pricePerLitre Float?
+  odometer      Int?
+  station       String?
+  receiptAt     String?  // date/time printed on the receipt, as read
+  photoId       String?
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+  @@index([employeeId])
+  @@map("fuel_logs")
+}
+
+// Meter / fuel receipt photos (small JPEG copies). Kept separate so lists never load image bytes.
+model KmPhoto {
+  id         String   @id @default(cuid())
+  employeeId String
+  kind       String   // "METER" or "RECEIPT"
+  mime       String   @default("image/jpeg")
+  data       Bytes
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("km_photos")
 }

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { assertDeliveryStarted } from "../services/km.service";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -426,6 +427,8 @@ router.patch(
     if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
       throw new ApiError(403, "You can only update your own deliveries");
     }
+    // KM-tracked drivers must enter Start KM before any delivery update.
+    if (req.user!.role === "DRIVER") await assertDeliveryStarted(req.user!.sub);
 
   const { start: todayStart } = dayRange();
       const isCarryover = status !== "PENDING" && existing.date.getTime() < todayStart.getTime();

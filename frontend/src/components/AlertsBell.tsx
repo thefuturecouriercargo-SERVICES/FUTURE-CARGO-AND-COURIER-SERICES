@@ -150,10 +150,11 @@ export default function AlertsBell() {
   const load = useCallback(async () => {
     setLoading(true);
     const today = todayStr();
-    const [carry, bank, bookings] = await Promise.allSettled([
+    const [carry, bank, bookings, kmAlerts] = await Promise.allSettled([
       apiFetch<{ orders: Order[] }>("/orders/pending-carryover", { query: { date: today } }),
       apiFetch<{ orders: Order[] }>("/orders/unconfirmed-bank-carryover", { query: { date: today } }),
       apiFetch<{ awaitingCount: number }>("/bookings"),
+      apiFetch<{ alerts: { name: string; date: string; flag: string }[] }>("/km/alerts"),
     ]);
     const out: AlertGroup[] = [];
     if (carry.status === "fulfilled") {
@@ -194,6 +195,18 @@ export default function AlertsBell() {
         href: "/awaiting-pickup",
         cta: "Open",
         tone: "blue",
+      });
+    }
+    if (kmAlerts.status === "fulfilled" && kmAlerts.value.alerts.length) {
+      const a = kmAlerts.value.alerts;
+      out.push({
+        key: "km",
+        count: a.length,
+        title: "KM & fuel flags",
+        sub: a.slice(0, 2).map((x) => `${x.name} · ${fmtDate(x.date)} · ${x.flag}`).join(" — "),
+        href: "/km-fuel",
+        cta: "Open",
+        tone: "red",
       });
     }
     setGroups(out);

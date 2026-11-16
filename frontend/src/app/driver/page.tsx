@@ -19,6 +19,7 @@ import DriverPayrollPage from "./payroll/page";
 import DriverReturns from "@/components/DriverReturns";
 import DriverTargets from "@/components/DriverTargets";
 import DriverIcon from "@/components/DriverIcon";
+import { useKmStatus, KmStartCover, KmEntrySheet, KmEndButton, DriverFuel, type KmStatus } from "@/components/DriverKm";
 import Icon from "@/components/Icon";
 
 interface Summary {
@@ -251,9 +252,20 @@ export default function DriverPortalPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusTab, setStatusTab] = useState<OrderStatus | "ALL">("ALL");
   const [raceShown, setRaceShown] = useState(false);
+  // KM tracking: Start KM must be saved before the counter box, live race and delivery taps unlock.
+  const { km, reload: reloadKm } = useKmStatus();
+  const kmLocked = Boolean(km?.enabled && !km.started);
+  const [kmSheet, setKmSheet] = useState(false);
+  function needStart(): boolean {
+    if (!kmLocked) return false;
+    setKmSheet(true);
+    return true;
+  }
   // The counter box shows counters; a tap flips it to the live race and a tap on the race flips back.
   // Only on the Deliveries page does it also auto-flip to the race for 15 s every 2 minutes.
   const [autoOn, setAutoOn] = useState(false);
+  const kmLockedRef = useRef(false);
+  kmLockedRef.current = kmLocked;
   useEffect(() => {
     const sync = () => setAutoOn(window.location.hash === "#deliveries");
     sync();
@@ -268,7 +280,7 @@ export default function DriverPortalPage() {
     if (!autoOn) return;
     let back: ReturnType<typeof setTimeout> | null = null;
     const i = setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || kmLockedRef.current) return;
       setRaceShown(true);
       back = setTimeout(() => setRaceShown(false), 15000);
     }, 120000);
@@ -288,16 +300,16 @@ export default function DriverPortalPage() {
   const [claimOpen, setClaimOpen] = useState(false);
   const [claimFrom, setClaimFrom] = useState<DOMRect | null>(null);
   const [statusScanOpen, setStatusScanOpen] = useState(false);
-  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets";
+  type DriverView = "home" | "list" | "area" | "cash" | "history" | "payroll" | "returns" | "targets" | "fuel";
   const [view, setViewState] = useState<DriverView>("home");
   // Home is a launcher; Deliveries (#deliveries), By area (#areas) and Cash closing (#cash)
   // are their own pages, so the phone's Back button returns to home.
-  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll", returns: "#returns", targets: "#targets" };
+  const VIEW_HASH: Record<DriverView, string> = { home: "", list: "#deliveries", area: "#areas", cash: "#cash", history: "#history", payroll: "#payroll", returns: "#returns", targets: "#targets", fuel: "#fuel" };
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash;
       setViewState(
-        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : h === "#returns" ? "returns" : h === "#targets" ? "targets" : "home"
+        h === "#areas" ? "area" : h === "#deliveries" ? "list" : h === "#cash" ? "cash" : h === "#history" ? "history" : h === "#payroll" ? "payroll" : h === "#returns" ? "returns" : h === "#targets" ? "targets" : h === "#fuel" ? "fuel" : "home"
       );
     };
     sync();
@@ -563,6 +575,10 @@ export default function DriverPortalPage() {
   }, [checkMonthlyAchievement]);
 
   async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string, bankPaymentConfirmed?: boolean) {
+    if (needStart()) {
+      showToast("Start delivery first — enter your Start KM", "reminder");
+      return;
+    }
     // Also re-hits the payment endpoint if only the confirmation checkbox changed
     // (payment method itself staying BANK), not just on an actual CASH/BANK switch.
     if (payment !== order.payment || (payment === "BANK" && bankPaymentConfirmed !== order.bankPaymentConfirmed)) {
@@ -758,7 +774,10 @@ export default function DriverPortalPage() {
           )}
           <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location"><Icon name="pin" /></button>
           <button
-            onClick={() => setStatusOrder(o)}
+            onClick={() => {
+              if (needStart()) return;
+              setStatusOrder(o);
+            }}
             className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full font-mono text-[12.5px] font-bold uppercase tracking-wide text-white active:scale-[0.98] ${
               o.status === "DELIVERED" ? "bg-delivered" : o.status === "CANCELLED" ? "bg-cancelled" : "bg-pending"
             }`}
@@ -1057,7 +1076,10 @@ export default function DriverPortalPage() {
             </div>
           </div>
           <button
-            onClick={() => setStatusScanOpen(true)}
+            onClick={() => {
+              if (needStart()) return;
+              setStatusScanOpen(true);
+            }}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
           >
             <Icon name="scan" className="mr-1" />Scan
@@ -1305,11 +1327,13 @@ export default function DriverPortalPage() {
           <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
             <div className="flex items-stretch gap-2">
               <div className="min-w-0 flex-1">
-                <div key={raceShown ? "race" : "count"} className="flip-in h-full">
-                  {raceShown ? (
+                <div key={kmLocked && (view === "list" || view === "area") ? "km" : raceShown ? "race" : "count"} className="flip-in h-full">
+                  {kmLocked && km && (view === "list" || view === "area") ? (
+                    <KmStartCover km={km} onStart={() => setKmSheet(true)} />
+                  ) : raceShown ? (
                     <DriverRace embedded onTap={() => setRaceShown(false)} />
                   ) : (
-                    <div className="h-full cursor-pointer rounded-2xl bg-white p-3 shadow ring-1 ring-line" onClick={() => setRaceShown(true)}>
+                    <div className="h-full cursor-pointer rounded-2xl bg-white p-3 shadow ring-1 ring-line" onClick={() => { if (!kmLocked) setRaceShown(true); }}>
                       <div className="grid grid-cols-4 gap-1.5">
                         {tiles.map(([k, label, n, color]) => (
                           <button
@@ -1438,6 +1462,18 @@ export default function DriverPortalPage() {
           <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
           <span className="text-lg opacity-40" aria-hidden>›</span>
         </button>
+        {km?.enabled && (
+          <button
+            onClick={() => setView("fuel")}
+            className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+              <DriverIcon name="fuel" />
+            </span>
+            <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Fuel</span>
+            <span className="text-lg opacity-40" aria-hidden>›</span>
+          </button>
+        )}
         <button
           onClick={() => setView("cash")}
           className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-navy text-white shadow px-3.5 text-left active:scale-[0.98]"
@@ -1450,6 +1486,8 @@ export default function DriverPortalPage() {
         </button>
       </div>
         </>
+      ) : view === "fuel" && km?.enabled ? (
+        <DriverFuel km={km} onBack={goHome} onChanged={reloadKm} />
       ) : view === "returns" ? (
         <DriverReturns onBack={goHome} />
       ) : view === "targets" ? (
@@ -1469,7 +1507,14 @@ export default function DriverPortalPage() {
           Showing yesterday&apos;s ({cashClosingDate}) cash closing — still available until 10 AM.
         </p>
       )}
-      <CashClosingPanel date={cashClosingDate} readOnly={isShowingYesterday} onBack={goHome} onSubmitted={() => showToast("Cash closing submitted", "success")} />
+      <CashClosingPanel
+        date={cashClosingDate}
+        readOnly={isShowingYesterday}
+        onBack={goHome}
+        km={km}
+        onKmEnded={reloadKm}
+        onSubmitted={() => showToast("Cash closing submitted", "success")}
+      />
         </>
       ) : (
         <>
@@ -1484,7 +1529,10 @@ export default function DriverPortalPage() {
           className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none"
         />
         <button
-          onClick={() => setStatusScanOpen(true)}
+          onClick={() => {
+            if (needStart()) return;
+            setStatusScanOpen(true);
+          }}
           title="Scan a label to update its status"
           className="flex h-9 items-center gap-1 rounded-full bg-brass px-3 font-mono text-[11px] font-bold uppercase text-white"
         >
@@ -1587,6 +1635,19 @@ export default function DriverPortalPage() {
             const o = areaEdit;
             setAreaEdit(null);
             await changeArea(o, area);
+          }}
+        />
+      )}
+
+      {kmSheet && km?.enabled && (
+        <KmEntrySheet
+          mode="start"
+          km={km}
+          onClose={() => setKmSheet(false)}
+          onSaved={async () => {
+            setKmSheet(false);
+            await reloadKm();
+            showToast("Delivery started — good luck", "success");
           }}
         />
       )}
@@ -1987,7 +2048,21 @@ function StatusModal({
   );
 }
 
-function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: string; readOnly?: boolean; onSubmitted: () => void; onBack?: () => void }) {
+function CashClosingPanel({
+  date,
+  readOnly,
+  onSubmitted,
+  onBack,
+  km,
+  onKmEnded,
+}: {
+  date: string;
+  readOnly?: boolean;
+  onSubmitted: () => void;
+  onBack?: () => void;
+  km?: KmStatus | null;
+  onKmEnded?: () => void | Promise<void>;
+}) {
   interface PurchaseEntry {
     id: string;
     amount: number;
@@ -2199,7 +2274,17 @@ function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: strin
         <span className="font-display text-xl font-semibold text-navy">{fmtNumber(balance)} AED</span>
       </div>
 
-      {!readOnly && (
+      {km?.enabled && km.open ? (
+        <KmEndButton
+          km={km}
+          busy={busy}
+          onEnded={async () => {
+            await onKmEnded?.();
+            // End KM saved → submit this day's cash closing too (if it is the open, editable day).
+            if (!readOnly && km.open?.date.slice(0, 10) === date) await submit();
+          }}
+        />
+      ) : !readOnly && (
         <>
           <button onClick={submit} disabled={busy} className="rounded bg-navy px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-60">
             {busy ? "Submitting…" : existing ? "Re-submit cash closing" : "Submit cash closing"}

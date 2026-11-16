@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { kmEnabled } from "../services/km.service";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, ApiError } from "../utils/asyncHandler";
@@ -22,6 +23,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const data = submitSchema.parse(req.body);
     const { start } = dayRange(data.date);
+
+    // KM-tracked drivers close the day with "End delivery" (End KM) first.
+    if (await kmEnabled(req.user!.sub)) {
+      const log = await prisma.kmLog.findUnique({ where: { employeeId_date: { employeeId: req.user!.sub, date: start } } });
+      if (log && log.endKm == null) throw new ApiError(400, "Enter your End KM — tap END DELIVERY");
+    }
 
     const orders = await prisma.order.findMany({
       where: { employeeId: req.user!.sub, date: start, status: "DELIVERED" },

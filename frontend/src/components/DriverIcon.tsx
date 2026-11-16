@@ -48,6 +48,12 @@ const P: Record<string, React.ReactNode> = {
       <path d="M12 7.5V12l3 2" />
     </>
   ),
+  fuel: (
+    <>
+      <path d="M4 21V5a2 2 0 012-2h7a2 2 0 012 2v16M3 21h13" />
+      <path d="M7 7h5v4H7zM15 9h2a2 2 0 012 2v5a1.5 1.5 0 003 0V8l-3-3" />
+    </>
+  ),
   payroll: (
     <>
       <path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z" />
@@ -56,7 +62,7 @@ const P: Record<string, React.ReactNode> = {
   ),
 };
 
-export type DriverIconName = "assign" | "deliveries" | "area" | "cash" | "returns" | "targets" | "history" | "payroll";
+export type DriverIconName = "assign" | "deliveries" | "area" | "cash" | "returns" | "targets" | "history" | "payroll" | "fuel";
 
 export default function DriverIcon({ name, size = 22 }: { name: DriverIconName; size?: number }) {
   return (
