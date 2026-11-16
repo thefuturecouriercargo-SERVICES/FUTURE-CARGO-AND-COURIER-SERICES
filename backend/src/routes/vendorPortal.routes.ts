@@ -319,7 +319,7 @@ router.get(
           { emirate: text },
         ],
       },
-      include: { booking: { select: PORTAL_BOOKING_SELECT } },
+      include: { booking: { select: PORTAL_BOOKING_SELECT }, employee: { select: { name: true } } },
       orderBy: [{ date: "desc" }],
       take: 100,
     });

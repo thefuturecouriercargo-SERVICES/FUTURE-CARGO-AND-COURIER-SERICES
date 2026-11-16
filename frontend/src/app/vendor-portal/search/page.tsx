@@ -19,6 +19,7 @@ interface Hit {
   emirate: string;
   note?: string | null;
   area?: string;
+  driver?: string | null;
   booking?: OrderBookingDetails | null;
 }
 
@@ -32,6 +33,7 @@ interface SearchResponse {
     emirate: string;
     remarks?: string | null;
     area?: string | null;
+    employee?: { name: string } | null;
     booking?: OrderBookingDetails | null;
   }[];
   bookings: (OrderBookingDetails & { id: string; cnNo: number; status: string; createdAt: string; rejectReason?: string | null })[];
@@ -67,6 +69,7 @@ function Search() {
             emirate: o.emirate,
             note: o.remarks,
             area: o.area || detectArea(o.booking?.address, o.emirate),
+            driver: o.employee?.name ?? null,
             booking: o.booking,
           })),
         ];
@@ -106,6 +109,7 @@ function Search() {
                 {h.booking && <span className="ml-2">{h.booking.customerName}</span>}
                 <span className="ml-2 text-xs text-ink-soft">
                   {fmtDate(h.date)} · {h.area ? `${h.area} · ` : ""}{h.emirate} · {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
+                  {h.driver ? <> · Driver: <b className="text-navy">{h.driver}</b></> : null}
                 </span>
               </span>
               <VendorOrderStatus status={h.status} />
