@@ -20,6 +20,17 @@ export async function initKmTracking(): Promise<void> {
     await prisma.$executeRawUnsafe(
       `UPDATE "users" SET "kmTracking" = ("role" = 'DRIVER' AND UPPER("name") LIKE '%NOUSHAD%') WHERE "kmTracking" IS NULL`
     );
+    // One-time switch-ons requested later (skipped once done, so admin can still switch them off).
+    for (const name of ["SAVAD"]) {
+      const marker = `km-on:${name}`;
+      const done = await prisma.auditLog.findFirst({ where: { action: "KM_TRACKING_SET", entity: "Init", entityId: marker } });
+      if (done) continue;
+      const users = await prisma.user.findMany({ where: { role: "DRIVER", name: { contains: name, mode: "insensitive" } }, select: { id: true } });
+      for (const u of users) await prisma.user.update({ where: { id: u.id }, data: { kmTracking: true } });
+      const admin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN" }, select: { id: true } });
+      if (admin) await prisma.auditLog.create({ data: { userId: admin.id, action: "KM_TRACKING_SET", entity: "Init", entityId: marker } });
+      console.log(`[km] tracking switched on for ${name} (${users.length})`);
+    }
   } catch (err) {
     console.error("[km] init failed", err);
   }
