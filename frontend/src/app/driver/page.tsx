@@ -18,6 +18,7 @@ import DriverHistoryPage from "./history/page";
 import DriverPayrollPage from "./payroll/page";
 import DriverReturns from "@/components/DriverReturns";
 import DriverTargets from "@/components/DriverTargets";
+import DriverIcon from "@/components/DriverIcon";
 
 interface Summary {
   assigned: number;
@@ -358,6 +359,25 @@ export default function DriverPortalPage() {
   // gets a warning until they actually confirm the money landed, no matter how
   // many days pass.
   const [unconfirmedBankCarryover, setUnconfirmedBankCarryover] = useState<Order[]>([]);
+  // Home: the page boxes stretch to fill the screen exactly — no scroll, no empty space at the bottom.
+  const homeBoxesRef = useRef<HTMLDivElement | null>(null);
+  const [homeBoxesH, setHomeBoxesH] = useState<number | null>(null);
+  useEffect(() => {
+    if (view !== "home") return;
+    const fit = () => {
+      const el = homeBoxesRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setHomeBoxesH(Math.max(8 * 46 + 7 * 8, window.innerHeight - top - 12));
+    };
+    fit();
+    const t = setTimeout(fit, 300);
+    window.addEventListener("resize", fit);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", fit);
+    };
+  }, [view, unconfirmedBankCarryover.length]);
   const loadUnconfirmedBank = useCallback(async () => {
     const res = await apiFetch<{ orders: Order[] }>("/orders/unconfirmed-bank-carryover", { query: { date } });
     setUnconfirmedBankCarryover(res.orders);
@@ -1238,7 +1258,7 @@ export default function DriverPortalPage() {
 
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3">
+    <div className={`mx-auto max-w-5xl px-4 pt-3 ${view === "home" ? "pb-3" : "pb-8"}`}>
       {awaitingBankConfirm ? (
         <div className="fixed bottom-24 right-4 z-50 max-w-[220px] rounded border border-pending bg-pending-bg px-3 py-2.5 text-xs shadow-lg">
           <span className="font-semibold text-pending">Is the payment received?</span> Say &quot;yes&quot; or &quot;no&quot;.
@@ -1342,95 +1362,91 @@ export default function DriverPortalPage() {
         </div>
       )}
 
-      {(() => {
-        return (
-        <div className="space-y-2">
-          <button
-            onClick={(e) => {
-              setClaimFrom(e.currentTarget.getBoundingClientRect());
-              setClaimOpen(true);
-            }}
-            className="flex w-full items-center gap-3 rounded-2xl bg-brass text-white shadow px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg">📦</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Assign</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => { setStatusTab("ALL"); setView("list"); }}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">📋</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Deliveries</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("area")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">📍</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">By area</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("cash")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-navy text-white shadow px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brass text-navy text-lg">💵</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Cash closing</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("returns")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">↩️</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Pickups &amp; cancels</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("targets")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🏆</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Targets &amp; achievements</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("history")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🕘</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">History</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-          <button
-            onClick={() => setView("payroll")}
-            className="flex w-full items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 py-2 text-left active:scale-[0.98]"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-white text-lg">🧾</span>
-            <span className="min-w-0 flex-1">
-              <span className="block font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
-            </span>
-            <span className="text-lg opacity-50" aria-hidden>›</span>
-          </button>
-        </div>
-        );
-      })()}
+      <div ref={homeBoxesRef} className="flex flex-col gap-2" style={{ height: homeBoxesH ?? undefined }}>
+        <button
+          onClick={(e) => {
+            setClaimFrom(e.currentTarget.getBoundingClientRect());
+            setClaimOpen(true);
+          }}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-brass text-white shadow px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-white/20 text-white">
+            <DriverIcon name="assign" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Assign</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => { setStatusTab("ALL"); setView("list"); }}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="deliveries" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Deliveries</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("area")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="area" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">By area</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("returns")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="returns" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Pickups &amp; cancels</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("targets")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="targets" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Targets &amp; achievements</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("history")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="history" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">History</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("payroll")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-white text-navy shadow ring-1 ring-line px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-[#E9D9B4] text-navy">
+            <DriverIcon name="payroll" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Payroll</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+        <button
+          onClick={() => setView("cash")}
+          className="flex min-h-[46px] w-full flex-1 items-center gap-3 rounded-2xl bg-navy text-white shadow px-3.5 text-left active:scale-[0.98]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] bg-white/10 text-brass-light">
+            <DriverIcon name="cash" />
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[13px] font-bold uppercase leading-tight">Cash closing</span>
+          <span className="text-lg opacity-40" aria-hidden>›</span>
+        </button>
+      </div>
         </>
       ) : view === "returns" ? (
         <DriverReturns onBack={goHome} />
