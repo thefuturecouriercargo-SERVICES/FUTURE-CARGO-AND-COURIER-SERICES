@@ -795,6 +795,14 @@ export function emirateFromAddress(emirate?: string | null, address?: string | n
   const named = Object.keys(EMIRATE_WORDS).filter((k) => EMIRATE_WORDS[k].test(text));
   if (named.length === 1) return named[0];
   if (named.length > 1) return em;
+  // Dubai / Sharjah / Ajman picked, but the address only names Abu Dhabi areas (plus "Al Nahda",
+  // which several emirates have) → Abu Dhabi ("Baniyas Al Wathba Al Nahda District" saved as Sharjah).
+  // "Baniyas Square / Road / Metro" is Deira, Dubai — that stays.
+  if (NORTH.has(em) && !/\bbani[\s\-']*yas[\s\-']*(?:square|sq|road|rd|metro|street|st)\b/i.test(text)) {
+    const hit = (k: string) => BY_EMIRATE[k].some(([re, n]) => !/^AL NAHDA/.test(n) && re.test(text));
+    const capital = ["ABUDHABI", "AL AIN"].filter(hit);
+    if (capital.length === 1 && !Array.from(NORTH).some(hit)) return capital[0];
+  }
   const owner = emirateOfAreaName(detectArea(text, em));
   return owner && owner !== em ? owner : em;
 }
