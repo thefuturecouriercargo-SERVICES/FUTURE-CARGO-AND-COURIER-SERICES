@@ -97,8 +97,24 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
                 </>
               )}
             </div>
-            <div className="mt-2 text-center font-mono text-[10px] uppercase text-white/70">
-              Every delivery after {fmtNumber(a.target)} = AED {a.bonusPer} bonus
+            <div className="mt-3 rounded-xl bg-white/10 px-3 py-2.5">
+              <div className="flex items-baseline justify-between font-mono text-[10px] font-bold uppercase tracking-wide text-white/70">
+                <span>Bonus calculation</span>
+                <span>AED {a.bonusPer} per delivery after {fmtNumber(a.target)}</span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[13px] font-bold uppercase">
+                <span>
+                  {fmtNumber(a.monthDelivered)} − {fmtNumber(a.target)} = <span className="text-brass-light">{fmtNumber(extra)}</span> extra
+                </span>
+                <span>
+                  {fmtNumber(extra)} × {a.bonusPer} = <span className="text-[16px] text-brass-light">AED {fmtNumber(extra * a.bonusPer)}</span>
+                </span>
+              </div>
+              {left > 0 && (
+                <div className="mt-1 font-mono text-[10px] uppercase text-white/60">
+                  Bonus starts after {fmtNumber(left)} more · 100 extra = AED {fmtNumber(100 * a.bonusPer)}
+                </div>
+              )}
             </div>
           </section>
 
