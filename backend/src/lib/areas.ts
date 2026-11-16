@@ -334,7 +334,7 @@ const AJMAN: AreaRule[] = [
   [/\b(?:al[\s\-]*)?sawan\b|\bajman[\s\-']*one\b/i, "AL SAWAN"],
   [/\bgarden[\s\-']*city\b/i, "GARDEN CITY"],
   [/\bajman[\s\-']*downtown\b|\bajman[\s\-']*corniche\b|\bajman[\s\-']*city[\s\-']*cent(re|er)\b/i, "AJMAN DOWNTOWN"],
-  [/\bajman[\s\-']*industrial\b|\bnew[\s\-']*industrial[\s\-']*area\b/i, "AJMAN INDUSTRIAL"],
+  [/\bajman[\s\-']*ind(?:ustrial|\.)?(?=[\s\-']|$)|\bnew[\s\-']*industrial[\s\-']*area\b/i, "AJMAN INDUSTRIAL"],
   [/\b(?:al[\s\-]*)?manama\b/i, "AL MANAMA"],
   [/\bmasfout\b/i, "MASFOUT"],
 ];
@@ -559,6 +559,9 @@ export function detectArea(address?: string | null, emirate?: string | null): st
     // "Al Nahda 1" / "Al Nahda 2" are Dubai's (Sharjah's Al Nahda has no numbers).
     if (/\bnah[a]?d[h]?a[\s\-]*[12]\b/i.test(text)) return "AL NAHDA (DXB)";
   }
+  // Ajman has its own Industrial Areas (1, 2, 3…): an Ajman parcel with "Ind. Area 1" is
+  // Ajman Industrial — never Sharjah's Industrial Area 1 (EW slip "Ajman / Ind. Area 1").
+  if ((emirate ?? "").toUpperCase() === "AJMAN" && /\bind(?:ustrial|\.)?\b|\bsana[iy]+a?h?\b/i.test(text) && !/\b(sharjah|sharja|sharjha|shj|dubai|dxb)\b/i.test(text) && !AJMAN.some(([re, n]) => n !== "AJMAN INDUSTRIAL" && re.test(text))) return "AJMAN INDUSTRIAL";
   // "Industrial area" next to a Dubai district (Al Qusais Industrial Area 1, Al Quoz Ind 3,
   // Ras Al Khor Industrial…) is that Dubai district — not Sharjah's industrial areas,
   // even when Sharjah was picked as the emirate. Only an address that writes "Sharjah" stays Sharjah.
