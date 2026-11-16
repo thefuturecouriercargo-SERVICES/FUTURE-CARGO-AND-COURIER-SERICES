@@ -7,6 +7,7 @@ import { Vendor } from "@/types";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import RowActions from "@/components/ui/RowActions";
+import Icon from "@/components/Icon";
 const emptyForm = { name: "", deliveryCharge: "", username: "", password: "" };
 
 export default function VendorsPage() {
@@ -94,7 +95,7 @@ export default function VendorsPage() {
           }}
           className="ml-auto rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase text-navy hover:bg-paper"
         >
-          🔑 Reset all to default
+          <Icon name="key" className="mr-1" />Reset all to default
         </button>
       </div>
 

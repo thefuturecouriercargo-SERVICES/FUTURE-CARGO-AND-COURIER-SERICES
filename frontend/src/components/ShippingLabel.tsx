@@ -6,6 +6,7 @@ import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber, fmtDate } from "@/lib/format";
 import { detectArea, isWesternArea, emirateOfAreaName } from "@/lib/areas";
+import Icon from "@/components/Icon";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
 
@@ -226,7 +227,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
         <div style={sq || items.length > 14 ? clamp(2) : clamp(3)}>{booking.address}</div>
         <div style={{ fontWeight: 800, textTransform: "uppercase", fontSize: sq ? 12 : 14 }}>
-          📍 {(() => {
+          <Icon name="pin" className="mr-1" />{(() => {
             // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
             const a = detectArea(booking.address, booking.emirate);
             const saved = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
@@ -266,7 +267,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
                   style={{ minHeight: fit.row * 0.8, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined, fontSize: "0.8em" }}
                 >
                   <span className="min-w-0 flex-1" style={{ fontWeight: 700, fontStyle: "italic", ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
-                    🎁 {it.name}
+                    {it.name}
                   </span>
                   {hasPrices && (
                     <span className="shrink-0 pl-1 text-right" style={{ width: fit.cols === 1 ? fit.priceW : undefined, fontWeight: 700, whiteSpace: "nowrap" }}>

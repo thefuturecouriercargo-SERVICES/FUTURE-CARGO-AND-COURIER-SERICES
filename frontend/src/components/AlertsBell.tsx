@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSocketEvent } from "@/lib/useSocketEvent";
 import { fmtDate, fmtNumber } from "@/lib/format";
 import { toast } from "@/components/ui/Feedback";
+import Icon from "@/components/Icon";
 
 interface Reminder {
   id: string;
@@ -299,7 +300,7 @@ export default function AlertsBell() {
           >
             <div className="flex items-center justify-between border-b border-[#1F2A40] bg-[#1A1220] px-4 py-3">
               <span className="font-display text-[15px] font-semibold text-white">
-                🔔 Reminder{reminders.length > 1 ? "s" : ""} from manager
+                <Icon name="bell" className="mr-1" />Reminder{reminders.length > 1 ? "s" : ""} from manager
                 <span className="ml-2 rounded-full bg-[#EF4444]/20 px-2 py-0.5 text-[11px] font-bold text-[#FCA5A5]">{reminders.length}</span>
               </span>
               <button onClick={() => setRemOpen(false)} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full border border-[#2A3550] text-lg">

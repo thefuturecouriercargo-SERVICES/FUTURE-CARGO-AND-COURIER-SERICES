@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDateTime } from "@/lib/format";
+import Icon from "@/components/Icon";
 
 interface Status {
   configured: boolean;
@@ -170,7 +171,7 @@ export default function InspiredSyncPanel({ onSynced, conn = "inspired", compact
                 : " · connected"
               : " · not connected"}
           </span>
-          {last && last.errors.length > 0 && <span className="text-cancelled"> · ⚠</span>}
+          {last && last.errors.length > 0 && <span className="text-cancelled"> · <Icon name="alert" /></span>}
         </button>
         {status.configured && (
           <button

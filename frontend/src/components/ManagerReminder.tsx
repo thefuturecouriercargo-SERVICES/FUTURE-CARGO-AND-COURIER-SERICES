@@ -6,6 +6,7 @@ import { todayStr, fmtNumber } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/components/ui/Feedback";
 import { Employee } from "@/types";
+import Icon from "@/components/Icon";
 
 export const EXPENSE_TYPES = [
   "FUEL", "SALARY", "SALIK", "DARB", "PARKING", "CAR_WASH", "WORKSHOP", "ROOM_RENT", "CAR_RENT",
@@ -72,7 +73,7 @@ export default function ManagerReminder({ compact }: { compact?: boolean }) {
         style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="mb-3 flex items-center justify-between">
-          <div className="font-display text-lg font-semibold text-navy">🔔 Remind admin</div>
+          <div className="font-display text-lg font-semibold text-navy"><Icon name="bell" className="mr-1" />Remind admin</div>
           <button type="button" onClick={() => setOpen(false)} className="grid h-9 w-9 place-items-center rounded-full border border-line text-lg" aria-label="Close">
             ×
           </button>
@@ -123,7 +124,7 @@ export default function ManagerReminder({ compact }: { compact?: boolean }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Fuel for Anas car" className="touch-target mb-4 w-full rounded-xl border border-line px-3 text-sm" />
 
         <button type="button" disabled={busy} onClick={save} className="touch-target w-full rounded-xl bg-navy text-sm font-semibold text-paper hover:bg-navy-2 disabled:opacity-60">
-          {busy ? "Sending…" : "🔔 Remind"}
+          {busy ? "Sending…" : <><Icon name="bell" className="mr-1" />Remind</>}
         </button>
 
         {mine.length > 0 && (
@@ -155,7 +156,7 @@ export default function ManagerReminder({ compact }: { compact?: boolean }) {
         onClick={() => setOpen(true)}
         className={compact ? "h-9 rounded-xl border border-brass bg-white px-3 text-xs font-semibold text-navy hover:bg-brass/10" : "touch-target rounded-xl border border-brass bg-white px-4 text-sm font-semibold text-navy hover:bg-brass/10"}
       >
-        🔔 Remind
+        <Icon name="bell" className="mr-1" />Remind
       </button>
       {modal}
     </>

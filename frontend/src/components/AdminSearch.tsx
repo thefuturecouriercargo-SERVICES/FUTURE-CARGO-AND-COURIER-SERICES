@@ -8,6 +8,7 @@ import { fmtNumber, fmtDate } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
 import SearchHitCard from "@/components/SearchHitCard";
 import { OrderBookingDetails } from "@/types";
+import Icon from "@/components/Icon";
 
 type Stage = "AWAITING_PICKUP" | "REJECTED" | "PENDING" | "DELIVERED" | "TRANSFER" | "CANCELLED";
 
@@ -246,7 +247,7 @@ export default function AdminSearch() {
                         {area ? ` · ${area}` : ""} · {h.emirate}
                         {" · "}
                         {h.amount === 0 && h.booking ? "Prepaid" : `AED ${fmtNumber(h.amount)}`}
-                        {h.driver ? ` · 🚚 ${h.driver}` : ""}
+                        {h.driver ? <> · <Icon name="truck" className="mr-0.5" />{h.driver}</> : ""}
                       </span>
                       {h.matched.length > 0 && (
                         <span className="mt-1 flex flex-wrap gap-1">

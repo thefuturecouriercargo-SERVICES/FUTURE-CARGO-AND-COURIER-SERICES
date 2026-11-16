@@ -11,6 +11,7 @@ import OrderDetails from "@/components/OrderDetails";
 
 import VendorHeader from "@/components/VendorHeader";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 interface VendorOrder {
   id: string;
   date: string;
@@ -379,7 +380,7 @@ function VendorPortalContent() {
                           <td className="font-mono">
                             <button onClick={() => setOpenId(openId === o.id ? null : o.id)} className="whitespace-nowrap text-left hover:text-brass hover:underline">
                               {openId === o.id ? "▾" : "▸"} {o.cnNo}
-                              {o.booking && <span className="ml-1">👤</span>}
+                              {o.booking && <span className="ml-1"><Icon name="user" /></span>}
                             </button>
                             {o.booking && <div className="text-[11px] text-ink-soft">{o.booking.customerName}</div>}
                           </td>

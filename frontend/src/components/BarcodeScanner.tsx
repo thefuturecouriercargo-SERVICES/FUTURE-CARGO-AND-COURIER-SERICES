@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import Icon from "@/components/Icon";
 type Detector = { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> };
 
 export function beep(ok = true) {
@@ -293,7 +294,7 @@ export default function BarcodeScanner({
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-lg disabled:opacity-30"
             style={{ borderColor: GOLD, background: torch ? "#e9c46a" : "transparent" }}
           >
-            🔦
+            <Icon name="flashlight" />
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3">
@@ -349,7 +350,7 @@ export default function BarcodeScanner({
             disabled={disabled}
             className={`shrink-0 font-mono text-xs uppercase tracking-wide disabled:opacity-40 ${big ? "min-w-[64px] rounded-xl bg-navy px-4 font-bold text-paper" : "rounded bg-navy px-4 text-paper"}`}
           >
-            📷 Camera
+            <Icon name="camera" className="mr-1" />Camera
           </button>
         ) : (
           <button type="button" onClick={stopCamera} className="shrink-0 rounded bg-cancelled px-4 font-mono text-xs uppercase tracking-wide text-white">
@@ -386,7 +387,8 @@ export default function BarcodeScanner({
           </div>
           {torch !== null && (
             <button type="button" onClick={toggleTorch} className="absolute bottom-2 right-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-bold text-navy shadow">
-              {torch ? "🔦 Light off" : "🔦 Light"}
+              <Icon name="flashlight" className="mr-1" />
+              {torch ? "Light off" : "Light"}
             </button>
           )}
         </div>

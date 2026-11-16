@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Booking } from "@/types";
 import ShippingLabel, { LABEL_SIZES, LabelSize, pageCss } from "@/components/ShippingLabel";
+import Icon from "@/components/Icon";
 
 const SIZE_KEY = "labelSize";
 
@@ -127,7 +128,7 @@ export default function LabelSheet({
           disabled={bookings.length === 0}
           className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-50"
         >
-          🖨 Print
+          <Icon name="printer" className="mr-1" />Print
         </button>
       </div>
 

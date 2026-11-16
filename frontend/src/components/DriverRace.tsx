@@ -7,6 +7,7 @@ import { useSocketEvent } from "@/lib/useSocketEvent";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { detectArea } from "@/lib/areas";
 import type { Order } from "@/types";
+import Icon from "@/components/Icon";
 
 interface RacePin { code: string; name: string; rank: number; pos: number; me: boolean }
 interface RaceMe { rank: number; delivered: number; total: number; ahead: { name: string; need: number } | null; behind: { name: string; gap: number } | null }
@@ -46,23 +47,23 @@ function ambient(me: RaceMe, now: Date, st: RaceStats | null, today: Today | nul
   const out: string[] = [];
   // Next round number today: 28 → "2 more to hit 30".
   const nextTen = Math.ceil((me.delivered + 1) / 10) * 10;
-  if (me.delivered > 0 && nextTen - me.delivered <= 3) out.push(`Just ${nextTen - me.delivered} more to hit ${nextTen} today! 🔥`);
+  if (me.delivered > 0 && nextTen - me.delivered <= 3) out.push(`Just ${nextTen - me.delivered} more to hit ${nextTen} today!`);
   if (st) {
     out.push(`${monName(st.month)}: ${st.monthDelivered} delivered so far`);
     if (st.left > 0) {
       const perDay = Math.ceil(st.left / Math.max(1, st.daysLeft));
       out.push(`${st.left} more to hit the ${st.target} target · ~${perDay} a day`);
     } else {
-      out.push(`Target ${st.target} done! +${st.extra} extra = ${aed(st.bonus)} bonus 💰`);
+      out.push(`Target ${st.target} done! +${st.extra} extra = ${aed(st.bonus)} bonus`);
       out.push(`Every extra delivery = AED ${st.bonusPer} more`);
     }
     if (st.salary.hasSalary) {
       const m = monName(st.salary.month);
-      out.push(st.salary.pending > 0 ? `${m} salary: ${aed(st.salary.received)} received · ${aed(st.salary.pending)} to come` : `${m} salary fully received ✅`);
+      out.push(st.salary.pending > 0 ? `${m} salary: ${aed(st.salary.received)} received · ${aed(st.salary.pending)} to come` : `${m} salary fully received`);
     }
     const mins = Math.round((new Date(st.nextPrayer.at).getTime() - now.getTime()) / 60000);
     const pn = PRAYER[st.nextPrayer.name] ?? st.nextPrayer.name.toUpperCase();
-    if (mins >= 0 && mins <= 25) out.push(`${pn} in ${mins} min — don't miss your namaz 🕌`);
+    if (mins >= 0 && mins <= 25) out.push(`${pn} in ${mins} min — don't miss your namaz`);
     else if (mins > 25 && mins <= 90) out.push(`Next namaz: ${pn} in ${Math.floor(mins / 60) ? `${Math.floor(mins / 60)}h ` : ""}${mins % 60}m`);
   }
   if (today) {
@@ -74,7 +75,7 @@ function ambient(me: RaceMe, now: Date, st: RaceStats | null, today: Today | nul
   if (me.ahead) {
     out.push(me.ahead.need <= 2 ? `Just ${me.ahead.need} more and you pass ${me.ahead.name}!` : `${me.ahead.need} more to catch ${me.ahead.name}`);
   } else {
-    out.push("You're leading the race 👑");
+    out.push("You're leading the race");
     if (me.behind) out.push(me.behind.gap <= 1 ? `${me.behind.name} is right behind you — don't slow down` : `Leading by ${me.behind.gap} — keep it up`);
   }
   if (me.ahead && me.behind && me.behind.gap <= 1) out.push(`${me.behind.name} is close behind you`);
@@ -120,7 +121,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
           const myOld = was(meNow.code)!;
           if (meNow.rank < myOld) {
             const passed = d.drivers.filter((p) => !p.me && (was(p.code) ?? 99) < myOld && p.rank > meNow.rank).map((p) => p.name);
-            ev = { tone: "good", text: meNow.rank === 1 ? `You took the lead! ${passed.length ? passed.join(" & ") + " overtaken" : ""} 👑` : `You overtook ${passed.join(" & ") || "a driver"}! Now P${meNow.rank} 🔥` };
+            ev = { tone: "good", text: meNow.rank === 1 ? `You took the lead! ${passed.length ? passed.join(" & ") + " overtaken" : ""}` : `You overtook ${passed.join(" & ") || "a driver"}! Now P${meNow.rank}` };
           } else if (meNow.rank > myOld) {
             const by = d.drivers.filter((p) => !p.me && (was(p.code) ?? 99) > myOld && p.rank < meNow.rank).map((p) => p.name);
             ev = { tone: "bad", text: `${by.join(" & ") || "Someone"} just passed you — take it back!` };
@@ -221,7 +222,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
   });
   const noOneYet = !data.drivers.some((p) => p.pos > 0);
   const pool = noOneYet && data.yesterdayWinner
-    ? [`Yesterday's winner: ${data.yesterdayWinner.name} 🏆`, "New race — first delivery takes the lead"]
+    ? [`Yesterday's winner: ${data.yesterdayWinner.name}`, "New race — first delivery takes the lead"]
     : data.me
       ? ambient(data.me, new Date(), stats, today)
       : [];
@@ -370,7 +371,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
                 )}
 
                 <div className="rounded-lg bg-[#1E3A2A] px-3 py-2 text-center font-mono text-[11px] font-bold uppercase tracking-wide text-[#4ADE80]">
-                  🕌 Next namaz: {PRAYER[stats.nextPrayer.name] ?? stats.nextPrayer.name} ·{" "}
+                  <Icon name="mosque" className="mr-1" />Next namaz: {PRAYER[stats.nextPrayer.name] ?? stats.nextPrayer.name} ·{" "}
                   {new Date(stats.nextPrayer.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" })}
                 </div>
               </div>

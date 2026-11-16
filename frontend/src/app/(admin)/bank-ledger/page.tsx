@@ -11,6 +11,7 @@ import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 type SortKey = "cnNo" | "total" | "confirmed";
 type SortDir = "asc" | "desc";
 
@@ -215,7 +216,7 @@ export default function BankLedgerPage() {
         {carryover.length > 0 && (
           <div className="mb-6 border border-pending bg-pending-bg p-5">
             <h2 className="mb-1 font-display text-[17px] font-semibold text-pending">
-              ⚠ Carried Forward — Still Unconfirmed ({carryover.length})
+              <Icon name="alert" className="mr-1" />Carried Forward — Still Unconfirmed ({carryover.length})
             </h2>
             <p className="mb-4 max-w-2xl text-sm text-pending">
               Bank payments from previous days that still haven&apos;t been confirmed received. These stay here,
@@ -274,7 +275,7 @@ export default function BankLedgerPage() {
             </div>
           </div>
           <div className="border border-cancelled bg-cancelled-bg p-4">
-            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-cancelled">⚠ Unconfirmed</div>
+            <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-cancelled"><Icon name="alert" className="mr-1" />Unconfirmed</div>
             <div className="font-display text-xl font-semibold text-cancelled">
               {totals.unconfirmedCount} <span className="text-sm font-normal">({fmtNumber(totals.unconfirmedTotal)} AED)</span>
             </div>
@@ -336,7 +337,7 @@ export default function BankLedgerPage() {
               >
                 <option value="">All</option>
                 <option value="yes">✓ Confirmed only</option>
-                <option value="no">⚠ Unconfirmed only</option>
+                <option value="no">Unconfirmed only</option>
               </select>
             </div>
             {activeFilterCount > 0 && (
@@ -362,7 +363,7 @@ export default function BankLedgerPage() {
               disabled={bulkSaving}
               className="rounded border border-cancelled px-4 py-2 font-mono text-xs uppercase tracking-wide text-cancelled hover:bg-cancelled-bg disabled:opacity-60"
             >
-              ⚠ Mark Unconfirmed
+              <Icon name="alert" className="mr-1" />Mark Unconfirmed
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
@@ -426,7 +427,7 @@ export default function BankLedgerPage() {
                             o.bankPaymentConfirmed ? "bg-delivered text-white" : "bg-cancelled text-white"
                           }`}
                         >
-                          {o.bankPaymentConfirmed ? "✓ Confirmed" : "⚠ Unconfirmed"}
+                          {o.bankPaymentConfirmed ? "✓ Confirmed" : <><Icon name="alert" className="mr-1" />Unconfirmed</>}
                         </button>
                       </td>
                     </tr>

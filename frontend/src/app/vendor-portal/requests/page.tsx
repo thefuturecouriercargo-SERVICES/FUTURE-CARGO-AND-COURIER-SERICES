@@ -6,6 +6,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { VendorAuthProvider } from "@/context/VendorAuthContext";
 import VendorShell from "@/components/VendorShell";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 
 interface CustomerRequest {
   id: string;
@@ -100,14 +101,14 @@ function Requests() {
   return (
     <>
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Customer link</p>
-      <h1 className="mb-3 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">📥 Customer requests</h1>
+      <h1 className="mb-3 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]"><Icon name="inbox" className="mr-1" />Customer requests</h1>
 
       <div className="mb-5 rounded border border-line bg-white p-3">
         <div className="mb-1.5 text-sm text-ink-soft">Send this link to your customer — they fill in their address and location:</div>
         <div className="flex flex-wrap items-center gap-2">
           <code className="min-w-0 flex-1 truncate rounded bg-paper px-2 py-1.5 text-sm text-navy">{link}</code>
           <button onClick={copyLink} className="rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-navy">
-            {copied ? "✓ Copied" : "📋 Copy"}
+            {copied ? "✓ Copied" : <><Icon name="copy" className="mr-1" />Copy</>}
           </button>
           <a
             href={`https://wa.me/?text=${encodeURIComponent(share)}`}
@@ -115,7 +116,7 @@ function Requests() {
             rel="noopener noreferrer"
             className="rounded bg-delivered px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-white"
           >
-            💬 Share on WhatsApp
+            <Icon name="message" className="mr-1" />Share on WhatsApp
           </a>
         </div>
       </div>
@@ -133,7 +134,7 @@ function Requests() {
           <span>{msg.text}</span>
           {msg.bookingId && (
             <button onClick={() => router.push(`/vendor-portal/labels?ids=${msg.bookingId}`)} className="rounded bg-navy px-3 py-1 font-mono text-[11px] font-bold uppercase text-paper">
-              🖨 Print label
+              <Icon name="printer" className="mr-1" />Print label
             </button>
           )}
         </div>
@@ -153,7 +154,7 @@ function Requests() {
               <div key={r.id} className="rounded border border-line bg-white p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div className="text-base">
-                    👤 <b>{r.customerName}</b> · <a href={`tel:${r.customerPhone}`} className="font-mono text-navy underline">{r.customerPhone}</a>
+                    <Icon name="user" className="mr-1" /><b>{r.customerName}</b> · <a href={`tel:${r.customerPhone}`} className="font-mono text-navy underline">{r.customerPhone}</a>
                   </div>
                   <span className="font-mono text-[11px] text-ink-soft">{when(r.createdAt)}</span>
                 </div>
@@ -170,7 +171,7 @@ function Requests() {
                       rel="noopener noreferrer"
                       className="inline-block rounded border border-delivered px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-delivered"
                     >
-                      📍 Location pinned — view map
+                      <Icon name="pin" className="mr-1" />Location pinned — view map
                     </a>
                   ) : (
                     <span className="inline-block rounded bg-pending-bg px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-pending">No GPS pin — address only</span>

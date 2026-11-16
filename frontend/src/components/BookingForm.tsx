@@ -9,6 +9,7 @@ import { apiFetch, ApiClientError } from "@/lib/api";
 import { ESCALO_PRODUCTS, INSPIRED_PRODUCTS } from "@/lib/products";
 
 import { confirmDialog } from "@/components/ui/Feedback";
+import Icon from "@/components/Icon";
 interface Props {
   /** When set, the form edits this booking instead of creating a new one. */
   editing?: Booking | null;
@@ -74,8 +75,8 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
     if (p.notes?.startsWith("Prepaid")) warn.push("ℹ Message says paid — amount set to 0.");
     setPasteMsg(
       filled.length
-        ? [`✓ Filled ${filled.join(", ")}. ✨ AI is double-checking…`, ...warn].join("\n")
-        : "✨ AI is reading the message…"
+        ? [`✓ Filled ${filled.join(", ")}. AI is double-checking…`, ...warn].join("\n")
+        : "AI is reading the message…"
     );
     aiCheck(paste, next);
   }
@@ -120,10 +121,10 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
       const missing = [!a.customerName && "name", !a.customerPhone && "phone", !a.address && "address", !a.items && "items", a.codAmount == null && "amount"].filter(Boolean);
       if (missing.length) warn.push(`⚠ Not in the message: ${missing.join(", ")} — please type ${missing.length > 1 ? "them" : "it"}.`);
       if (a.unclear?.length) warn.push(`⚠ AI wasn't sure about: ${a.unclear.join(", ")}.`);
-      setPasteMsg([`✨ AI checked the message${changed.length ? ` and corrected ${changed.join(", ")}` : " — all fields agree"}. Please check before saving.`, ...warn].join("\n"));
+      setPasteMsg([`AI checked the message${changed.length ? ` and corrected ${changed.join(", ")}` : " — all fields agree"}. Please check before saving.`, ...warn].join("\n"));
     } catch {
       if (run !== aiRun.current) return;
-      setPasteMsg((m) => m.replace("✨ AI is double-checking…", "Please check every field before saving. (AI check not available right now.)").replace("✨ AI is reading the message…", "Couldn't recognise anything — please type the details in."));
+      setPasteMsg((m) => m.replace("AI is double-checking…", "Please check every field before saving. (AI check not available right now.)").replace("AI is reading the message…", "Couldn't recognise anything — please type the details in."));
     } finally {
       if (run === aiRun.current) setAiBusy(false);
     }
@@ -225,7 +226,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
               disabled={!paste.trim() || aiBusy}
               className="rounded border border-navy bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2 disabled:opacity-40"
             >
-              {aiBusy ? "✨ Reading…" : "⤵ Fill form from message"}
+              {aiBusy ? <><Icon name="sparkles" className="mr-1" />Reading…</> : "⤵ Fill form from message"}
             </button>
             {pasteMsg && <span className={`whitespace-pre-line text-xs ${pasteMsg.includes("⚠") ? "font-semibold text-cancelled" : "text-ink-soft"}`}>{pasteMsg}</span>}
           </div>

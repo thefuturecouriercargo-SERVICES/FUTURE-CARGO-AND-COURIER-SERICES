@@ -19,6 +19,7 @@ import DriverPayrollPage from "./payroll/page";
 import DriverReturns from "@/components/DriverReturns";
 import DriverTargets from "@/components/DriverTargets";
 import DriverIcon from "@/components/DriverIcon";
+import Icon from "@/components/Icon";
 
 interface Summary {
   assigned: number;
@@ -172,7 +173,7 @@ function AddressTicker({ text }: { text: string }) {
   }, [text]);
   return (
     <div className="mt-1 flex max-w-full items-center gap-1 overflow-hidden text-[13px] text-ink">
-      <span className="shrink-0">🏠</span>
+      <span className="shrink-0"><Icon name="home" /></span>
       <div ref={boxRef} className="relative min-w-0 flex-1 overflow-hidden whitespace-nowrap">
         {long ? (
           <span className="addr-ticker inline-block pr-10" style={{ animationDuration: `${Math.max(7, text.length / 5)}s` }}>
@@ -728,7 +729,7 @@ export default function DriverPortalPage() {
             ⇄ Pickup delivery — collect from customer{o.total > 0 ? ` · charge AED ${fmtNumber(o.total)}` : " · no payment"}
           </div>
         )}
-        {isUrgent(o) && <div className="mt-1.5 text-[13px] font-bold text-cancelled">🚨 {o.booking?.notes}</div>}
+        {isUrgent(o) && <div className="mt-1.5 text-[13px] font-bold text-cancelled"><Icon name="alert" className="mr-1" />{o.booking?.notes}</div>}
         {o.total < 0 && (
           <div className="mt-1.5 rounded bg-transferred-bg px-2 py-1 text-center font-mono text-[12px] font-bold uppercase text-transferred">
             ↩ Refund — give customer AED {fmtNumber(-o.total)}
@@ -742,7 +743,7 @@ export default function DriverPortalPage() {
             {age !== null && <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${agingBadgeClass(age)}`}>{age}d old</span>}
             {o.driverNote && (o.status === "PENDING" || o.status === "TRANSFER") && (
               <span className="font-semibold text-pending">
-                🚚 {o.driverNote}
+                <Icon name="truck" className="mr-1" />{o.driverNote}
                 {o.driverNoteAt ? ` · ${new Date(o.driverNoteAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
               </span>
             )}
@@ -751,11 +752,11 @@ export default function DriverPortalPage() {
         )}
         <div className="mt-2.5 flex items-center gap-2">
           {o.booking?.customerPhone ? (
-            <a href={`tel:${o.booking.customerPhone}`} className={round} title="Call customer" aria-label="Call customer">📞</a>
+            <a href={`tel:${o.booking.customerPhone}`} className={round} title="Call customer" aria-label="Call customer"><Icon name="phone" /></a>
           ) : (
-            <span className={`${round} opacity-30`}>📞</span>
+            <span className={`${round} opacity-30`}><Icon name="phone" /></span>
           )}
-          <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location">📍</button>
+          <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location"><Icon name="pin" /></button>
           <button
             onClick={() => setStatusOrder(o)}
             className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full font-mono text-[12.5px] font-bold uppercase tracking-wide text-white active:scale-[0.98] ${
@@ -763,7 +764,7 @@ export default function DriverPortalPage() {
             }`}
             title="Tap to change status"
           >
-            {o.status === "DELIVERED" ? "✓ Delivered" : o.status === "CANCELLED" ? "✕ Cancelled" : "⏳ Pending"}
+            {o.status === "DELIVERED" ? "✓ Delivered" : o.status === "CANCELLED" ? "✕ Cancelled" : <><Icon name="hourglass" className="mr-1" />Pending</>}
             <span className="text-[10px] opacity-80">▾</span>
           </button>
           <button
@@ -1059,7 +1060,7 @@ export default function DriverPortalPage() {
             onClick={() => setStatusScanOpen(true)}
             className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
           >
-            📷 Scan
+            <Icon name="scan" className="mr-1" />Scan
           </button>
         </div>
         <div className="mt-2 grid grid-cols-3 gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-line">
@@ -1089,7 +1090,7 @@ export default function DriverPortalPage() {
                 setAreaSuggestOpen(true);
               }}
               onFocus={() => setAreaSuggestOpen(true)}
-              placeholder="🔎  Search area…"
+              placeholder="Search area…"
               className={`w-full rounded-full border px-4 py-2.5 text-sm shadow-sm outline-none focus:border-navy ${areaFilter ? "border-navy bg-navy/5 font-bold uppercase text-navy" : "border-line bg-white"}`}
             />
             {(areaFilter || areaTyped) && (
@@ -1128,7 +1129,7 @@ export default function DriverPortalPage() {
                         }}
                         className="rounded-full border border-navy/30 bg-paper px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-navy hover:border-brass"
                       >
-                        📍 {a} <span className="text-ink-soft">({n})</span>
+                        <Icon name="pin" className="mr-1" />{a} <span className="text-ink-soft">({n})</span>
                       </button>
                     ))}
                   </div>
@@ -1144,7 +1145,7 @@ export default function DriverPortalPage() {
 
       {areaGroups.length === 0 ? (
         <div className="rounded border border-line bg-white py-14 text-center text-ink-soft">
-          <div className="mb-1 font-display text-lg text-navy">{areaTab === "OPEN" ? "All delivered 🎉" : "Nothing here"}</div>
+          <div className="mb-1 font-display text-lg text-navy">{areaTab === "OPEN" ? "All delivered" : "Nothing here"}</div>
           {areaTab === "OPEN" ? "No parcels left to deliver." : "No parcels match."}
         </div>
       ) : (
@@ -1169,7 +1170,7 @@ export default function DriverPortalPage() {
                       rel="noopener noreferrer"
                       className="shrink-0 rounded-full bg-delivered px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase text-white shadow-sm"
                     >
-                      🗺 Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
+                      <Icon name="route" className="mr-1" />Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
                     </a>
                   ))}
                   <span className="flex shrink-0 flex-col">
@@ -1211,7 +1212,8 @@ export default function DriverPortalPage() {
                             onClick={() => setNoteOpenId(o.id)}
                             className="w-full border-t border-line bg-paper px-3 py-1.5 text-left font-mono text-[10.5px] uppercase text-ink-soft"
                           >
-                            {o.driverNote ? "✎ Change note" : "📝 Not delivered? add a note"}
+                            <Icon name="note" className="mr-1" />
+                            {o.driverNote ? "Change note" : "Not delivered? add a note"}
                           </button>
                         ) : (
                         <div className="flex flex-wrap items-center gap-1 border-t border-line bg-paper px-2 py-1.5">
@@ -1346,7 +1348,7 @@ export default function DriverPortalPage() {
       {unconfirmedBankCarryover.length > 0 && (
         <div className="mb-6 border border-pending bg-pending-bg p-4">
           <h2 className="mb-1 font-display text-base font-semibold text-pending">
-            ⚠ {unconfirmedBankCarryover.length} bank payment{unconfirmedBankCarryover.length === 1 ? "" : "s"} still unconfirmed
+            <Icon name="alert" className="mr-1" />{unconfirmedBankCarryover.length} bank payment{unconfirmedBankCarryover.length === 1 ? "" : "s"} still unconfirmed
           </h2>
           <p className="mb-3 text-xs text-pending">
             From previous days — admin or manager will confirm these once the money is verified received.
@@ -1474,7 +1476,7 @@ export default function DriverPortalPage() {
       <div className="mb-4 flex items-center gap-2">
       <button type="button" onClick={goHome} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
       <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-white py-1 pl-4 pr-1 shadow-sm ring-1 ring-line">
-        <span className="text-ink-soft">🔎</span>
+        <span className="text-ink-soft"><Icon name="search" /></span>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -1486,7 +1488,7 @@ export default function DriverPortalPage() {
           title="Scan a label to update its status"
           className="flex h-9 items-center gap-1 rounded-full bg-brass px-3 font-mono text-[11px] font-bold uppercase text-white"
         >
-          📷 Scan
+          <Icon name="scan" className="mr-1" />Scan
         </button>
         {voiceAssistant.supported && (
           <button
@@ -1494,7 +1496,7 @@ export default function DriverPortalPage() {
             title="Voice assistant — say a CN number to search, or add a command like 'delivered bank'"
             className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition ${voiceAssistant.listening ? "animate-pulse bg-cancelled text-white" : "bg-navy text-paper"}`}
           >
-            🎙
+            <Icon name="mic" />
           </button>
         )}
       </div>
@@ -1514,7 +1516,7 @@ export default function DriverPortalPage() {
               </div>
               <div className="min-w-0 flex-1">
                 {renderAreaCard(o)}
-                <div className="px-3 pb-2 font-mono text-[10px] uppercase text-ink-soft">📍 {areaOf(o)}</div>
+                <div className="px-3 pb-2 font-mono text-[10px] uppercase text-ink-soft"><Icon name="pin" className="mr-1" />{areaOf(o)}</div>
               </div>
             </div>
           ))}
@@ -1647,7 +1649,7 @@ export default function DriverPortalPage() {
       {achievement && (
         <div className="fixed inset-x-0 top-16 z-50 flex justify-center px-4">
           <div className="flex animate-[achievement-pop_0.5s_cubic-bezier(0.34,1.56,0.64,1)_forwards] items-center gap-3 bg-navy px-5 py-3.5 text-paper shadow-xl">
-            <span className="text-2xl">🏆</span>
+            <span className="text-2xl"><Icon name="trophy" /></span>
             <div>
               <div className="text-sm font-semibold">{achievement.title}</div>
               <div className="font-mono text-[10px] uppercase tracking-wide text-brass-light">{achievement.subtitle}</div>
@@ -1660,7 +1662,7 @@ export default function DriverPortalPage() {
               rel="noopener noreferrer"
               className="ml-2 rounded border border-brass-light px-2.5 py-1.5 font-mono text-[10px] uppercase text-brass-light hover:bg-white/10"
             >
-              📤 Share
+              <Icon name="share" className="mr-1" />Share
             </a>
           </div>
         </div>
@@ -1677,7 +1679,7 @@ function AreaPickerModal({ order, areas, onClose, onPick }: { order: Order; area
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-4 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-navy">📍 Area for CN {order.cnNo}</h2>
+          <h2 className="font-display text-lg font-semibold text-navy"><Icon name="pin" className="mr-1" />Area for CN {order.cnNo}</h2>
           <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
             ×
           </button>
@@ -1746,7 +1748,7 @@ function StatusScanModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-5 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-xl font-semibold text-navy">📷 Scan to update status</h2>
+          <h2 className="font-display text-xl font-semibold text-navy"><Icon name="scan" className="mr-1" />Scan to update status</h2>
           <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
             ×
           </button>
@@ -2092,7 +2094,7 @@ function CashClosingPanel({ date, readOnly, onSubmitted, onBack }: { date: strin
       </div>
       {readOnly && (
         <p className="mb-3 inline-block rounded border border-pending bg-white px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-pending">
-          🔒 Read-only — yesterday&apos;s closing, locked
+          <Icon name="lock" className="mr-1" />Read-only — yesterday&apos;s closing, locked
         </p>
       )}
       <p className="mb-5 text-xs text-ink-soft">
@@ -2425,7 +2427,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
                 <span className="min-w-0" style={{ color: !l.ok ? "#f09595" : l.already ? "#cfc6b0" : "#e9c46a" }}>
                   {l.ok ? (l.already ? "• " : "✓ ") : "✕ "}
                   {l.text}
-                  {l.note && <span className="mt-0.5 block" style={{ color: "#cfc6b0" }}>💬 {l.note}</span>}
+                  {l.note && <span className="mt-0.5 block" style={{ color: "#cfc6b0" }}><Icon name="message" className="mr-1" />{l.note}</span>}
                 </span>
                 <span className="shrink-0" style={{ color: "#8d8163" }}>
                   {l.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

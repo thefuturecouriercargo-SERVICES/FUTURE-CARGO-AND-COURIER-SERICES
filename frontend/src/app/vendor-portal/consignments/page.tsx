@@ -14,6 +14,7 @@ import { Booking, BookingInput } from "@/types";
 
 import VendorHeader from "@/components/VendorHeader";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -149,7 +150,7 @@ function ConsignmentsContent() {
         {stopState.active ? (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-2 border-pending bg-pending-bg px-4 py-3">
             <div className="text-sm text-pending">
-              <b>⏸ Today&apos;s orders stopped at {new Date(stopState.stoppedAt!).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" })}.</b>{" "}
+              <b><Icon name="pause" className="mr-1" />Today&apos;s orders stopped at {new Date(stopState.stoppedAt!).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dubai" })}.</b>{" "}
               New orders (website and manual) now go to <b>tomorrow&apos;s</b> list. Starts again by itself after midnight.
             </div>
             <button onClick={() => toggleStop(false)} className="rounded border border-pending bg-white px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-pending">
@@ -162,7 +163,7 @@ function ConsignmentsContent() {
               onClick={() => window.confirm("Stop taking orders for today?\n\nOrders from now on will show in tomorrow's list.") && toggleStop(true)}
               className="rounded border-2 border-cancelled bg-white px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-cancelled hover:bg-cancelled-bg"
             >
-              ⏹ Stop today&apos;s orders
+              <Icon name="stop" className="mr-1" />Stop today&apos;s orders
             </button>
           </div>
         )}
@@ -176,7 +177,7 @@ function ConsignmentsContent() {
             </div>
             <span className="flex gap-2">
               <button onClick={() => printLabels([justSaved.id])} className="rounded bg-navy px-3 py-1.5 font-mono text-[11px] uppercase text-paper hover:bg-navy-2">
-                🖨 Print label
+                <Icon name="printer" className="mr-1" />Print label
               </button>
               <button onClick={() => setJustSaved(null)} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase">
                 Close
@@ -190,7 +191,7 @@ function ConsignmentsContent() {
             onClick={() => setShowPhotos(!showPhotos)}
             className={`rounded px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide ${showPhotos ? "border border-navy bg-white text-navy" : "bg-navy text-paper hover:bg-navy-2"}`}
           >
-            {showPhotos ? "✕ Close photos" : "📷 Enter orders from photos"}
+            {showPhotos ? "✕ Close photos" : <><Icon name="camera" className="mr-1" />Enter orders from photos</>}
           </button>
         </div>
         {showPhotos && (
@@ -227,8 +228,8 @@ function ConsignmentsContent() {
           {/* Website / Manual switch — each with its own total */}
           <div className="mb-4 grid gap-3 sm:grid-cols-3">
             {([
-              { key: "WEBSITE" as Source, label: "🌐 From website", list: web },
-              { key: "MANUAL" as Source, label: "✍ Manual entry", list: manual },
+              { key: "WEBSITE" as Source, label: "From website", list: web },
+              { key: "MANUAL" as Source, label: "Manual entry", list: manual },
             ]).map((t) => (
               <button
                 key={t.key}
@@ -284,14 +285,14 @@ function ConsignmentsContent() {
                 onClick={() => printLabels(shown.map((b) => b.id))}
                 className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper hover:bg-navy-2"
               >
-                🖨 Print all ({shown.length})
+                <Icon name="printer" className="mr-1" />Print all ({shown.length})
               </button>
               {shown.some((b) => !b.labelPrintedAt) && (
                 <button
                   onClick={() => printLabels(shown.filter((b) => !b.labelPrintedAt).map((b) => b.id))}
                   className="rounded border border-navy bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-navy hover:bg-paper-2"
                 >
-                  🖨 Print new only ({shown.filter((b) => !b.labelPrintedAt).length})
+                  <Icon name="printer" className="mr-1" />Print new only ({shown.filter((b) => !b.labelPrintedAt).length})
                 </button>
               )}
             </div>
@@ -301,7 +302,7 @@ function ConsignmentsContent() {
             <div className="mb-3 flex items-center gap-3 bg-paper-2 px-3 py-2 text-sm">
               <span>{selected.size} selected</span>
               <button onClick={() => printLabels(Array.from(selected))} className="rounded bg-navy px-3 py-1.5 font-mono text-[11px] uppercase text-paper hover:bg-navy-2">
-                🖨 Print labels
+                <Icon name="printer" className="mr-1" />Print labels
               </button>
               <button onClick={() => setSelected(new Set())} className="text-xs text-ink-soft hover:underline">
                 Clear
@@ -370,7 +371,7 @@ function ConsignmentsContent() {
                             className={`ml-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${b.webStatus === "completed" ? "bg-delivered-bg text-delivered" : "bg-pending-bg text-pending"}`}
                             title="Status on your website"
                           >
-                            🌐 {b.webStatus}
+                            <Icon name="globe" className="mr-1" />{b.webStatus}
                           </span>
                         )}
                       </td>
@@ -380,7 +381,7 @@ function ConsignmentsContent() {
                       <td className="whitespace-nowrap">
                         {b.hasPhoto && (
                           <a href={`/api/vendor-portal/bookings/${b.id}/photo${vendorTabToken() ? `?vt=${encodeURIComponent(vendorTabToken()!)}` : ""}`} target="_blank" rel="noreferrer" className="mr-2 text-xs text-brass hover:underline" title="Original slip photo">
-                            📷
+                            <Icon name="camera" />
                           </a>
                         )}
                         <button onClick={() => printLabels([b.id])} className="mr-2 text-xs text-brass hover:underline">
@@ -399,7 +400,7 @@ function ConsignmentsContent() {
                             </button>
                             {b.labelPrintedAt ? (
                               <span className="text-xs text-ink-soft" title="Label already printed — ask Future Courier to cancel it">
-                                🔒 Printed
+                                <Icon name="lock" className="mr-1" />Printed
                               </span>
                             ) : (
                               <button onClick={() => remove(b)} className="text-xs text-cancelled hover:underline">

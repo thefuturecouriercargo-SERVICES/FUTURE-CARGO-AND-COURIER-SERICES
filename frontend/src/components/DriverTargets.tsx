@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtDate, fmtNumber } from "@/lib/format";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 
 interface Ach {
   today: number;
@@ -171,7 +172,7 @@ export default function DriverTargets({ onBack }: { onBack: () => void }) {
                       className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center ${b.got ? "bg-brass/15 ring-1 ring-brass/50" : "bg-paper opacity-60"}`}
                     >
                       <span className={`flex h-9 w-9 items-center justify-center rounded-full text-base ${b.got ? (g === "month" ? "bg-brass text-white" : "bg-navy text-brass-light") : "bg-line text-ink-soft"}`}>
-                        {b.got ? "★" : "🔒"}
+                        <Icon name={b.got ? "star" : "lock"} size={16} />
                       </span>
                       <span className={`font-mono text-[9.5px] font-bold uppercase leading-tight ${b.got ? "text-navy" : "text-ink-soft"}`}>{b.label}</span>
                     </div>

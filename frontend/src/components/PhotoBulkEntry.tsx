@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { EW_AGENTS, NO_AGENT, PICKUP_RE } from "@/lib/notes";
+import Icon from "@/components/Icon";
 
 /**
  * Bulk entry from photos of handwritten order slips (e.g. a vendor that only
@@ -326,7 +327,7 @@ export default function PhotoBulkEntry({
   return (
     <div className="border-2 border-navy bg-white p-4 md:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h2 className="font-display text-xl font-semibold text-navy">📷 Read order photos</h2>
+        <h2 className="font-display text-xl font-semibold text-navy"><Icon name="camera" className="mr-1" />Read order photos</h2>
         <span className="text-sm text-ink-soft">Select all the slip photos at once (or paste them). Check each one, then Save all.</span>
       </div>
 
@@ -368,7 +369,7 @@ export default function PhotoBulkEntry({
           onClick={() => (mode === "admin" && !vendorId ? alert("Choose the vendor first.") : fileRef.current?.click())}
           className="rounded bg-brass px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-white hover:opacity-90"
         >
-          ➕ Add photos
+          <Icon name="plus" className="mr-1" />Add photos
         </button>
         {cards.length > 0 && (
           <>
@@ -377,14 +378,14 @@ export default function PhotoBulkEntry({
               disabled={savingAll || !readyOk.length}
               className="rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2 disabled:opacity-50"
             >
-              {savingAll ? "Saving…" : `💾 Save all checked (${readyOk.length})`}
+              {savingAll ? "Saving…" : <><Icon name="save" className="mr-1" />Save all checked ({readyOk.length})</>}
             </button>
             {saved.length > 0 && (
               <button
                 onClick={() => onPrint(saved.map((c) => c.booking!.id))}
                 className="rounded border border-navy bg-white px-4 py-2 font-mono text-xs uppercase tracking-wide text-navy hover:bg-paper-2"
               >
-                🖨 Labels for saved ({saved.length})
+                <Icon name="printer" className="mr-1" />Labels for saved ({saved.length})
               </button>
             )}
             <button
@@ -409,7 +410,7 @@ export default function PhotoBulkEntry({
       {saved.length > 0 && notSaved.length > 0 && !savingAll && reading === 0 && (
         <div className="mb-3 border-2 border-cancelled bg-cancelled-bg p-3 text-sm text-cancelled">
           <b>
-            ⚠ {saved.length} saved · {notSaved.length} NOT saved
+            <Icon name="alert" className="mr-1" />{saved.length} saved · {notSaved.length} NOT saved
           </b>{" "}
           — fix or remove {notSaved.length === 1 ? "it" : "them"}:
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -460,7 +461,7 @@ export default function PhotoBulkEntry({
 
               {c.status === "blocked" && (
                 <div className="py-2 text-sm">
-                  <p className="font-bold text-cancelled">⛔ {c.message}</p>
+                  <p className="font-bold text-cancelled"><Icon name="ban" className="mr-1" />{c.message}</p>
                   <button onClick={() => setCards((l) => l.filter((x) => x.key !== c.key))} className="mt-1 text-xs text-cancelled hover:underline">
                     Remove this card
                   </button>

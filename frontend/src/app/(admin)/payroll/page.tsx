@@ -12,6 +12,7 @@ import { confirmDialog } from "@/components/ui/Feedback";
 import { PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
+import Icon from "@/components/Icon";
 interface PayrollRow {
   id: string;
   month: string;
@@ -402,7 +403,7 @@ export default function PayrollPage() {
       <div id="entry-form" className={`mb-6 border p-5 ${editingEntryId || fromReminder ? "border-brass bg-brass/5" : "border-line bg-white"}`}>
         <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">{editingEntryId ? "Edit Entry" : "New Entry"}</h2>
         {fromReminder && !editingEntryId && (
-          <p className="-mt-2 mb-3 text-xs text-brass">🔔 Filled from the manager&apos;s salary reminder — check the month and press Save.</p>
+          <p className="-mt-2 mb-3 text-xs text-brass"><Icon name="bell" className="mr-1" />Filled from the manager&apos;s salary reminder — check the month and press Save.</p>
         )}
         <form onSubmit={onSubmitEntry} className={`grid grid-cols-2 gap-3 ${editingEntryId ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
           <div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
+import Icon from "@/components/Icon";
 
 type Risk = {
   cancelled: number;
@@ -80,7 +81,7 @@ export default function CustomerRiskBadge({
   return (
     <div className={`rounded-lg border px-3 py-2 text-xs ${tone} ${className}`} role="alert">
       <div className="flex items-start gap-2">
-        <span aria-hidden>⚠</span>
+        <span aria-hidden><Icon name="alert" /></span>
         <div className="flex-1">
           <b className="font-semibold">{high ? "High-risk customer" : "Check before sending"}</b> — {text}.{" "}
           {mode === "vendor" ? "Please confirm with the customer before booking." : "Call to confirm before dispatch."}

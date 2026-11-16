@@ -35,7 +35,7 @@ function offerShareButton(file: File, blob: Blob) {
     "position:fixed;left:12px;right:12px;bottom:max(16px,env(safe-area-inset-bottom));z-index:2147483000;display:flex;gap:8px;align-items:center;background:#0F1626;color:#F1D9A0;border:1px solid #D4AF5A;border-radius:16px;padding:10px 12px;box-shadow:0 12px 40px rgba(0,0,0,.5);font:600 14px Inter,system-ui,sans-serif"
   );
   const label = document.createElement("span");
-  label.textContent = `📄 ${file.name}`;
+  label.textContent = file.name;
   label.setAttribute("style", "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E8ECF4;font-weight:500;font-size:13px");
   const share = document.createElement("button");
   share.textContent = "Save / Share";

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import Icon from "@/components/Icon";
 
 const EMIRATES = ["DUBAI", "SHARJAH", "AJMAN", "ABUDHABI", "AL AIN", "RAS AL KHAIMAH", "UMM AL QUWAIN", "FUJAIRAH"];
 const SAVE_KEY = "fcOrderDetails";
@@ -215,7 +216,7 @@ export default function CustomerOrderPage() {
             </div>
 
             <div className="rounded-xl border border-line bg-white p-4">
-              <div className="mb-2 text-sm font-semibold text-navy">📍 Your location</div>
+              <div className="mb-2 text-sm font-semibold text-navy"><Icon name="pin" className="mr-1" />Your location</div>
               {pin ? (
                 <>
                   <iframe
@@ -238,7 +239,7 @@ export default function CustomerOrderPage() {
                 </>
               ) : (
                 <button type="button" onClick={useMyLocation} disabled={pinBusy} className="w-full rounded-lg bg-delivered py-3 text-base font-semibold text-white disabled:opacity-60">
-                  {pinBusy ? "Finding you…" : "📍 Use my current location"}
+                  {pinBusy ? "Finding you…" : <><Icon name="pin" className="mr-1" />Use my current location</>}
                 </button>
               )}
               {pinMsg && <p className="mt-2 text-xs text-pending">{pinMsg}</p>}
@@ -292,7 +293,7 @@ export default function CustomerOrderPage() {
 
         {step === "done" && (
           <div className="mt-6 rounded-xl border border-delivered bg-white p-6 text-center">
-            <div className="text-4xl">✅</div>
+            <div className="text-4xl"><Icon name="checkCircle" /></div>
             <h2 className="mt-2 font-display text-2xl font-semibold text-navy">Thank you, {name.split(" ")[0]}!</h2>
             <p className="mt-2 text-sm text-ink-soft">
               {vendor} has your delivery details. Our driver will call you before delivery.

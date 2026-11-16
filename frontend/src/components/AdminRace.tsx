@@ -124,7 +124,7 @@ function analyse(sorted: (AdminRaceRow & { code: string; f: string })[], live: b
 
   const avg = Math.round(team.d / sorted.length);
   if (team.d > 0) ticker.push({ text: `AVERAGE ${avg} PER DRIVER · ${sorted.filter((r) => r.delivered > avg).map((r) => r.f).join(", ") || "—"} ABOVE AVERAGE`, tone: "info" });
-  if (live && team.p === 0 && team.d > 0) ticker.push({ text: "ALL PARCELS CLEARED — GREAT WORK BY THE TEAM 🏁", tone: "good" });
+  if (live && team.p === 0 && team.d > 0) ticker.push({ text: "ALL PARCELS CLEARED — GREAT WORK BY THE TEAM", tone: "good" });
   if (!live && p1.delivered > 0) ticker.push({ text: `FINAL RESULT · ${p1.f} WINS WITH ${p1.delivered}`, tone: "good" });
 
   return { insights, ticker };
@@ -175,7 +175,7 @@ export default function AdminRace({ rows, live }: Props) {
       if (r.delivered > o.delivered) bumped.push(r.id);
       if (!ev && n.rank < o.rank) {
         const passed = sorted.filter((x) => x.id !== r.id && (was.get(x.id)?.rank ?? 99) < o.rank && nowMap.get(x.id)!.rank > n.rank).map((x) => x.f);
-        ev = { tone: "good", text: n.rank === 1 ? `${r.f} TAKES THE LEAD${passed.length ? ` FROM ${passed.join(" & ")}` : ""} 👑` : `${r.f} OVERTOOK ${passed.join(" & ") || "A DRIVER"} → NOW P${n.rank}` };
+        ev = { tone: "good", text: n.rank === 1 ? `${r.f} TAKES THE LEAD${passed.length ? ` FROM ${passed.join(" & ")}` : ""}` : `${r.f} OVERTOOK ${passed.join(" & ") || "A DRIVER"} → NOW P${n.rank}` };
       }
     }
     if (!ev) {

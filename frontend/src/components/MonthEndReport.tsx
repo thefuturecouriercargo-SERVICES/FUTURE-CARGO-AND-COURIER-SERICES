@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
 import { detectArea } from "@/lib/areas";
 import { toast } from "@/components/ui/Feedback";
+import Icon from "@/components/Icon";
 
 /**
  * Month-end TEAM report — shared with the whole team on WhatsApp, so there are
@@ -901,7 +902,7 @@ export default function MonthEndReport({ month }: { month: string }) {
                 {data.drivers.map((d, i) => (
                   <tr key={d.name} className={i === 0 && d.delivered ? "font-semibold" : ""}>
                     <td>
-                      {i < 3 && d.delivered ? ["🥇", "🥈", "🥉"][i] + " " : ""}
+                      {i < 3 && d.delivered ? <Icon name="medal" className="mr-1" /> : null}
                       {d.name}
                     </td>
                     <td className="text-right font-mono">{fmtNumber(d.delivered)}</td>

@@ -20,6 +20,7 @@ import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 type Filter = "AWAITING_PICKUP" | "ACCEPTED" | "REJECTED" | "";
 
 const FILTERS: { value: Filter; label: string }[] = [
@@ -609,7 +610,7 @@ export default function AwaitingPickupPage() {
             {msg && <p className={`px-1 text-sm ${msg.ok ? "text-brass" : "text-cancelled"}`}>{msg.text}</p>}
             {olderCount > 0 && filter === "AWAITING_PICKUP" && (
               <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-pending bg-pending-bg px-3 py-2 text-sm text-pending">
-                <b>⚠ {olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
+                <b><Icon name="alert" className="mr-1" />{olderCount} older order{olderCount === 1 ? "" : "s"} still awaiting pickup:</b>
                 {olderAwaiting.map((d) => (
                   <button key={d.day} onClick={() => setViewDay(d.day)} className="rounded-md border border-pending px-2 py-0.5 font-mono text-xs hover:bg-pending/10">
                     {fmtDate(d.day)} ({d.count})
@@ -739,7 +740,7 @@ export default function AwaitingPickupPage() {
                                 className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${r.level === "high" ? "bg-cancelled-bg text-cancelled" : "bg-pending-bg text-pending"}`}
                                 title="This customer refused parcels before (any vendor). Call to confirm before dispatch."
                               >
-                                ⚠ Refused {r.cancelled}× before{r.delivered ? ` · ${r.delivered} delivered` : ""}
+                                <Icon name="alert" className="mr-1" />Refused {r.cancelled}× before{r.delivered ? ` · ${r.delivered} delivered` : ""}
                               </div>
                             )}
                           </button>
@@ -821,7 +822,7 @@ export default function AwaitingPickupPage() {
                             <CustomerRiskBadge phone={b.customerPhone} excludeCn={b.cnNo} />
                             <div className="flex gap-3">
                               <a href={`tel:${b.customerPhone.replace(/[^0-9+]/g, "")}`} className="text-brass hover:underline">
-                                📞 Call
+                                <Icon name="phone" className="mr-1" />Call
                               </a>
                               <a
                                 href={`https://wa.me/${b.customerPhone.replace(/[^0-9]/g, "").replace(/^0/, "971")}`}

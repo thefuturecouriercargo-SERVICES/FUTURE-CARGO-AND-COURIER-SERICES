@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Order } from "@/types";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import { fmtNumber, fmtDateLong } from "@/lib/format";
+import Icon from "@/components/Icon";
 
 const URGENT_RE =
   /\b(urgent\w*|asap|emergency|immediate(ly)?|priority|important|vip|today\s*itself|same\s*day|must|tomorrow|tmrw|tmw|before\s*\d{1,2}\s*(am|pm|:)?|by\s*\d{1,2}\s*(am|pm))\b|ضروري|عاجل/i;
@@ -158,7 +159,7 @@ export default function DriverSheet({ orders, date, driverLabel }: { orders: Ord
         ⬇ PDF
       </button>
       <button onClick={() => make("print")} disabled={busy || !orders.length} className="rounded bg-navy px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-paper disabled:opacity-40">
-        🖨 Print
+        <Icon name="printer" className="mr-1" />Print
       </button>
     </div>
   );

@@ -9,6 +9,7 @@ import AgentReportHistory from "@/components/AgentReportHistory";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
+import Icon from "@/components/Icon";
 type Action = "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver" | "waitPdf";
 
 interface Item {
@@ -177,7 +178,7 @@ export default function AgentReportPage() {
           onFiles(e.dataTransfer.files);
         }}
       >
-        <span className="text-2xl">📄</span>
+        <span className="text-2xl"><Icon name="file" /></span>
         <span className="mt-1 font-semibold text-navy">{busy === "reading" ? "Reading report…" : "Choose or drop Excel / PDF report"}</span>
         <span className="text-xs text-ink-soft">.xlsx or .pdf · you can pick several at once</span>
         <input

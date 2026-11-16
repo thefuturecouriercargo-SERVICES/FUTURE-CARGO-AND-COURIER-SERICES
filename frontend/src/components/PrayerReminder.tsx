@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { PRAYER_NAMES, PRAYER_QUOTES, type PrayerQuote } from "@/lib/prayerQuotes";
+import Icon from "@/components/Icon";
 
 type PrayerInfo = {
   emirate: string;
@@ -268,7 +269,7 @@ export default function PrayerReminder() {
     <>
       {upcoming && info && (
         <span className="flex w-full items-center justify-center gap-1 rounded-full border border-white/25 px-3 py-1 font-mono text-[11px] text-brass-light" title={`Next azan · ${info.emirateLabel}`}>
-          🕌 {timeFmt(upcoming.at)}
+          <Icon name="mosque" className="mr-1" />{timeFmt(upcoming.at)}
         </span>
       )}
 
@@ -277,18 +278,18 @@ export default function PrayerReminder() {
           onClick={() => void subscribe(true)}
           className="w-full animate-pulse rounded-full border border-brass-light px-2 py-1 font-mono text-[10px] font-bold text-brass-light"
         >
-          🔔 Azan ON
+          <Icon name="bell" className="mr-1" />Azan ON
         </button>
       )}
       {push === "denied" && (
-        <span className="w-full text-center font-mono text-[10px] text-cancelled" title="Allow notifications in phone settings">🔕 Blocked</span>
+        <span className="w-full text-center font-mono text-[10px] text-cancelled" title="Allow notifications in phone settings"><Icon name="bellOff" className="mr-1" />Blocked</span>
       )}
 
       {active && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center whitespace-normal break-words bg-black/80 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md overflow-hidden rounded-xl border-2 border-brass bg-navy text-paper shadow-2xl">
             <div className="border-b border-brass/40 bg-navy-2 px-5 py-4 text-center">
-              <div className="text-3xl">🕌</div>
+              <div className="text-3xl"><Icon name="mosque" /></div>
               <div className="mt-1 font-display text-2xl font-bold text-brass-light">
                 {PRAYER_NAMES[active.name]?.ml} നിസ്കാര സമയം
               </div>
@@ -311,7 +312,7 @@ export default function PrayerReminder() {
               </p>
               {active.quote.ref && <p className="mt-2 font-mono text-xs text-brass-light">— {active.quote.ref}</p>}
               <p className="mt-5 rounded border border-white/15 px-3 py-2 text-xs text-line" lang="ml">
-                🚗 വണ്ടി ഓടിക്കുകയാണെങ്കിൽ സുരക്ഷിതമായി ഒതുക്കിയ ശേഷം മാത്രം ഫോൺ നോക്കുക.
+                വണ്ടി ഓടിക്കുകയാണെങ്കിൽ സുരക്ഷിതമായി ഒതുക്കിയ ശേഷം മാത്രം ഫോൺ നോക്കുക.
               </p>
             </div>
 
@@ -321,7 +322,7 @@ export default function PrayerReminder() {
                 className="w-full rounded-lg bg-brass px-4 py-3.5 text-lg font-bold leading-snug text-navy hover:bg-brass-light"
                 lang="ml"
               >
-                ശരി, നിസ്കരിക്കാൻ പോകുന്നു 🤲
+                ശരി, നിസ്കരിക്കാൻ പോകുന്നു 
               </button>
             </div>
           </div>

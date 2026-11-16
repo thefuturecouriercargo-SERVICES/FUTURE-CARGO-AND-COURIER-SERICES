@@ -5,6 +5,7 @@ import { useState } from "react";
 import { fmtNumber } from "@/lib/format";
 import { NotesText, isPickup } from "@/lib/notes";
 import CustomerRiskBadge from "@/components/CustomerRiskBadge";
+import Icon from "@/components/Icon";
 
 /** Small "📋 Copy" — copies all the parcel details as plain text (to paste in WhatsApp etc.). */
 function CopyButton({ text }: { text: string }) {
@@ -37,7 +38,7 @@ function CopyButton({ text }: { text: string }) {
       title="Copy all details"
       className={`shrink-0 rounded border px-2 py-0.5 font-mono text-[10px] font-bold uppercase ${done ? "border-delivered bg-delivered-bg text-delivered" : "border-line bg-white text-ink-soft hover:border-navy"}`}
     >
-      {done ? "✓ Copied" : "📋 Copy"}
+      {done ? "✓ Copied" : <><Icon name="copy" className="mr-1" />Copy</>}
     </button>
   );
 }
@@ -154,7 +155,7 @@ export default function OrderDetails({
       </div>
       <div className="flex flex-wrap gap-2 pt-1.5">
         <a href={`tel:${tel}`} className="rounded bg-navy px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-paper">
-          📞 Call customer
+          <Icon name="phone" className="mr-1" />Call customer
         </a>
         <a
           href={waHref ?? `https://wa.me/${waNumber(booking.customerPhone)}?text=${waText}`}
@@ -162,7 +163,7 @@ export default function OrderDetails({
           rel="noreferrer"
           className="rounded bg-delivered px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-white"
         >
-          💬 WhatsApp customer
+          <Icon name="message" className="mr-1" />WhatsApp customer
         </a>
         <a
           href={
@@ -174,7 +175,7 @@ export default function OrderDetails({
           rel="noreferrer"
           className="rounded border border-navy bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-navy"
         >
-          📍 {booking.lat != null && booking.lng != null ? "Map (exact pin)" : "Map"}
+          <Icon name="pin" className="mr-1" />{booking.lat != null && booking.lng != null ? "Map (exact pin)" : "Map"}
         </a>
       </div>
     </div>

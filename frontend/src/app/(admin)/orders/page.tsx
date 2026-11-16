@@ -66,6 +66,7 @@ import RowActions from "@/components/ui/RowActions";
 import OrderDrawer from "@/components/OrderDrawer";
 import ContactEditModal from "@/components/ContactEditModal";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
+import Icon from "@/components/Icon";
 const emptyForm = {
   cnNo: "",
   vendorId: "",
@@ -550,7 +551,7 @@ required
         voiceSearch.listening ? "border-cancelled bg-cancelled text-white animate-pulse" : "border-line bg-white text-ink-soft hover:border-brass"
       }`}
     >
-      🎤
+      <Icon name="mic" />
     </button>
   )}
   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "")} className="rounded border border-line px-3 py-1.5 text-sm">
@@ -714,7 +715,7 @@ required
                             className="rounded bg-cancelled px-1 py-0.5 font-mono text-[9px] font-bold uppercase text-white"
                             title="Driver has not confirmed this bank payment was received"
                           >
-                            ⚠ Unconfirmed
+                            <Icon name="alert" className="mr-1" />Unconfirmed
                           </span>
                         )}
                       </span>
@@ -756,7 +757,7 @@ required
                     </td>
                     <td className="max-w-[160px] truncate text-ink-soft" title={[o.remarks, o.driverNote && `Driver: ${o.driverNote}`].filter(Boolean).join(" · ")}>
                       {o.remarks || (o.driverNote ? "" : "—")}
-                      {o.driverNote && <span className="ml-1 rounded bg-pending-bg px-1 text-[11px] font-semibold text-pending">🚚 {o.driverNote}</span>}
+                      {o.driverNote && <span className="ml-1 rounded bg-pending-bg px-1 text-[11px] font-semibold text-pending"><Icon name="truck" className="mr-1" />{o.driverNote}</span>}
                     </td>
                     <td className="whitespace-nowrap text-right">
                       <RowActions
