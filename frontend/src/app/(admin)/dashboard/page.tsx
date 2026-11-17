@@ -74,7 +74,7 @@ interface DailyResponse {
   date: string;
   summary: Summary;
 employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number })[];
-  agentBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number })[];
+  agentBreakdown: ({ employee: { id: string; name: string } } & Summary & { totalExpenses: number; otherDeduction: number; otherDeductionEntries: { id: string; amount: number }[]; cashBalance: number; scannedCount?: number })[];
   vendorBreakdown: ({ vendor: { id: string; name: string } } & Summary)[];
   emirateBreakdown: ({ emirate: string } & Summary)[];
   paymentBreakdown: ({ method: string } & Summary)[];
@@ -299,7 +299,7 @@ const shareButton = data ? (
               date={useRange ? `${fromDate} → ${toDate}` : date}
               drivers={leaderRows}
               orders={data.orders}
-              agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
+              agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.scannedCount ?? a.totalOrders }))}
               records={records}
               delivered={data.summary.delivered}
               pending={data.summary.pending + nonAgentPendingCarryover.length}
@@ -419,7 +419,7 @@ return (
                                     date={useRange ? `${fromDate} → ${toDate}` : date}
                                     drivers={leaderRows}
                                     orders={data.orders}
-                                    agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.totalOrders }))}
+                                    agents={(data.agentBreakdown ?? []).map((a) => ({ name: a.employee.name, count: a.scannedCount ?? a.totalOrders }))}
               records={records}
                                     delivered={data.summary.delivered}
                                     pending={pendingAll}

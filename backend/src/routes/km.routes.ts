@@ -13,6 +13,8 @@ router.use(authenticate);
 
 const GAP_ALLOW = 2; // km difference allowed between last End KM and next Start KM (car parked overnight)
 const MISMATCH_ALLOW = 2; // typed vs photo reading
+const MAX_DAY_KM = 600; // more than this in one day = a wrong reading, never real driving
+const UNUSUAL_FACTOR = 2.5; // a day this many times the driver's usual KM (and 50+ KM over it) is reported
 
 type LogRow = {
   id: string;
@@ -34,6 +36,10 @@ function flagsFor(log: LogRow, prev: LogRow | null): string[] {
   const f: string[] = [];
   if (log.endMissed) f.push("END KM MISSED");
   if (prev?.endKm != null && log.startKm - prev.endKm > GAP_ALLOW && !prev.endMissed) f.push(`USED WHILE PARKED ${log.startKm - prev.endKm} KM`);
+  // Next morning's Start lower than last night's End — one of the two readings is wrong.
+  if (prev?.endKm != null && prev.endKm - log.startKm > GAP_ALLOW) f.push(`START ${log.startKm} BELOW LAST END ${prev.endKm}`);
+  if (log.endKm != null && log.endKm < log.startKm) f.push("END BELOW START");
+  else if (log.endKm != null && log.endKm - log.startKm > MAX_DAY_KM) f.push(`UNUSUAL KM ${log.endKm - log.startKm}`);
   if (log.startReadKm != null && Math.abs(log.startReadKm - log.startKm) > MISMATCH_ALLOW) f.push(`START PHOTO SHOWS ${log.startReadKm}`);
   if (log.endKm != null && log.endReadKm != null && Math.abs(log.endReadKm - log.endKm) > MISMATCH_ALLOW) f.push(`END PHOTO SHOWS ${log.endReadKm}`);
   return f;
@@ -288,6 +294,13 @@ router.get(
     const drivers = users.map((u) => {
       const mine = logs.filter((l) => l.employeeId === u.id);
       const myFuel = fuel.filter((f) => f.employeeId === u.id);
+      // The driver's usual day (median of normal, properly ended days) — to catch odd
+      // lengths, mainly on End-missed days whose End came from next morning's Start.
+      const normal = mine
+        .filter((l) => l.endKm != null && !l.endMissed && l.endKm >= l.startKm && l.endKm - l.startKm <= MAX_DAY_KM)
+        .map((l) => l.endKm! - l.startKm)
+        .sort((a, b) => a - b);
+      const usual = normal.length >= 3 ? normal[Math.floor(normal.length / 2)] : null;
       const days = mine
         .map((l, i) => ({ l, prev: i > 0 ? mine[i - 1] : null }))
         .filter(({ l }) => l.date.getTime() >= start.getTime())
@@ -297,6 +310,12 @@ router.get(
           const deliveries = delMap.get(key(u.id, l.date)) ?? 0;
           const dayFuel = myFuel.filter((f) => f.date.getTime() === l.date.getTime());
           const gap = prev?.endKm != null && !prev.endMissed ? Math.max(0, l.startKm - prev.endKm) : 0;
+          const flags = flagsFor(l, prev);
+          if (km != null && km >= 0 && km <= MAX_DAY_KM && usual != null && km > usual * UNUSUAL_FACTOR && km - usual > 50) {
+            flags.push(`UNUSUAL KM ${km} (USUAL ${usual})`);
+          }
+          // Wrong-looking readings are kept out of the month totals until corrected.
+          const check = km != null && (km < 0 || km > MAX_DAY_KM || flags.some((f) => f.startsWith("UNUSUAL KM")));
           return {
             id: l.id,
             date: ds,
@@ -305,17 +324,19 @@ router.get(
             km,
             gapKm: gap > GAP_ALLOW ? gap : 0,
             deliveries,
-            kmPerDelivery: km != null && deliveries ? Math.round((km / deliveries) * 10) / 10 : null,
+            kmPerDelivery: km != null && km >= 0 && deliveries ? Math.round((km / deliveries) * 10) / 10 : null,
             fuelAmount: dayFuel.reduce((s, f) => s + f.amount, 0),
             fuelLitres: dayFuel.reduce((s, f) => s + (f.litres ?? 0), 0),
             startAt: l.startAt,
             endAt: l.endAt,
             startPhotoId: l.startPhotoId,
             endPhotoId: l.endPhotoId,
-            flags: flagsFor(l, prev),
+            flags,
+            check,
           };
         });
-      const totalKm = days.reduce((s, d) => s + (d.km ?? 0), 0);
+      const totalKm = days.reduce((s, d) => s + (d.check ? 0 : d.km ?? 0), 0);
+      const checkDays = days.filter((d) => d.check).length;
       const gapKm = days.reduce((s, d) => s + d.gapKm, 0);
       const deliveries = days.reduce((s, d) => s + d.deliveries, 0);
       const fuelAmount = Math.round(myFuel.reduce((s, f) => s + f.amount, 0) * 100) / 100;
@@ -332,8 +353,13 @@ router.get(
         fuelLitres,
         kmPerLitre: fuelLitres ? Math.round((allKm / fuelLitres) * 10) / 10 : null,
         aedPerKm: allKm ? Math.round((fuelAmount / allKm) * 100) / 100 : null,
-        kmPerDelivery: deliveries ? Math.round((totalKm / deliveries) * 10) / 10 : null,
+        // Only days with a good, finished KM reading — so open or wrong days don't skew it.
+        kmPerDelivery: (() => {
+          const del = days.filter((d) => d.km != null && !d.check).reduce((s, d) => s + d.deliveries, 0);
+          return del ? Math.round((totalKm / del) * 10) / 10 : null;
+        })(),
         missedEnds: days.filter((d) => d.flags.includes("END KM MISSED")).length,
+        checkDays,
         days,
         fuel: myFuel.map((f) => ({ ...f, date: f.date.toISOString().slice(0, 10) })),
       };

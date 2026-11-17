@@ -6,16 +6,10 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "START / END KM TRACKING",
-    "ADD EXPENSE WITH BILL PHOTO",
-    "NEW HOME SCREEN",
-    "FULL-SCREEN SCANNER",
-  ],
+  driver: [],
   admin: [
-    "KM AND FUEL PAGE",
-    "LOG DRIVER EXPENSES",
-    "NEW PHONE DASHBOARD",
-    "STAFF PASSWORDS VIEW",
+    "CLEANER, BIGGER KM AND FUEL PAGE",
+    "UNUSUAL KM AND READING GAPS REPORTED",
+    "SCANNED TO ASHRAF MATCHES SCAN HISTORY",
   ],
 };

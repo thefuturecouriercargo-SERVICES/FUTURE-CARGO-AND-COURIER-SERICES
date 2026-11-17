@@ -39,6 +39,36 @@ function revenueDeliveryCharge(orders: OrderWithAgentFlag[]) {
     .reduce((s, o) => s + o.deliveryCharge, 0);
 }
 
+// "Scanned to <agent>" on the daily share report: barcodes actually scanned to each
+// agent in the Dubai day(s) — the same count as Scan & Assign → Scan History
+// (one row per CN, its latest real scan; deleted consignments ignored). Counting
+// orders by their date missed parcels entered/scanned on an earlier day and moved
+// to the agent today, and added hand-entered ones that were never scanned.
+async function agentScanCounts(fromDay: Date, toDay: Date): Promise<Map<string, number>> {
+  const DUBAI = 4 * 60 * 60 * 1000;
+  const from = new Date(fromDay.getTime() - DUBAI);
+  const to = new Date(toDay.getTime() - DUBAI + 24 * 60 * 60 * 1000);
+  const rows = await prisma.scanLog.findMany({
+    where: { createdAt: { gte: from, lt: to }, result: { not: "FAILED" }, cnNo: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: { cnNo: true, result: true, driverId: true, orderId: true },
+  });
+  const latest = new Map<number, (typeof rows)[number]>();
+  for (const r of rows) {
+    const prev = latest.get(r.cnNo!);
+    if (!prev || r.result !== "ALREADY" || prev.result === "ALREADY") latest.set(r.cnNo!, r);
+  }
+  const ids = [...new Set([...latest.values()].map((r) => r.orderId).filter(Boolean) as string[])];
+  const alive = new Set((await prisma.order.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((o) => o.id));
+  const counts = new Map<string, number>();
+  for (const r of latest.values()) {
+    if (r.result !== "ACCEPTED" && r.result !== "REASSIGNED") continue;
+    if (!r.driverId || (r.orderId && !alive.has(r.orderId))) continue;
+    counts.set(r.driverId, (counts.get(r.driverId) ?? 0) + 1);
+  }
+  return counts;
+}
+
 // Records before a day, for the shared daily report: each driver's best day so
 // far, and the team's best day ever / this month (delivered counts, drivers only).
 router.get(
@@ -71,16 +101,22 @@ router.get(
   asyncHandler(async (req, res) => {
     let where: { date: Date } | { date: { gte: Date; lte: Date } };
     let label: string;
+    let scanFrom: Date;
+    let scanTo: Date;
 
     if (req.query.from || req.query.to) {
       const { start: fromStart } = dayRange(req.query.from as string | undefined);
       const { start: toStart } = dayRange(req.query.to as string | undefined);
       where = { date: { gte: fromStart, lte: toStart } };
       label = `${displayDate(fromStart)} to ${displayDate(toStart)}`;
+      scanFrom = fromStart;
+      scanTo = toStart;
     } else {
       const { start, date } = dayRange(req.query.date as string | undefined);
       where = { date: start };
       label = displayDate(date);
+      scanFrom = start;
+      scanTo = start;
     }
 
     const rawOrders = await prisma.order.findMany({
@@ -141,6 +177,7 @@ const expenses = await prisma.expenseEntry.findMany({
     // Agents are tracked completely separately from drivers — their own performance,
     // cash collection, and delivery-charge totals never mix into the driver breakdown above.
     const agents = await prisma.user.findMany({ where: { isAgent: true }, orderBy: { name: "asc" } });
+    const scanCounts = await agentScanCounts(scanFrom, scanTo);
     const agentBreakdown = agents.map((a) => {
       const own = orders.filter((o) => o.employeeId === a.id);
       const ownSummary = summarize(own);
@@ -150,6 +187,7 @@ const expenses = await prisma.expenseEntry.findMany({
       return {
         employee: { id: a.id, name: a.name },
         ...ownSummary,
+        scannedCount: scanCounts.get(a.id) ?? 0,
         totalExpenses,
         otherDeduction,
         otherDeductionEntries,
