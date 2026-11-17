@@ -762,3 +762,9 @@ input[type="url"]::placeholder {
     font-size-adjust: cap-height 0.66;
   }
 }
+
+/* No blinking text cursor on titles, labels and table text when clicked
+   (shows when the browser's caret browsing is on). Inputs keep their cursor. */
+:where(body *:not(input):not(textarea):not(select):not([contenteditable]):not([contenteditable] *)) {
+  caret-color: transparent;
+}

@@ -8,7 +8,6 @@
 export const RELEASE_NOTES = {
   driver: [],
   admin: [
-    "KM TRACKING STARTS FRESH FROM 17 NOV",
-    "OLD 16 NOV KM ENTRIES CLEARED",
+    "NO TEXT CURSOR WHEN CLICKING TITLES",
   ],
 };
