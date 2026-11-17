@@ -65,6 +65,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import RowActions from "@/components/ui/RowActions";
 import OrderDrawer from "@/components/OrderDrawer";
 import ContactEditModal from "@/components/ContactEditModal";
+import { printOrderLabels } from "@/lib/orderLabels";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import Icon from "@/components/Icon";
 const emptyForm = {
@@ -623,6 +624,14 @@ required
       />
     )}
     <button
+      type="button"
+      onClick={() => printOrderLabels([...orders, ...pendingCarryover].filter((x, i, all) => selectedIds.has(x.id) && all.findIndex((y) => y.id === x.id) === i))}
+      className="flex h-10 items-center gap-1.5 rounded-xl border border-[#D4AF5A] px-3 text-sm font-semibold text-[#F1D9A0] hover:bg-[#1A1F2E]"
+    >
+      <Icon name="printer" size={14} />
+      Print labels
+    </button>
+    <button
       onClick={applyBulkUpdate}
       disabled={bulkSaving || (!bulkEmirate && !bulkEmployeeId && !bulkStatus)}
       className="h-10 rounded-xl bg-[#D4AF5A] px-4 text-sm font-semibold text-[#14100A] hover:bg-[#E9CB82] disabled:opacity-50"
@@ -765,6 +774,7 @@ required
                         actions={[
                           { label: "Edit", onClick: () => startEdit(o) },
                           { label: "Edit address & phone", onClick: () => setContactEdit(o) },
+                          { label: "Print label", onClick: () => printOrderLabels([o]) },
                           { label: "Open details", onClick: () => setDrawerId(o.id) },
                           { label: "Delete", onClick: () => deleteOrder(o.id), danger: true },
                         ]}

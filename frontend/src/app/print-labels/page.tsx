@@ -6,14 +6,22 @@ import AuthGate from "@/components/AuthGate";
 import LabelSheet from "@/components/LabelSheet";
 import { apiFetch } from "@/lib/api";
 import { Booking } from "@/types";
+import { readOrderLabels } from "@/lib/orderLabels";
 
 // Office label printing — outside the admin layout so the page is just the labels.
 function Labels() {
-  const ids = useSearchParams().get("ids") ?? "";
+  const params = useSearchParams();
+  const ids = params.get("ids") ?? "";
+  const fromOrders = params.get("from") === "orders";
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Reprint from Daily Entry (⋯ → Print label): labels built from the consignments, nothing marked.
+    if (fromOrders) {
+      setBookings(readOrderLabels());
+      return;
+    }
     if (!ids) return;
     apiFetch<{ bookings: Booking[] }>("/bookings", { query: { ids } })
       .then((r) => {
@@ -21,10 +29,12 @@ function Labels() {
         setBookings([...r.bookings].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load labels"));
-  }, [ids]);
+  }, [ids, fromOrders]);
 
   if (error) return <p className="p-6 text-cancelled">{error}</p>;
   if (!bookings) return <p className="p-6 text-ink-soft">Loading labels…</p>;
+
+  if (fromOrders) return <LabelSheet bookings={bookings} backHref="/orders" />;
 
   return (
     <LabelSheet

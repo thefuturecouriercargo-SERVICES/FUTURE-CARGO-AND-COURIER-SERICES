@@ -47,6 +47,10 @@ export default function ExpensesPage() {
   const [fromDate, setFromDate] = useState(dubaiToday());
   const [toDate, setToDate] = useState(dubaiToday());
   const [categoryFilter, setCategoryFilter] = useState("");
+  // Entry log filters (on the loaded entries).
+  const [logSearch, setLogSearch] = useState("");
+  const [logDriver, setLogDriver] = useState("");
+  const [logSource, setLogSource] = useState("");
 
  const load = useCallback(async () => {
     setEntries(
@@ -149,7 +153,18 @@ export default function ExpensesPage() {
     await load();
   }
 
-  const total = entries.reduce((sum, e) => sum + e.amount, 0);
+  const sourceOf = (e: ExpenseEntry) => (e.enteredBy === "DRIVER" ? "DRIVER" : e.source);
+  const q = logSearch.trim().toLowerCase();
+  const shown = entries.filter(
+    (e) =>
+      (!logDriver || (logDriver === "NONE" ? !e.employee : e.employee?.id === logDriver)) &&
+      (!logSource || sourceOf(e) === logSource) &&
+      (!q || [e.category, e.remarks, e.employee?.name, String(e.amount)].some((v) => v?.toLowerCase().includes(q)))
+  );
+  const logFiltered = Boolean(q || logDriver || logSource || categoryFilter);
+  const total = shown.reduce((sum, e) => sum + e.amount, 0);
+  const logDrivers = Array.from(new Map(entries.filter((e) => e.employee).map((e) => [e.employee!.id, e.employee!.name])).entries());
+  const sources = Array.from(new Set(entries.map(sourceOf)));
 
  return (
     <AuthGate allow={["SUPER_ADMIN"]}>
@@ -265,8 +280,49 @@ export default function ExpensesPage() {
 
       <div className="border border-line bg-white p-5">
         <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
-          Entries for {useRange ? `${fromDate} to ${toDate}` : date} ({entries.length}) · Total {total} AED
+          Entries for {useRange ? `${fromDate} to ${toDate}` : date} ({logFiltered ? `${shown.length} of ${entries.length}` : entries.length}) · Total {total} AED
         </h2>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <input
+            value={logSearch}
+            onChange={(e) => setLogSearch(e.target.value)}
+            placeholder="Search remarks, driver, amount…"
+            className="min-w-[220px] flex-1 rounded border border-line px-2.5 py-2 text-sm md:max-w-[320px]"
+          />
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm">
+            <option value="">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select value={logDriver} onChange={(e) => setLogDriver(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm">
+            <option value="">All drivers</option>
+            <option value="NONE">Company (no driver)</option>
+            {logDrivers.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+          <select value={logSource} onChange={(e) => setLogSource(e.target.value)} className="rounded border border-line px-2.5 py-2 text-sm">
+            <option value="">All sources</option>
+            {sources.map((src) => (
+              <option key={src} value={src}>{src}</option>
+            ))}
+          </select>
+          {logFiltered && (
+            <button
+              type="button"
+              onClick={() => {
+                setLogSearch("");
+                setLogDriver("");
+                setLogSource("");
+                setCategoryFilter("");
+              }}
+              className="rounded border border-line px-3 py-2 font-mono text-xs uppercase text-ink-soft hover:border-brass"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <div className="table-wrap"><table className="data-table">
           <thead>
             <tr>
@@ -280,13 +336,18 @@ export default function ExpensesPage() {
             </tr>
           </thead>
           <tbody>
-            {entries.map((e) => (
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-6 text-center text-sm text-ink-soft">No entries match these filters</td>
+              </tr>
+            )}
+            {shown.map((e) => (
               <tr key={e.id}>
                 <td>{e.date.slice(0, 10)}</td>
                 <td>{e.category}</td>
                 <td className="text-right font-mono">{e.amount}</td>
                 <td>
-                  {e.enteredBy === "DRIVER" ? "DRIVER" : e.source}
+                  {sourceOf(e)}
                   {e.photoId && (
                     <a href={`/api/km/photo/${e.photoId}`} target="_blank" rel="noreferrer" className="ml-1.5 text-brass underline" title="Receipt photo (kept 7 days)">
                       Photo
