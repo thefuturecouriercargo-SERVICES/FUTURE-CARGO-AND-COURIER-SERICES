@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber, fmtDate } from "@/lib/format";
-import { detectArea, isWesternArea, emirateOfAreaName } from "@/lib/areas";
+import { detectArea, isWesternArea, emirateOfAreaName, emirateFromAddress } from "@/lib/areas";
 import Icon from "@/components/Icon";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
@@ -89,7 +89,9 @@ export function splitItems(items?: string | null): LabelItem[] {
         ? { qty: m[1], name: m[2].trim(), price }
         : n && Number(n[1]) > 0 && (n[2].trim() || /\D/.test(body))
           ? { qty: n[1], name: n[2].trim() || "Item", price }
-          : { qty: "1", name: body, price };
+          : /^\d{1,3}$/.test(body.trim()) && Number(body) > 0
+            ? { qty: body.trim(), name: "Item", price } // just a number ("2") is the piece count
+            : { qty: "1", name: body, price };
       if (marked) row.header = true;
       return row;
     });
@@ -229,8 +231,10 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         <div style={{ fontWeight: 800, textTransform: "uppercase", fontSize: sq ? 12 : 14 }}>
           <Icon name="pin" className="mr-1" />{(() => {
             // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
-            const a = detectArea(booking.address, booking.emirate);
-            const saved = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+            const picked = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+            // Emirate picked wrong (Mussafah saved as Dubai) → the address decides, also for old entries.
+            const saved = picked ? emirateFromAddress(picked, booking.address) || picked : "";
+            const a = detectArea(booking.address, saved || booking.emirate);
             // The area decides the emirate printed (Al Warqa / Jumeirah are Dubai, whatever was selected).
             const em = emirateOfAreaName(a) ?? saved;
             if (a === "OTHER AREA" || a === "NO ADDRESS") return em || "—";
