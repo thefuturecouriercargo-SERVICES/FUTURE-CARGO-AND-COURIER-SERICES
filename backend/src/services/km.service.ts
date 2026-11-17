@@ -245,3 +245,25 @@ export async function readBill(base64: string, mime: string): Promise<{ amount: 
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null);
   return { amount: num(r.amount), litres: num(r.litres), station: r.station ? String(r.station).toUpperCase().slice(0, 60) : null };
 }
+
+/**
+ * One-time clean start (asked 17 Nov 2026): drivers were confused on the first day,
+ * so every KM day before 17 Nov 2026 is deleted, with its meter photos. Fuel fills
+ * and expenses are kept. Runs once (marked in the audit log).
+ */
+export async function runKmFreshStartOnce() {
+  const MARK = "KM_FRESH_START_2026_11_17";
+  try {
+    const done = await prisma.auditLog.findFirst({ where: { action: MARK }, select: { id: true } });
+    if (done) return;
+    const cutoff = new Date(Date.UTC(2026, 10, 17));
+    const old = await prisma.kmLog.findMany({ where: { date: { lt: cutoff } }, select: { startPhotoId: true, endPhotoId: true } });
+    const photoIds = old.flatMap((l) => [l.startPhotoId, l.endPhotoId]).filter((x): x is string => !!x);
+    const logs = await prisma.kmLog.deleteMany({ where: { date: { lt: cutoff } } });
+    const photos = photoIds.length ? await prisma.kmPhoto.deleteMany({ where: { id: { in: photoIds }, kind: "METER" } }) : { count: 0 };
+    await prisma.auditLog.create({ data: { action: MARK, entity: "KmLog", meta: { logs: logs.count, photos: photos.count } } });
+    console.log(`[km] fresh start: deleted ${logs.count} KM days before 17 Nov 2026 (${photos.count} photos)`);
+  } catch (err) {
+    console.error("[km] fresh start failed:", err);
+  }
+}

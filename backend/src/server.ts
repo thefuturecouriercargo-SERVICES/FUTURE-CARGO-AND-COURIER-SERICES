@@ -4,7 +4,7 @@ import { env } from "./config/env";
 import { initSocket } from "./lib/socket";
 import { prisma } from "./lib/prisma";
 import { backfillResolvedAt } from "./services/resolvedAt.backfill";
-import { initKmTracking, startKmScheduler } from "./services/km.service";
+import { initKmTracking, startKmScheduler, runKmFreshStartOnce } from "./services/km.service";
 import { startWeeklyBackupScheduler } from "./services/backup.service";
 import { startNightlyBackupScheduler, nightlyConfigured } from "./services/nightlyBackup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
@@ -22,6 +22,7 @@ async function main() {
   // Ensure Order.resolvedAt exists and is filled for older orders, before serving.
   await backfillResolvedAt();
   await initKmTracking();
+  await runKmFreshStartOnce();
 
   httpServer.listen(env.port, () => {
     // eslint-disable-next-line no-console
