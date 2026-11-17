@@ -540,6 +540,8 @@ export const DEFAULT_AREA_ROUTE: string[] = [
   "SHARJAH|INDUSTRIAL AREA",
 ];
 
+/** "Corniche" with no emirate or district beside it. */
+const BARE_CORNICHE = /\bcorniche\b(?![\s\-']*(?:al[\s\-']*)?qawasim)/i;
 const DUBAI_INDUSTRIAL = new Set(["AL QUSAIS", "AL QUOZ", "RAS AL KHOR", "AL AWIR", "JEBEL ALI", "DIP", "DUBAI INDUSTRIAL CITY"]);
 const CAPITAL = new Set(["ABUDHABI", "AL AIN"]);
 /** Outside emirates written in an address (any spelling the office sees). */
@@ -573,6 +575,8 @@ export function detectArea(address?: string | null, emirate?: string | null): st
     for (const [re, name] of DUBAI) if (DUBAI_INDUSTRIAL.has(name) && re.test(text)) return name;
   }
   let em = (emirate ?? "").toUpperCase();
+  // Bare "Corniche" on an Ajman parcel is Ajman Corniche, not Abu Dhabi's (ORD10035).
+  if (em === "AJMAN" && BARE_CORNICHE.test(text)) return "AJMAN DOWNTOWN";
   // Outside emirate picked but the address writes Dubai / Sharjah / Ajman / Abu Dhabi and no
   // outside-emirate name → use the emirate the address names ("Ra's Al Khor, Dubai" saved as UAQ).
   if (OUTSIDE_EM.has(em) && !OUTSIDE_NAME.test(text)) {
@@ -797,6 +801,8 @@ export function emirateFromAddress(emirate?: string | null, address?: string | n
   const named = Object.keys(EMIRATE_WORDS).filter((k) => EMIRATE_WORDS[k].test(text));
   if (named.length === 1) return named[0];
   if (named.length > 1) return em;
+  // Only "Corniche" written: many emirates have one — the emirate the customer picked stays (ORD10035).
+  if (BARE_CORNICHE.test(text) && !isKnownArea(text.replace(/\bcorniche\b/gi, " "))) return em;
   // Dubai / Sharjah / Ajman picked, but the address only names Abu Dhabi areas (plus "Al Nahda",
   // which several emirates have) → Abu Dhabi ("Baniyas Al Wathba Al Nahda District" saved as Sharjah).
   // "Baniyas Square / Road / Metro" is Deira, Dubai — that stays.
