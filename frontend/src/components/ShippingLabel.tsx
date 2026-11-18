@@ -165,97 +165,111 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   const hasOrderNo = Boolean(booking.vendorRef && booking.vendorRef !== String(booking.cnNo));
   const billNo = (booking as { billNo?: string | null }).billNo || parsed.bill;
 
+  // Area worked out by the system — printed small; the vendor's own address is the highlighted line.
+  const area = (() => {
+    // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
+    const picked = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
+    // Emirate picked wrong (Mussafah saved as Dubai) → the address decides, also for old entries.
+    const saved = picked ? emirateFromAddress(picked, booking.address) || picked : "";
+    const a = detectArea(booking.address, saved || booking.emirate);
+    // The area decides the emirate printed (Al Warqa / Jumeirah are Dubai, whatever was selected).
+    const em = emirateOfAreaName(a) ?? saved;
+    if (a === "OTHER AREA" || a === "NO ADDRESS") return { text: em || "—", western: false };
+    // Western Region parcels must not go with the Abu Dhabi city driver.
+    if (isWesternArea(a)) return { text: `${a} · WESTERN REGION · ABU DHABI`, western: true };
+    return { text: em ? `${a} · ${em}` : a, western: false };
+  })();
+  const payLabel = pickup
+    ? booking.codAmount > 0 ? "COLLECT DELIVERY CHARGE" : booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : "PICKUP"
+    : booking.codAmount > 0 ? "CASH ON DELIVERY" : booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : "PAYMENT";
+  const payValue = booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : pickup ? "NO CASH" : "PREPAID";
+  const B = "1.5px solid #000";
+  const T = "1px solid #000";
+  const k: React.CSSProperties = { fontSize: 7, fontWeight: 700, letterSpacing: 0.9, color: "#444", textTransform: "uppercase", lineHeight: 1.2 };
+  const tag: React.CSSProperties = { border: B, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, padding: "1px 6px", lineHeight: 1.3 };
+  // With no notes, the address gets the extra lines.
+  const addrLines = sq ? (noteParts.length ? 2 : 3) : items.length > 14 ? 2 : noteParts.length ? 3 : 5;
+
   return (
     <div ref={rootRef} className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
-      {/* Header: brand + date on the left, compact barcode + CN on the right */}
-      <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-1.5">
-        <div className="min-w-0 flex-1">
-          <div style={{ fontSize: narrow ? 13 : 15, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
-          <div style={{ fontSize: 9 }}>{dubaiDate(booking.createdAt)}</div>
-          <div className="mt-0.5" style={{ fontSize: 9 }}>
-            From: <b>{labelVendorName(booking.vendor.name)}</b>
+      {/* Header grid: brand + date | barcode — from / bill / agent | payment. Outlines only, no black fills. */}
+      <div style={{ border: B, display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+        <div style={{ padding: narrow ? "4px 6px" : "6px 8px", borderRight: T, borderBottom: T }}>
+          <div style={{ fontSize: narrow ? 12 : 14, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
+          <div style={{ fontSize: 8.5, marginTop: 2, color: "#333", textTransform: "uppercase" }}>{dubaiDate(booking.createdAt)}</div>
+        </div>
+        <div className="flex flex-col items-center justify-center" style={{ padding: "3px 6px", borderBottom: T }}>
+          <Barcode value={String(booking.cnNo)} height={sq ? 22 : 26} />
+          <div style={{ fontSize: sq ? 9 : 10, fontWeight: 800, letterSpacing: 1.5, fontFamily: "'Courier New', monospace", lineHeight: 1.1, marginTop: 1 }}>
+            CN {booking.cnNo}
+          </div>
+        </div>
+        <div style={{ padding: narrow ? "3px 6px" : "5px 8px", borderRight: T, fontSize: 9, lineHeight: 1.6, textTransform: "uppercase" }}>
+          <div className="truncate">
+            FROM <b>{labelVendorName(booking.vendor.name)}</b>
           </div>
           {(hasOrderNo || billNo || parsed.agent) && (
-            <div className="mt-0.5 flex flex-wrap items-center gap-1" style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1 }}>
-              {hasOrderNo ? <span>ORDER #{booking.vendorRef}</span> : billNo ? <span>BILL: {billNo}</span> : null}
+            <div>
+              {hasOrderNo ? <>ORDER <b>#{booking.vendorRef}</b></> : billNo ? <>BILL <b>{billNo}</b></> : null}
+              {(hasOrderNo || billNo) && parsed.agent ? " · " : ""}
               {parsed.agent && (
-                <span style={{ border: "1.5px solid #000", padding: "0 3px", fontSize: 10, fontWeight: 800, letterSpacing: 0.5 }}>
-                  AGENT: {parsed.agent === NO_AGENT ? <span style={{ display: "inline-block", width: 28 }} /> : parsed.agent}
-                </span>
+                <>
+                  AGENT <b>{parsed.agent === NO_AGENT ? <span style={{ display: "inline-block", width: 26, borderBottom: T }} /> : parsed.agent}</b>
+                </>
               )}
             </div>
           )}
         </div>
-        <div className="shrink-0 text-center" style={{ width: sq ? "48%" : "52%" }}>
-          <Barcode value={String(booking.cnNo)} height={sq ? 26 : 34} />
-          <div className="mt-1" style={{ fontSize: sq ? 13 : 15, fontWeight: 800, letterSpacing: 1.5, fontFamily: "'Courier New', monospace", lineHeight: 1.1 }}>
-            CN {booking.cnNo}
+        <div className="flex flex-col items-center justify-center text-center" style={{ padding: "3px 4px" }}>
+          <div style={k}>{payLabel}</div>
+          <div style={{ fontSize: sq ? 15 : 18, fontWeight: 800, lineHeight: 1.15 }}>{payValue}</div>
+        </div>
+      </div>
+
+      {/* Customer — vendor-given address highlighted, system area small underneath. */}
+      <div style={{ padding: sq ? "5px 0 4px" : "8px 0 6px", textTransform: "uppercase" }}>
+        <div className="flex items-center justify-between gap-1">
+          <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
+          <div className="flex gap-1">
+            {pickup && <span style={tag}>PICKUP</span>}
+            {area.western && <span style={tag}>WESTERN REGION</span>}
           </div>
         </div>
-      </div>
-
-      {/* Pickup delivery — we collect the parcel from the customer. */}
-      {pickup && (
-        <div className="mt-1.5 border-black text-center" style={{ borderWidth: 3, borderStyle: "solid", padding: "2px 4px", fontSize: sq ? 17 : 20, fontWeight: 900, letterSpacing: 1.5, lineHeight: 1.1 }}>
-          ⇄ PICKUP DELIVERY
-        </div>
-      )}
-
-      {/* COD */}
-      <div className="mt-1.5 flex items-center justify-between border-2 border-black px-2 py-1">
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>
-          {pickup
-            ? booking.codAmount > 0
-              ? "Collect delivery charge"
-              : booking.codAmount < 0
-                ? "Refund — give customer"
-                : "Pickup payment"
-            : booking.codAmount > 0
-              ? "Cash on delivery"
-              : booking.codAmount < 0
-                ? "Refund — give customer"
-                : "Payment"}
-        </span>
-        <span style={{ fontSize: sq ? 18 : 22, fontWeight: 800 }}>
-          {booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : pickup ? "NO PAYMENT" : "PREPAID"}
-        </span>
-      </div>
-
-      {/* Customer */}
-      <div className="mt-1.5" style={{ fontSize: sq ? 11 : 12, lineHeight: 1.3 }}>
-        <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1 }}>Deliver to</div>
-        <div style={{ fontSize: sq ? 13 : 15, fontWeight: 700 }} className={sq ? "truncate" : ""}>
+        <div className={sq ? "truncate" : ""} style={{ fontSize: sq ? 11.5 : 12.5, fontWeight: 700, marginTop: 2, lineHeight: 1.2 }}>
           {booking.customerName} · {booking.customerPhone}
         </div>
-        <div style={sq || items.length > 14 ? clamp(2) : clamp(3)}>{booking.address}</div>
-        <div style={{ fontWeight: 800, textTransform: "uppercase", fontSize: sq ? 12 : 14 }}>
-          <Icon name="pin" className="mr-1" />{(() => {
-            // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
-            const picked = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
-            // Emirate picked wrong (Mussafah saved as Dubai) → the address decides, also for old entries.
-            const saved = picked ? emirateFromAddress(picked, booking.address) || picked : "";
-            const a = detectArea(booking.address, saved || booking.emirate);
-            // The area decides the emirate printed (Al Warqa / Jumeirah are Dubai, whatever was selected).
-            const em = emirateOfAreaName(a) ?? saved;
-            if (a === "OTHER AREA" || a === "NO ADDRESS") return em || "—";
-            // Western Region parcels must not go with the Abu Dhabi city driver.
-            if (isWesternArea(a)) return `${a} · WESTERN REGION`;
-            return em ? `${a} · ${em}` : a;
-          })()}
+        {booking.address && (
+          <div style={{ marginTop: 4, border: B, padding: "2px 7px", display: "inline-block", maxWidth: "100%", fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3 }}>
+            <div style={clamp(addrLines)}>{booking.address}</div>
+          </div>
+        )}
+        <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500 }}>
+          <Icon name="pin" className="mr-0.5" />
+          {area.text}
         </div>
       </div>
+
+      {/* Notes sit above the items, same width. No notes → no box, the space goes to the address and items. */}
+      {noteParts.length > 0 && (
+        <div className="flex items-center gap-2" style={{ border: B, padding: "4px 8px", marginBottom: 5, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, textTransform: "uppercase" }}>
+          <span style={{ ...k, color: "#000" }}>NOTES</span>
+          <span className="min-w-0 flex-1" style={sq ? clamp(1) : clamp(2)}>
+            <NotesText notes={booking.notes} hideBill hideAgent hidePickup={pickup} />
+          </span>
+        </div>
+      )}
 
       {/* Items — boxed table that fills the label down to the footer.
           Every item is printed: rows shrink, then split into 2 columns for big orders. */}
       {items.length > 0 && (
-        <div ref={boxRef} className={`mt-1.5 flex flex-col border-2 border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font }}>
+        <div ref={boxRef} className={`flex flex-col border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font, border: "1.5px solid #000" }}>
           {/* No background colour here: many browsers drop backgrounds when printing, which left this row blank. */}
-          <div className="flex border-b-2 border-black bg-white px-1.5 py-0.5 text-black" style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase" }}>
+          <div className="flex border-b border-black bg-white px-1.5 text-black" style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", paddingTop: 4, paddingBottom: 4 }}>
             <span style={{ width: fit.tick + 6 }}>✓</span>
             <span style={{ width: fit.qtyW }}>{fit.qtyW < 24 ? "#" : "Qty"}</span>
             <span className="flex-1">
               Item
-              <span className="ml-2 opacity-90">
+              <span className="ml-2" style={{ fontWeight: 600, color: "#444" }}>
                 · {pieces.length} item{pieces.length === 1 ? "" : "s"}
                 {totalQty && totalQty !== pieces.length ? ` · ${totalQty} pcs` : ""}
               </span>
@@ -282,8 +296,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
               ) : (
               <div
                 key={i}
-                className="flex items-center border-b border-black px-1.5"
-                style={{ minHeight: fit.row, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined }}
+                className="flex items-center border-b px-1.5"
+                style={{ borderBottomColor: "#999", minHeight: fit.row, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined }}
               >
                 <span className="flex shrink-0 items-center" style={{ width: fit.tick + 6 }}>
                   <span style={{ display: "inline-block", width: fit.tick, height: fit.tick, border: "1.5px solid #000" }} />
@@ -306,15 +320,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       )}
 
-      {noteParts.length > 0 && (
-        <div className="mt-1 border border-black px-1.5 py-0.5" style={{ fontSize: 10.5, lineHeight: 1.25, ...(sq ? clamp(1) : clamp(2)) }}>
-          <b style={{ fontWeight: 800 }}>NOTES: </b>
-          <NotesText notes={booking.notes} hideBill hideAgent hidePickup={pickup} />
-        </div>
-      )}
-
-      <div className={`${size === "80mm" || items.length ? "mt-1" : "mt-auto"} border-t border-black pt-0.5 text-right`} style={{ fontSize: 8 }}>
-        The Future Courier Service L.L.C
+      <div className={`${size === "80mm" || items.length ? "mt-1" : "mt-auto"} text-right`} style={{ fontSize: 7, letterSpacing: 0.6, color: "#555" }}>
+        THE FUTURE COURIER SERVICE L.L.C
       </div>
     </div>
   );
