@@ -285,8 +285,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
               it.header ? (
                 <div
                   key={i}
-                  className="flex items-center border-b border-dashed border-black px-1.5"
-                  style={{ minHeight: fit.row * 0.8, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined, fontSize: "0.8em" }}
+                  className="flex items-center px-1.5"
+                  style={{ borderBottom: "1.3px dashed #000", minHeight: fit.row * 0.8, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? T : undefined, fontSize: "0.8em" }}
                 >
                   <span className="min-w-0 flex-1" style={{ fontWeight: 700, fontStyle: "italic", ...(fit.clampName ? clamp(fit.clampName) : {}) }}>
                     {it.name}
@@ -300,8 +300,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
               ) : (
               <div
                 key={i}
-                className="flex items-center border-b px-1.5"
-                style={{ borderBottomColor: "#999", minHeight: fit.row, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? "1px solid #000" : undefined }}
+                className="flex items-center px-1.5"
+                style={{ borderBottom: T, minHeight: fit.row, lineHeight: 1.1, borderRight: fit.cols === 2 && i % 2 === 0 ? T : undefined }}
               >
                 <span className="flex shrink-0 items-center" style={{ width: fit.tick + 6 }}>
                   <span style={{ display: "inline-block", width: fit.tick, height: fit.tick, border: "1.5px solid #000" }} />
