@@ -6,12 +6,10 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "APP NO LONGER STUCK ON THE LOADING SCREEN",
-    "EXPIRED LOGIN GOES STRAIGHT TO SIGN IN",
-  ],
+  driver: [],
   admin: [
-    "APP NO LONGER STUCK ON THE LOADING SCREEN",
-    "NEW NAVY & GOLD LOADING SCREEN",
+    "LABEL PDF: COD AMOUNT AND PHONE STAY ON ONE LINE",
+    "LONG PHONE NUMBERS SHRINK TO FIT THE BOX",
+    "AREA NAME NO LONGER PRINTED TWICE",
   ],
 };

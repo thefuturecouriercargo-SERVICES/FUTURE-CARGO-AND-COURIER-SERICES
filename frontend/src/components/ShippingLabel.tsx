@@ -62,6 +62,15 @@ function clamp(lines: number): React.CSSProperties {
   return { display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" };
 }
 
+/** One line that must never wrap (the PDF snapshot can measure text a hair wider than the screen). */
+const oneLine: React.CSSProperties = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "clip", maxWidth: "100%" };
+
+/** Font that steps down for long text so it stays on one line in its box. */
+function fitFont(text: string, base: number, roomChars: number, min: number): number {
+  const len = text.length;
+  return len <= roomChars ? base : Math.max(min, Math.floor(((base * roomChars) / len) * 2) / 2);
+}
+
 export type LabelItem = { qty: string; name: string; price?: string; header?: boolean };
 
 /**
@@ -177,7 +186,9 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
     if (a === "OTHER AREA" || a === "NO ADDRESS") return { text: em || "—", western: false };
     // Western Region parcels must not go with the Abu Dhabi city driver.
     if (isWesternArea(a)) return { text: `${a} · WESTERN REGION · ABU DHABI`, western: true };
-    return { text: em ? `${a} · ${em}` : a, western: false };
+    // Area and emirate the same (RAS AL KHAIMAH · RAS AL KHAIMAH) → print it once.
+    const same = em && a.replace(/[^A-Z]/gi, "").toUpperCase() === em.replace(/[^A-Z]/gi, "").toUpperCase();
+    return { text: em && !same ? `${a} · ${em}` : a, western: false };
   })();
   // No "CASH ON DELIVERY" heading — the amount says it. Only refunds / pickup charges get a heading.
   const payLabel = booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : pickup && booking.codAmount > 0 ? "COLLECT DELIVERY CHARGE" : "";
@@ -196,17 +207,17 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
       {/* Header grid: brand + date | barcode — from / bill / agent | payment. Outlines only, no black fills. */}
       <div style={{ border: B, display: "grid", gridTemplateColumns: "1fr 1fr" }}>
         <div style={{ padding: narrow ? "4px 6px" : "6px 8px", borderRight: T, borderBottom: T }}>
-          <div style={{ fontSize: narrow ? 12 : 14, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1 }}>FUTURE COURIER</div>
-          <div style={{ fontSize: 8.5, marginTop: 2, color: "#333", textTransform: "uppercase" }}>{dubaiDate(booking.createdAt)}</div>
+          <div style={{ fontSize: narrow ? 12 : 14, fontWeight: 800, letterSpacing: 0.3, lineHeight: 1.1, ...oneLine }}>FUTURE COURIER</div>
+          <div style={{ fontSize: 8.5, marginTop: 2, color: "#333", textTransform: "uppercase", ...oneLine }}>{dubaiDate(booking.createdAt)}</div>
         </div>
         <div className="flex flex-col items-center justify-center" style={{ padding: "3px 6px", borderBottom: T }}>
           <Barcode value={String(booking.cnNo)} height={sq ? 22 : 26} />
-          <div style={{ fontSize: sq ? 9 : 10, fontWeight: 800, letterSpacing: 1.5, fontFamily: "'Courier New', monospace", lineHeight: 1.1, marginTop: 1 }}>
+          <div className="w-full text-center" style={{ fontSize: sq ? 9 : 10, fontWeight: 800, letterSpacing: 1.5, fontFamily: "'Courier New', monospace", lineHeight: 1.1, marginTop: 1, ...oneLine }}>
             CN {booking.cnNo}
           </div>
         </div>
         <div style={{ padding: narrow ? "3px 6px" : "5px 8px", borderRight: T, fontSize: 9, lineHeight: 1.6, textTransform: "uppercase" }}>
-          <div className="truncate">
+          <div className="truncate" style={{ whiteSpace: "nowrap" }}>
             FROM <b>{labelVendorName(booking.vendor.name)}</b>
           </div>
           {(hasOrderNo || billNo || parsed.agent) && (
@@ -222,8 +233,8 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           )}
         </div>
         <div className="flex flex-col items-center justify-center text-center" style={{ padding: "3px 4px" }}>
-          {payLabel && <div style={k}>{payLabel}</div>}
-          <div style={{ fontSize: sq ? 15 : 18, fontWeight: 800, lineHeight: 1.15 }}>{payValue}</div>
+          {payLabel && <div className="w-full" style={{ ...k, ...oneLine }}>{payLabel}</div>}
+          <div className="w-full" style={{ fontSize: fitFont(payValue, sq ? 15 : 18, 10, 11), fontWeight: 800, lineHeight: 1.15, ...oneLine }}>{payValue}</div>
         </div>
       </div>
 
@@ -231,16 +242,16 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           system area small underneath. Same 2-column split as the header grid so the lines align. */}
       <div style={{ marginTop: sq ? 5 : 7, marginBottom: sq ? 4 : 6, border: B, display: "grid", gridTemplateColumns: "1fr 1fr", textTransform: "uppercase" }}>
         <div className="flex min-w-0 items-center" style={{ padding: "5px 8px", borderRight: T, borderBottom: T }}>
-          <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2, ...clamp(2) }}>{booking.customerName}</div>
+          <div className="w-full" style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2, ...clamp(2) }}>{booking.customerName}</div>
         </div>
         <div className="flex min-w-0 items-center" style={{ padding: "5px 8px", borderBottom: T }}>
-          <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2 }}>{booking.customerPhone}</div>
+          <div className="w-full" style={{ fontSize: fitFont(booking.customerPhone ?? "", sq ? 11 : 12, 19, 7.5), fontWeight: 700, lineHeight: 1.2, ...oneLine }}>{booking.customerPhone}</div>
         </div>
         <div className="min-w-0" style={{ gridColumn: "1 / 3", padding: "4px 8px" }}>
           {booking.address && (
             <div style={{ fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3, ...clamp(addrLines) }}>{booking.address}</div>
           )}
-          <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500 }}>
+          <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500, ...oneLine }}>
             <Icon name="pin" className="mr-0.5" />
             {area.text}
           </div>
