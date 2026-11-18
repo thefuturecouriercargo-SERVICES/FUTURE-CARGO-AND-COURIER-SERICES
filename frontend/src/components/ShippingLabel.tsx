@@ -179,12 +179,11 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
     if (isWesternArea(a)) return { text: `${a} · WESTERN REGION · ABU DHABI`, western: true };
     return { text: em ? `${a} · ${em}` : a, western: false };
   })();
-  const payLabel = pickup
-    ? booking.codAmount > 0 ? "COLLECT DELIVERY CHARGE" : booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : "PICKUP"
-    : booking.codAmount > 0 ? "CASH ON DELIVERY" : booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : "PAYMENT";
+  // No "CASH ON DELIVERY" heading — the amount says it. Only refunds / pickup charges get a heading.
+  const payLabel = booking.codAmount < 0 ? "REFUND — GIVE CUSTOMER" : pickup && booking.codAmount > 0 ? "COLLECT DELIVERY CHARGE" : "";
   const payValue = booking.codAmount > 0 ? `AED ${fmtNumber(booking.codAmount)}` : booking.codAmount < 0 ? `AED ${fmtNumber(-booking.codAmount)}` : pickup ? "NO CASH" : "PREPAID";
-  const B = "1.5px solid #000";
-  const T = "1px solid #000";
+  const B = "2.5px solid #000"; // thick outer boxes — thin lines fade on thermal printers
+  const T = "1.3px solid #000";
   const k: React.CSSProperties = { fontSize: 7, fontWeight: 700, letterSpacing: 0.9, color: "#444", textTransform: "uppercase", lineHeight: 1.2 };
   // Pickup and Western Region go inside the notes box — no separate tags.
   const flags = [pickup && "PICKUP DELIVERY", area.western && "WESTERN REGION"].filter(Boolean) as string[];
@@ -223,7 +222,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
           )}
         </div>
         <div className="flex flex-col items-center justify-center text-center" style={{ padding: "3px 4px" }}>
-          <div style={k}>{payLabel}</div>
+          {payLabel && <div style={k}>{payLabel}</div>}
           <div style={{ fontSize: sq ? 15 : 18, fontWeight: 800, lineHeight: 1.15 }}>{payValue}</div>
         </div>
       </div>
@@ -231,18 +230,15 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
       {/* Customer box (layout 4): name | phone, then the vendor-given address across the full width,
           system area small underneath. Same 2-column split as the header grid so the lines align. */}
       <div style={{ marginTop: sq ? 5 : 7, marginBottom: sq ? 4 : 6, border: B, display: "grid", gridTemplateColumns: "1fr 1fr", textTransform: "uppercase" }}>
-        <div className="min-w-0" style={{ padding: "4px 8px", borderRight: T, borderBottom: T }}>
-          <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
+        <div className="flex min-w-0 items-center" style={{ padding: "5px 8px", borderRight: T, borderBottom: T }}>
           <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2, ...clamp(2) }}>{booking.customerName}</div>
         </div>
-        <div className="min-w-0" style={{ padding: "4px 8px", borderBottom: T }}>
-          <div style={k}>PHONE</div>
+        <div className="flex min-w-0 items-center" style={{ padding: "5px 8px", borderBottom: T }}>
           <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2 }}>{booking.customerPhone}</div>
         </div>
         <div className="min-w-0" style={{ gridColumn: "1 / 3", padding: "4px 8px" }}>
-          <div style={k}>ADDRESS</div>
           {booking.address && (
-            <div style={{ marginTop: 1, fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3, ...clamp(addrLines) }}>{booking.address}</div>
+            <div style={{ fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3, ...clamp(addrLines) }}>{booking.address}</div>
           )}
           <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500 }}>
             <Icon name="pin" className="mr-0.5" />
@@ -270,7 +266,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
       {/* Items — boxed table that fills the label down to the footer.
           Every item is printed: rows shrink, then split into 2 columns for big orders. */}
       {items.length > 0 && (
-        <div ref={boxRef} className={`flex flex-col border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font, border: "1.5px solid #000" }}>
+        <div ref={boxRef} className={`flex flex-col border-black ${size === "80mm" ? "" : "min-h-0 flex-1 overflow-hidden"}`} style={{ fontSize: fit.font, border: B }}>
           {/* No background colour here: many browsers drop backgrounds when printing, which left this row blank. */}
           <div className="flex border-b border-black bg-white px-1.5 text-black" style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", paddingTop: 4, paddingBottom: 4 }}>
             <span style={{ width: fit.tick + 6 }}>✓</span>
