@@ -228,20 +228,26 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
         </div>
       </div>
 
-      {/* Customer — vendor-given address highlighted, system area small underneath. */}
-      <div style={{ padding: sq ? "5px 0 4px" : "8px 0 6px", textTransform: "uppercase" }}>
-        <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
-        <div className={sq ? "truncate" : ""} style={{ fontSize: sq ? 11.5 : 12.5, fontWeight: 700, marginTop: 2, lineHeight: 1.2 }}>
-          {booking.customerName} · {booking.customerPhone}
+      {/* Customer box (layout 4): name | phone, then the vendor-given address across the full width,
+          system area small underneath. Same 2-column split as the header grid so the lines align. */}
+      <div style={{ marginTop: sq ? 5 : 7, marginBottom: sq ? 4 : 6, border: B, display: "grid", gridTemplateColumns: "1fr 1fr", textTransform: "uppercase" }}>
+        <div className="min-w-0" style={{ padding: "4px 8px", borderRight: T, borderBottom: T }}>
+          <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
+          <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2, ...clamp(2) }}>{booking.customerName}</div>
         </div>
-        {booking.address && (
-          <div style={{ marginTop: 4, border: B, padding: "2px 7px", display: "inline-block", maxWidth: "100%", fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3 }}>
-            <div style={clamp(addrLines)}>{booking.address}</div>
+        <div className="min-w-0" style={{ padding: "4px 8px", borderBottom: T }}>
+          <div style={k}>PHONE</div>
+          <div style={{ fontSize: sq ? 11 : 12, fontWeight: 700, lineHeight: 1.2 }}>{booking.customerPhone}</div>
+        </div>
+        <div className="min-w-0" style={{ gridColumn: "1 / 3", padding: "4px 8px" }}>
+          <div style={k}>ADDRESS</div>
+          {booking.address && (
+            <div style={{ marginTop: 1, fontSize: sq ? 11 : 11.5, fontWeight: 800, lineHeight: 1.3, ...clamp(addrLines) }}>{booking.address}</div>
+          )}
+          <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500 }}>
+            <Icon name="pin" className="mr-0.5" />
+            {area.text}
           </div>
-        )}
-        <div style={{ fontSize: 8.5, color: "#555", marginTop: 2, fontWeight: 500 }}>
-          <Icon name="pin" className="mr-0.5" />
-          {area.text}
         </div>
       </div>
 
