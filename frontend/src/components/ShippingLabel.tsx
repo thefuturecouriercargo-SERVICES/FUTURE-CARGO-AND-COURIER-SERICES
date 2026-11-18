@@ -186,9 +186,11 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   const B = "1.5px solid #000";
   const T = "1px solid #000";
   const k: React.CSSProperties = { fontSize: 7, fontWeight: 700, letterSpacing: 0.9, color: "#444", textTransform: "uppercase", lineHeight: 1.2 };
-  const tag: React.CSSProperties = { border: B, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.8, padding: "1px 6px", lineHeight: 1.3 };
+  // Pickup and Western Region go inside the notes box — no separate tags.
+  const flags = [pickup && "PICKUP DELIVERY", area.western && "WESTERN REGION"].filter(Boolean) as string[];
+  const showNotes = noteParts.length > 0 || flags.length > 0;
   // With no notes, the address gets the extra lines.
-  const addrLines = sq ? (noteParts.length ? 2 : 3) : items.length > 14 ? 2 : noteParts.length ? 3 : 5;
+  const addrLines = sq ? (showNotes ? 2 : 3) : items.length > 14 ? 2 : showNotes ? 3 : 5;
 
   return (
     <div ref={rootRef} className="label-page flex flex-col bg-white text-black" style={{ ...box, boxSizing: "border-box", fontFamily: "Arial, Helvetica, sans-serif" }}>
@@ -228,13 +230,7 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
 
       {/* Customer — vendor-given address highlighted, system area small underneath. */}
       <div style={{ padding: sq ? "5px 0 4px" : "8px 0 6px", textTransform: "uppercase" }}>
-        <div className="flex items-center justify-between gap-1">
-          <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
-          <div className="flex gap-1">
-            {pickup && <span style={tag}>PICKUP</span>}
-            {area.western && <span style={tag}>WESTERN REGION</span>}
-          </div>
-        </div>
+        <div style={k}>{pickup ? "COLLECT FROM" : "DELIVER TO"}</div>
         <div className={sq ? "truncate" : ""} style={{ fontSize: sq ? 11.5 : 12.5, fontWeight: 700, marginTop: 2, lineHeight: 1.2 }}>
           {booking.customerName} · {booking.customerPhone}
         </div>
@@ -250,11 +246,17 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
       </div>
 
       {/* Notes sit above the items, same width. No notes → no box, the space goes to the address and items. */}
-      {noteParts.length > 0 && (
+      {showNotes && (
         <div className="flex items-center gap-2" style={{ border: B, padding: "4px 8px", marginBottom: 5, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25, textTransform: "uppercase" }}>
           <span style={{ ...k, color: "#000" }}>NOTES</span>
           <span className="min-w-0 flex-1" style={sq ? clamp(1) : clamp(2)}>
-            <NotesText notes={booking.notes} hideBill hideAgent hidePickup={pickup} />
+            {flags.length > 0 && (
+              <span style={{ fontWeight: 800 }}>
+                {flags.join(" · ")}
+                {noteParts.length > 0 ? " · " : ""}
+              </span>
+            )}
+            {noteParts.length > 0 && <NotesText notes={booking.notes} hideBill hideAgent hidePickup={pickup} />}
           </span>
         </div>
       )}
