@@ -23,7 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const me = await apiFetch<AuthUser>("/auth/me");
+      // Give up after 8 s (e.g. iPhone Safari resuming a sleeping tab with a
+      // stuck request) so the app falls through to the login page instead of
+      // hanging on the loading screen.
+      const me = await Promise.race([
+        apiFetch<AuthUser>("/auth/me"),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+      ]);
       setUser(me);
     } catch {
       setUser(null);
