@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 
 const IDLE_MS = 5 * 60_000; // reload after 5 minutes without any touch, click, key or scroll
+// Pages that must never auto-reload (owner's request 20 Nov 2026: Daily Entry).
+const NO_REFRESH = ["/orders"];
 
 /**
  * Admin only: when the page is open on screen but nobody has used it for 5 minutes,
@@ -38,6 +40,7 @@ export default function AdminIdleRefresh() {
 
     const i = setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      if (NO_REFRESH.some((p) => window.location.pathname === p || window.location.pathname.startsWith(`${p}/`))) return;
       if (Date.now() - last < IDLE_MS) return;
       if (busy()) {
         touch();
