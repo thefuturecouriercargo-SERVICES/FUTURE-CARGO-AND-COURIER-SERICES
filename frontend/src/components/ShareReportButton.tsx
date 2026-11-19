@@ -29,6 +29,8 @@ interface Props {
   agents: { name: string; count: number }[];
   /** Records before this day — feeds the personal-best / team-record highlight. */
   records?: { driverBest: { employeeId: string; value: number }[]; teamBest: number; teamBestMonth: number; teamTop: number[] } | null;
+  /** Dashboard still loading the day (or its older pending) — sharing now would miss parcels. */
+  loading?: boolean;
   /** Small square icon-only button (desktop header). */
   iconOnly?: boolean;
   /** Phone dashboard: icon-only WhatsApp button that fills its box. */
@@ -232,7 +234,7 @@ export default function ShareReportButton(p: Props) {
     <>
       <button
         onClick={share}
-        disabled={busy}
+        disabled={busy || !!p.loading}
         aria-label="Share report"
         title={busy ? "Preparing…" : "Share report"}
         className={

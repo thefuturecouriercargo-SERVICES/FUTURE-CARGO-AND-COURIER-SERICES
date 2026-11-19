@@ -312,6 +312,7 @@ const todayButton = (
 );
 const shareButton = data ? (
   <ShareReportButton
+              loading={loading}
       iconOnly={!!headerSlot}
               date={useRange ? `${fromDate} → ${toDate}` : date}
               drivers={leaderRows}
@@ -432,6 +433,7 @@ return (
                                 </button>
                                 <div className="flex-1">
                                   <ShareReportButton
+              loading={loading}
                                     whatsapp
                                     date={useRange ? `${fromDate} → ${toDate}` : date}
                                     drivers={leaderRows}
