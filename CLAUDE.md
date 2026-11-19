@@ -10,3 +10,13 @@ With EVERY change you make, also update `frontend/src/lib/releaseNotes.ts`:
 - `admin`: 2–4 short CAPITAL-letter lines on what's new for admin/manager
 Replace the previous lines (don't pile them up). Use an empty list if nothing
 changed for that portal — the popup still says bugs are cleared.
+
+## Area / emirate fixes — never repeat a mistake
+`backend/src/checks/areaChecks.ts` lists every wrong-area address ever reported.
+It runs inside `npm run build`; if any case is wrong the deploy stops.
+- Every new wrong-area report: FIRST add the address as a case there, then fix.
+- Run `cd backend && npm run check:areas` before pushing any change to areas.
+- `backend/src/lib/areas.ts` and `frontend/src/lib/areas.ts` must stay identical
+  (except the first comment line) — change both.
+- Prefer fixing the rule that caused the mistake (so similar addresses are fixed
+  too) over adding one more special case.

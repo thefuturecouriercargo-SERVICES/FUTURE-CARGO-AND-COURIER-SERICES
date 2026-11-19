@@ -6,12 +6,8 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "SHARJAH CRICKET STADIUM PARCELS NO LONGER UNDER AL NAHDA (DXB)",
-    "CRICKET STADIUM / RAMEZ MALL NOW UNDER INDUSTRIAL AREA 5",
-  ],
+  driver: [],
   admin: [
-    "AREA FIX: 'STADIUM' NO LONGER READ AS AL NAHDA DUBAI",
-    "CRICKET STADIUM / RAMEZ MALL → INDUSTRIAL AREA 5, SHARJAH",
+    "AUTOMATIC CHECK OF ALL PAST AREA MISTAKES BEFORE EVERY UPDATE",
   ],
 };
