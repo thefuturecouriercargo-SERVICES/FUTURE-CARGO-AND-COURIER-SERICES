@@ -84,11 +84,11 @@ function achievements(p: Props): Achievements {
     .filter((e) => !Number.isNaN(e.t))
     .sort((a, b) => a.t - b.t);
 
-  // Race from 10 AM to 10 PM Dubai: who sat in 1st place longest (all drivers race;
+  // Race from 10 AM to 12 midnight Dubai: who sat in 1st place longest (all drivers race;
   // only drivers past the award line can win it). On a tie the earlier leader keeps 1st.
   if (/^\d{4}-\d{2}-\d{2}$/.test(p.date) && events.length) {
     const winStart = new Date(`${p.date}T10:00:00+04:00`).getTime();
-    const winEnd = Math.min(new Date(`${p.date}T22:00:00+04:00`).getTime(), Date.now());
+    const winEnd = Math.min(new Date(`${p.date}T10:00:00+04:00`).getTime() + 14 * 3600 * 1000, Date.now()); // 12 midnight
     const counts = new Map<string, number>();
     const held = new Map<string, number>();
     let leader: string | null = null;
@@ -296,7 +296,7 @@ export default function ShareReportButton(p: Props) {
               [
                 ach.top && { icon: "🏆", title: "MOST DELIVERIES", name: ach.top.name, value: `${ach.top.value}`, color: "#D4AF5A" },
                 ach.rate && { icon: "🎯", title: "HIGHEST SUCCESS RATE", name: ach.rate.name, value: `${Math.round(ach.rate.value)}%`, color: "#34D399" },
-                ach.lead && { icon: "🥇", title: "LONGEST IN 1ST PLACE · 10 AM–10 PM", name: ach.lead.name, value: dur(ach.lead.ms), color: "#60A5FA" },
+                ach.lead && { icon: "🥇", title: "LONGEST IN 1ST PLACE · 10 AM–12 AM", name: ach.lead.name, value: dur(ach.lead.ms), color: "#60A5FA" },
               ]
                 .filter(Boolean)
                 .map((c) => {

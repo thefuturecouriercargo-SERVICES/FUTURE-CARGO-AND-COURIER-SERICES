@@ -8,12 +8,12 @@ import { outsideAreaOf } from "../lib/deliveryCharge";
 
 /**
  * Daily sharing reminders for admin / manager (the bell rings until each is done):
- *  - OUTSIDE_COUNTS: Inspired & Escalo outside-area counts — from 11 AM, when the
- *    day's scanned batch has any outside parcels.
- *  - AGENT_EXCEL: Excel of the CNs scanned to the agent (Ashraf) — from 11 AM, when
- *    anything was scanned to an agent that day.
- *  - DAILY_REPORT: the dashboard's WhatsApp daily report — from 10 PM (the report
- *    covers 10 AM–10 PM). Yesterday's stays until it's shared or marked done.
+ *  - OUTSIDE_COUNTS: Inspired & Escalo outside-area counts — from 12 midnight, as
+ *    soon as the day's scanned batch has any outside parcels.
+ *  - AGENT_EXCEL: Excel of the CNs scanned to the agent (Ashraf) — from 12 midnight,
+ *    as soon as anything was scanned to an agent that day.
+ *  - DAILY_REPORT: the dashboard's WhatsApp daily report (covers 10 AM–12 midnight) —
+ *    shows from 12 midnight for the day just ended, until shared or marked done.
  */
 const router = Router();
 router.use(authenticate);
@@ -21,8 +21,6 @@ router.use(authenticate);
 const TASKS = ["OUTSIDE_COUNTS", "DAILY_REPORT", "AGENT_EXCEL"] as const;
 type Task = (typeof TASKS)[number];
 
-const MORNING_HOUR = 11; // outside counts + agent Excel
-const REPORT_HOUR = 22; // daily report
 
 const dubaiNow = () => new Date(Date.now() + 4 * 3600 * 1000);
 const dayStr = (d: Date) => d.toISOString().slice(0, 10);
@@ -70,22 +68,20 @@ router.get(
     const now = dubaiNow();
     const today = dayStr(now);
     const yesterday = addDay(today, -1);
-    const hour = now.getUTCHours();
     const done = await prisma.shareTaskDone.findMany({ where: { day: { in: [today, yesterday] } } });
     const isDone = (day: string, task: Task) => done.some((d) => d.day === day && d.task === task);
 
     const due: { task: Task; day: string; title: string; sub: string; href: string; count?: number }[] = [];
-    if (hour >= MORNING_HOUR && !isDone(today, "OUTSIDE_COUNTS")) {
+    if (!isDone(today, "OUTSIDE_COUNTS")) {
       const n = await outsideCount(today);
       if (n > 0) due.push({ task: "OUTSIDE_COUNTS", day: today, title: "Share outside area counts", sub: `${n} Inspired / Escalo parcel${n > 1 ? "s" : ""} for outside areas`, href: "/assign", count: n });
     }
-    if (hour >= MORNING_HOUR && !isDone(today, "AGENT_EXCEL")) {
+    if (!isDone(today, "AGENT_EXCEL")) {
       const a = await agentScans(today);
       if (a.count > 0)
         due.push({ task: "AGENT_EXCEL", day: today, title: `Share ${a.names.join(", ") || "agent"} scanned Excel`, sub: `${a.count} CN${a.count > 1 ? "s" : ""} scanned to the agent today`, href: "/assign", count: a.count });
     }
-    if (!isDone(yesterday, "DAILY_REPORT")) due.push({ task: "DAILY_REPORT", day: yesterday, title: "Share daily report (yesterday)", sub: "Not shared to the employee group yet", href: `/dashboard?date=${yesterday}` });
-    if (hour >= REPORT_HOUR && !isDone(today, "DAILY_REPORT")) due.push({ task: "DAILY_REPORT", day: today, title: "Share daily report", sub: "Today's report to the employee group", href: "/dashboard" });
+    if (!isDone(yesterday, "DAILY_REPORT")) due.push({ task: "DAILY_REPORT", day: yesterday, title: "Share yesterday's daily report", sub: "10 AM–12 midnight report to the employee group", href: `/dashboard?date=${yesterday}` });
     res.json({ due });
   })
 );
