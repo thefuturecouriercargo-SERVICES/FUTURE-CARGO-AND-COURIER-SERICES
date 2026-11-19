@@ -31,6 +31,7 @@ import cashHandoverRoutes from "./cashHandover.routes";
 import customerRiskRoutes from "./customerRisk.routes";
 import monthEndRoutes from "./monthEnd.routes";
 import reminderRoutes from "./reminder.routes";
+import shareTaskRoutes from "./shareTask.routes";
 import kmRoutes from "./km.routes";
 const router = Router();
 
@@ -42,6 +43,7 @@ router.use("/employees", employeeRoutes);
 router.use("/orders", orderRoutes);
 router.use("/driver", driverRoutes);
 router.use("/reminders", reminderRoutes);
+router.use("/share-tasks", shareTaskRoutes);
 router.use("/km", kmRoutes);
 router.use("/cash-closings", cashClosingRoutes);
 router.use("/dashboard", dashboardRoutes);

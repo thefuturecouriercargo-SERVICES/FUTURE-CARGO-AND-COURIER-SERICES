@@ -49,6 +49,15 @@ function chime() {
   }
 }
 
+/** Daily sharing job the office must not forget (outside counts, daily report, agent Excel). */
+interface ShareTask {
+  task: "OUTSIDE_COUNTS" | "DAILY_REPORT" | "AGENT_EXCEL";
+  day: string;
+  title: string;
+  sub: string;
+  href: string;
+}
+
 interface AgingCn {
   cn: number;
   days: number;
@@ -98,6 +107,42 @@ export default function AlertsBell() {
   const [remOpen, setRemOpen] = useState(false);
   const [remBusy, setRemBusy] = useState<string | null>(null);
   const knownRem = useRef<Set<string> | null>(null);
+  const isStaff = user?.role === "SUPER_ADMIN" || user?.role === "MANAGER";
+  const [shares, setShares] = useState<ShareTask[]>([]);
+  const knownShare = useRef<Set<string> | null>(null);
+
+  const loadShares = useCallback(async () => {
+    if (!isStaff) return;
+    try {
+      const { due } = await apiFetch<{ due: ShareTask[] }>("/share-tasks/due");
+      const keys = due.map((t) => `${t.task}|${t.day}`);
+      // Sound when a sharing job becomes due (not on first load of the page).
+      if (knownShare.current && keys.some((k) => !knownShare.current!.has(k))) chime();
+      knownShare.current = new Set(keys);
+      setShares(due);
+    } catch {
+      /* ignore */
+    }
+  }, [isStaff]);
+  useSocketEvent("sharetask:changed", () => loadShares());
+  useEffect(() => {
+    loadShares();
+    const t = setInterval(loadShares, 60000);
+    return () => clearInterval(t);
+  }, [loadShares]);
+
+  async function markShared(t: ShareTask) {
+    const key = `${t.task}|${t.day}`;
+    setRemBusy(key);
+    try {
+      await apiFetch("/share-tasks/done", { method: "POST", body: { task: t.task, day: t.day } });
+      await loadShares();
+    } catch (e) {
+      toast("Couldn't mark done", "error", e instanceof Error ? e.message : undefined);
+    } finally {
+      setRemBusy(null);
+    }
+  }
 
   const loadReminders = useCallback(async () => {
     if (!isAdmin) return;
@@ -107,7 +152,6 @@ export default function AlertsBell() {
       if (knownRem.current && list.some((r) => !knownRem.current!.has(r.id))) chime();
       knownRem.current = new Set(list.map((r) => r.id));
       setReminders(list);
-      if (!list.length) setRemOpen(false);
     } catch {
       /* ignore */
     }
@@ -247,7 +291,11 @@ export default function AlertsBell() {
 
   const total = groups.reduce((s, g) => s + g.count, 0);
   const unseen = Math.max(0, total - seen);
-  const ringing = reminders.length > 0;
+  const ringCount = reminders.length + shares.length;
+  const ringing = ringCount > 0;
+  useEffect(() => {
+    if (!ringing) setRemOpen(false);
+  }, [ringing]);
 
   function toggle() {
     // A manager's reminder opens its own popup until the admin confirms it.
@@ -285,7 +333,7 @@ export default function AlertsBell() {
         </svg>
         {ringing && (
           <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-[#0A1020] bg-[#EF4444] px-1 text-[11px] font-bold text-white">
-            {reminders.length}
+            {ringCount}
           </span>
         )}
         {!ringing && total > 0 && (
@@ -307,20 +355,51 @@ export default function AlertsBell() {
         <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/60 p-3 pt-[80px]" onClick={() => setRemOpen(false)}>
           <div
             role="dialog"
-            aria-label="Reminders from manager"
+            aria-label="Reminders"
             onClick={(e) => e.stopPropagation()}
             className="flex max-h-[calc(100vh-110px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#EF4444]/40 bg-[#0F1626] text-[#E8ECF4] shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
           >
             <div className="flex items-center justify-between border-b border-[#1F2A40] bg-[#1A1220] px-4 py-3">
               <span className="font-display text-[15px] font-semibold text-white">
-                <Icon name="bell" className="mr-1" />Reminder{reminders.length > 1 ? "s" : ""} from manager
-                <span className="ml-2 rounded-full bg-[#EF4444]/20 px-2 py-0.5 text-[11px] font-bold text-[#FCA5A5]">{reminders.length}</span>
+                <Icon name="bell" className="mr-1" />REMINDER{ringCount > 1 ? "S" : ""}
+                <span className="ml-2 rounded-full bg-[#EF4444]/20 px-2 py-0.5 text-[11px] font-bold text-[#FCA5A5]">{ringCount}</span>
               </span>
               <button onClick={() => setRemOpen(false)} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full border border-[#2A3550] text-lg">
                 ×
               </button>
             </div>
             <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
+              {shares.length > 0 && <div className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8C97AD]">TO SHARE</div>}
+              {shares.map((t) => {
+                const key = `${t.task}|${t.day}`;
+                return (
+                  <div key={key} className="rounded-xl border border-[#3A3220] bg-[#131C30] p-3">
+                    <div className="text-[13px] font-bold uppercase tracking-wide text-[#F1D9A0]">{t.title}</div>
+                    <div className="mt-0.5 text-[11.5px] uppercase text-[#8C97AD]">
+                      {fmtDate(t.day)} · {t.sub}
+                    </div>
+                    <div className="mt-2.5 flex gap-2">
+                      <button
+                        onClick={() => {
+                          setRemOpen(false);
+                          router.push(t.href);
+                        }}
+                        className="h-9 flex-1 rounded-lg border border-[#D4AF5A] text-[13px] font-bold uppercase text-[#D4AF5A] hover:bg-[#D4AF5A]/10"
+                      >
+                        OPEN
+                      </button>
+                      <button
+                        disabled={remBusy === key}
+                        onClick={() => markShared(t)}
+                        className="h-9 flex-1 rounded-lg bg-[#D4AF5A] text-[13px] font-bold uppercase text-[#0A1020] hover:brightness-110 disabled:opacity-60"
+                      >
+                        SHARED · DONE
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {reminders.length > 0 && shares.length > 0 && <div className="px-1 pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8C97AD]">FROM MANAGER</div>}
               {reminders.map((r) => (
                 <div key={r.id} className="rounded-xl border border-[#2A3550] bg-[#131C30] p-3">
                   <div className="flex items-start justify-between gap-2">

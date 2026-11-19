@@ -696,3 +696,18 @@ model KmPhoto {
   @@index([createdAt])
   @@map("km_photos")
 }
+
+// Daily sharing jobs the office must not forget (outside-area counts, daily report,
+// agent's scanned Excel). One row once a job is done for a Dubai day.
+model ShareTaskDone {
+  id         String   @id @default(cuid())
+  day        String   // "YYYY-MM-DD" (Dubai)
+  task       String   // OUTSIDE_COUNTS | DAILY_REPORT | AGENT_EXCEL
+  doneById   String
+  doneByName String
+  how        String   @default("MANUAL") // MANUAL | AUTO (shared from the app)
+  doneAt     DateTime @default(now())
+
+  @@unique([day, task])
+  @@map("share_task_done")
+}

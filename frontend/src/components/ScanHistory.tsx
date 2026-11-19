@@ -629,6 +629,8 @@ export function DriverScanExport({
     };
     try {
       await (kind === "pdf" ? makeScanPdf(mine, o) : makeScanExcel(mine, o));
+      // The agent's (e.g. Ashraf's) Excel clears the "share agent Excel" reminder for today.
+      if (kind === "xl" && who) apiFetch("/share-tasks/done", { method: "POST", body: { task: "AGENT_EXCEL", day, auto: true, driverName: who } }).catch(() => undefined);
     } catch (err) {
       alert(`Could not make the file: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

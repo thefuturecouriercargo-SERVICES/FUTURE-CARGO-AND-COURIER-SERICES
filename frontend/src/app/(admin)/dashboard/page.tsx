@@ -83,6 +83,15 @@ employeeBreakdown: ({ employee: { id: string; name: string } } & Summary & { tot
 
 export default function DailyDashboardPage() {
   const [date, setDate] = useState(todayStr());
+  // Opened from the "share daily report" reminder for an earlier day (?date=YYYY-MM-DD).
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("date");
+      if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDate(q);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   // On desktop, Today + Share sit as two small boxes in the top header bar.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {

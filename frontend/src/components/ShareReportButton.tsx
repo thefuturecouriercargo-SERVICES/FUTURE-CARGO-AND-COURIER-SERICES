@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Feedback";
+import { apiFetch } from "@/lib/api";
 import { fmtDateLong } from "@/lib/format";
 
 export interface ShareDriverRow {
@@ -193,9 +194,14 @@ export default function ShareReportButton(p: Props) {
       if (!blob) throw new Error("Could not draw the report image");
       const file = new File([blob], `future-courier-${p.date}.png`, { type: "image/png" });
 
+      // Clears the "share daily report" reminder for this day.
+      const markDone = () => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(p.date)) apiFetch("/share-tasks/done", { method: "POST", body: { task: "DAILY_REPORT", day: p.date, auto: true } }).catch(() => undefined);
+      };
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await nav.share({ files: [file], title: text, text });
+        markDone();
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -205,6 +211,7 @@ export default function ShareReportButton(p: Props) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+      markDone();
       toast("Report image downloaded", "success", "Attach it in WhatsApp — the chat opened with the text summary.");
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return; // share sheet closed
