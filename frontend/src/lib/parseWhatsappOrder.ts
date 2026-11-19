@@ -272,7 +272,8 @@ export function parseWhatsappOrder(raw: string): ParsedOrder {
     if (urg) {
       const v = urg[1].trim();
       if (/^(y|yes|yes\b.*|urgent.*|today.*|asap.*)$/i.test(v)) notes.push(`URGENT delivery${/^(y|yes)$/i.test(v) ? "" : `: ${v}`}`);
-      else if (v && !/^(no|n|normal.*|not\s+urgent.*|-|nil|none)$/i.test(v)) notes.push(`Delivery: ${v}`);
+      // "charge 15 included in total" is the form's own text, not a note for the driver — skip it.
+      else if (v && !/^(no|n|normal.*|not\s+urgent.*|-|nil|none)$/i.test(v) && !/\bcharges?\b/i.test(v)) notes.push(`Delivery: ${v}`);
       continue;
     }
     // A form label with nothing typed after it ("SIZE:", "Landmark:") — skip it.

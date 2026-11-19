@@ -30,6 +30,9 @@ const KNOWN_LABELS = /^(alt\.?\s*phone|alt|phone|call|location|loc|time|deliver|
  * Split a booking's notes ("Bill 1211 · Agent KD · TOP URGENT · Alt phone: 050…")
  * into the bill No., the agent and the remaining parts, each with an optional label.
  */
+/** A note that only talks about the delivery charge being included in the total. */
+export const DELIVERY_CHARGE_NOTE = /^(?:(?:urgent(?:ly)?\s*)?deliver(?:y|ed)?\s*(?:charges?)?\s*[:\-]\s*)?.*\bcharges?\b.*\b(?:included|incl\.?|in\s*total)\b/i;
+
 export function parseNotes(notes: string | null | undefined): ParsedNotes {
   const out: ParsedNotes = { bill: null, agent: null, parts: [] };
   const segs = String(notes ?? "")
@@ -37,6 +40,9 @@ export function parseNotes(notes: string | null | undefined): ParsedNotes {
     .map((s) => s.trim())
     .filter(Boolean);
   for (const s of segs) {
+    // Delivery-charge lines from the vendor's form ("Delivery: charge 15 included in total")
+    // are not instructions for the driver — the COD amount already covers it. Never show them.
+    if (DELIVERY_CHARGE_NOTE.test(s)) continue;
     const bill = s.match(/^bill\s*(?:no\.?)?\s*[:#-]?\s*(.+)$/i);
     if (bill && !out.bill) {
       out.bill = bill[1].trim();
