@@ -1,4 +1,4 @@
-import { emirateFromAddress } from "./areas";
+import { emirateOfArea } from "./areas";
 /**
  * Delivery charge per parcel.
  *
@@ -52,34 +52,26 @@ export function isOutsideArea(emirate?: string | null, address?: string | null):
   return outsideAreaOf(emirate, address) !== null;
 }
 
-/**
- * Right emirate for a parcel: when the address names an outside emirate
- * (Umm Al Quwain, Fujairah, Al Ain, Ras Al Khaimah) and does NOT also name the
- * chosen emirate, the address wins. Sajja / Kalba stay with Sharjah.
- */
 const EMIRATE_WORD: Record<string, RegExp> = {
   DUBAI: /\bdub[a]?[iy]\b|\bdxb\b/i,
   SHARJAH: /\bsh[a]?r[a]?j[a]?h?\b|\bsharjha\b|\bshj\b/i,
   ABUDHABI: /\babu\s*dh?abi\b|\babudh?abi\b|\bauh\b/i,
   AJMAN: /\bajm[a]+n\b|\bajm\b/i,
 };
+
+/**
+ * Emirate to save. The emirate the vendor / client gave ALWAYS stays — the app never
+ * changes it (a mismatch with the address is only shown as a CHECK warning, see
+ * emirateWarning). Only a blank or OTHER emirate is filled in from the address.
+ */
 export function correctEmirate(emirate: string, address?: string | null): string {
   const em = (emirate ?? "").toUpperCase().trim();
+  if (em && em !== "OTHER") return em;
   const place = outsidePlaceInText(address);
-  // No outside emirate in the address → check Dubai / Sharjah / Ajman / Abu Dhabi against the area named.
-  if (!place || !(OUTSIDE_EMIRATES as readonly string[]).includes(place)) {
-    // Outside emirate picked, but the address names no outside place and writes one city emirate
-    // ("…Ra's Al Khor, Dubai" saved as Umm Al Quwain) → the address wins.
-    if (!place && (OUTSIDE_EMIRATES as readonly string[]).includes(em)) {
-      const named = Object.keys(EMIRATE_WORD).filter((k) => EMIRATE_WORD[k].test(address ?? ""));
-      if (named.length === 1) return named[0];
-    }
-    return emirateFromAddress(em, address);
-  }
-  if (place === em) return em;
-  const own = EMIRATE_WORD[em];
-  if (own && own.test(address ?? "")) return em; // address names both → keep what was chosen
-  return place;
+  if (place && (OUTSIDE_EMIRATES as readonly string[]).includes(place)) return place;
+  const named = Object.keys(EMIRATE_WORD).filter((k) => EMIRATE_WORD[k].test(address ?? ""));
+  if (named.length === 1) return named[0];
+  return emirateOfArea(address ?? "") ?? em;
 }
 
 export const OUTSIDE_CHARGE = 20;

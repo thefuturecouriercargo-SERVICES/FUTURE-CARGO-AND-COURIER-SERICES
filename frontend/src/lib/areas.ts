@@ -841,3 +841,29 @@ export function emirateFromAddress(emirate?: string | null, address?: string | n
   const owner = emirateOfAreaName(detectArea(text, em));
   return owner && owner !== em ? owner : em;
 }
+
+/** Outside emirates written in an address — spelling-tolerant (same patterns as the delivery charge). */
+const OUTSIDE_EMIRATE_TEXT: [RegExp, string][] = [
+  [/\bu+m+[aeiu]*n?[\s\-'’]*(?:[aeu]l+[\s\-'’]*)?[qkg][aeiouwv]{1,6}n\b|\b[qk]u[wv]+a?i?y?n\b|\bu\.?a\.?q\b/i, "UMM AL QUWAIN"],
+  [/\bf[uo]+j+[aeiy]{0,3}r+a*h?\b/i, "FUJAIRAH"],
+  [/\bal[\s\-]*a[iy]n\b(?![\s\-]*(?:road|rd|street|st|highway|hwy)\b)/i, "AL AIN"],
+  [/\bras[\s\-'’]*(?:[aeu]l+)?[\s\-'’]*kh?[aei]{1,2}ma?h?\b|\brak\b(?![\s\-]*(?:bank|ceramics?|porcelain|insurance)\b)/i, "RAS AL KHAIMAH"],
+];
+
+/**
+ * The emirate given by the vendor / client is NEVER changed by the app.
+ * This only tells when the address seems to point to another emirate, so the
+ * label and the form can show a CHECK warning for the office to fix by hand.
+ * Returns that other emirate, or null when nothing to check.
+ */
+export function emirateWarning(given?: string | null, address?: string | null): string | null {
+  const em = (given ?? "").toUpperCase().trim();
+  const text = (address ?? "").trim();
+  if (!em || em === "OTHER" || em === "EXCHANGED" || !text) return null;
+  const outside = OUTSIDE_EMIRATE_TEXT.find(([re]) => re.test(text))?.[1];
+  if (outside) return outside === em || EMIRATE_WORDS[em]?.test(text) ? null : outside;
+  const fromWords = emirateFromAddress(em, text);
+  if (fromWords && fromWords !== em) return fromWords;
+  const owner = emirateOfAreaName(detectArea(text, em));
+  return owner && owner !== em ? owner : null;
+}

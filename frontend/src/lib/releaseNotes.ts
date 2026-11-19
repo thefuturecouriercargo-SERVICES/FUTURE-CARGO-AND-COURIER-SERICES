@@ -6,8 +6,12 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
+  driver: [
+    "EMIRATE ON EACH PARCEL IS NOW EXACTLY AS THE VENDOR / CUSTOMER GAVE IT",
+  ],
   admin: [
-    "AUTOMATIC CHECK OF ALL PAST AREA MISTAKES BEFORE EVERY UPDATE",
+    "APP NEVER CHANGES THE EMIRATE GIVEN BY VENDOR / CUSTOMER",
+    "MISMATCH SHOWS 'CHECK EMIRATE' ON THE LABEL AND ENTRY FORM",
+    "EMIRATE FILLED IN ONLY WHEN LEFT BLANK / OTHER",
   ],
 };

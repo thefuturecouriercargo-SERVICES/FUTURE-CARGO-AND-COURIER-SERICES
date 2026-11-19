@@ -10,7 +10,7 @@ import { startNightlyBackupScheduler, nightlyConfigured } from "./services/night
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
-import { fixOtherEmirates, fixOutsideEmirates } from "./services/inspiredWoo.service";
+import { fixOtherEmirates } from "./services/inspiredWoo.service";
 import { startAzanPushScheduler } from "./services/azanPush.service";
 
 async function main() {
@@ -45,9 +45,7 @@ async function main() {
   void fixOtherEmirates()
     .then((n) => n && console.log(`[emirates] fixed ${n} parcel(s) saved as OTHER`))
     .catch((err) => console.error("[emirates] fix failed", err));
-  void fixOutsideEmirates()
-    .then((n) => n && console.log(`[emirates] moved ${n} parcel(s) to the outside emirate their address names`))
-    .catch((err) => console.error("[emirates] outside fix failed", err));
+  // No startup fixer may change an emirate the vendor / client gave — only blank / OTHER ones are filled.
 
   const shutdown = async (signal: string) => {
     // eslint-disable-next-line no-console

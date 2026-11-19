@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { writeAuditLog } from "./audit.service";
 import { emitGlobal } from "../lib/socket";
-import { chargeFor, correctEmirate, outsidePlaceInText } from "../lib/deliveryCharge";
+import { outsidePlaceInText } from "../lib/deliveryCharge";
 import { createBooking, phoneDigits, isCnFree, CN_START } from "./booking.service";
 
 /**
@@ -650,29 +650,3 @@ export async function markWebsiteCompleted(bookingIds: string[]): Promise<{ mark
   return { marked, failed, error };
 }
 
-/**
- * Parcels whose address names an outside emirate but were saved under another one
- * ("Ummul Kuvain" saved as ABUDHABI) get the right emirate and outside charge —
- * bookings from the last 14 days and their orders that are still pending.
- * Safe to run on every start: only touches parcels that disagree with their address.
- */
-export async function fixOutsideEmirates(): Promise<number> {
-  const since = new Date(Date.now() - 14 * 24 * 3600 * 1000);
-  const list = await prisma.booking.findMany({
-    where: { createdAt: { gte: since }, status: { not: "REJECTED" } },
-    select: { id: true, address: true, emirate: true, orderId: true, vendor: { select: { name: true, deliveryCharge: true } } },
-  });
-  let fixed = 0;
-  for (const b of list) {
-    const em = correctEmirate(b.emirate, b.address);
-    if (em === b.emirate) continue;
-    await prisma.booking.update({ where: { id: b.id }, data: { emirate: em } });
-    if (b.orderId)
-      await prisma.order.updateMany({
-        where: { id: b.orderId, status: "PENDING" },
-        data: { emirate: em, deliveryCharge: chargeFor(b.vendor, em, b.address) },
-      });
-    fixed++;
-  }
-  return fixed;
-}

@@ -11,6 +11,12 @@ With EVERY change you make, also update `frontend/src/lib/releaseNotes.ts`:
 Replace the previous lines (don't pile them up). Use an empty list if nothing
 changed for that portal — the popup still says bugs are cleared.
 
+## NEVER change the emirate / area the vendor or client gave (owner's rule, 19 Nov 2026)
+- Saving, importing, startup fixers, labels, forms: the given emirate stays as it is.
+- If the address seems to be in another emirate, only show a CHECK warning
+  (`emirateWarning` in areas.ts) — on the label notes and the entry form.
+- Only a blank / OTHER emirate may be filled in from the address.
+
 ## Area / emirate fixes — never repeat a mistake
 `backend/src/checks/areaChecks.ts` lists every wrong-area address ever reported.
 It runs inside `npm run build`; if any case is wrong the deploy stops.

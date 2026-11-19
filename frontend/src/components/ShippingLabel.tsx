@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
 import { Booking } from "@/types";
 import { fmtNumber, fmtDate } from "@/lib/format";
-import { detectArea, isWesternArea, emirateOfAreaName, emirateFromAddress } from "@/lib/areas";
+import { detectArea, isWesternArea, emirateOfAreaName, emirateWarning } from "@/lib/areas";
 import Icon from "@/components/Icon";
 
 export type LabelSize = "4x6" | "4x4" | "80mm" | "a4";
@@ -178,11 +178,10 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   const area = (() => {
     // Never print "OTHER AREA" / "NO ADDRESS" on a label: show only the emirate then.
     const picked = booking.emirate && booking.emirate !== "OTHER" && booking.emirate !== "EXCHANGED" ? booking.emirate : "";
-    // Emirate picked wrong (Mussafah saved as Dubai) → the address decides, also for old entries.
-    const saved = picked ? emirateFromAddress(picked, booking.address) || picked : "";
-    const a = detectArea(booking.address, saved || booking.emirate);
-    // The area decides the emirate printed (Al Warqa / Jumeirah are Dubai, whatever was selected).
-    const em = emirateOfAreaName(a) ?? saved;
+    const a = detectArea(booking.address, picked || booking.emirate);
+    // The emirate the vendor / client gave is always printed — never changed by the app.
+    // Only when none was given does the area fill it in. A mismatch shows as CHECK in the notes.
+    const em = picked || emirateOfAreaName(a) || "";
     if (a === "OTHER AREA" || a === "NO ADDRESS") return { text: em || "—", western: false };
     // Western Region parcels must not go with the Abu Dhabi city driver.
     if (isWesternArea(a)) return { text: `${a} · WESTERN REGION · ABU DHABI`, western: true };
@@ -197,7 +196,13 @@ export default function ShippingLabel({ booking, size }: { booking: Booking; siz
   const T = "1.3px solid #000";
   const k: React.CSSProperties = { fontSize: 7, fontWeight: 700, letterSpacing: 0.9, color: "#444", textTransform: "uppercase", lineHeight: 1.2 };
   // Pickup and Western Region go inside the notes box — no separate tags.
-  const flags = [pickup && "PICKUP DELIVERY", area.western && "WESTERN REGION"].filter(Boolean) as string[];
+  // Address seems to be in another emirate than the one given → warn, don't change it.
+  const warnEm = emirateWarning(booking.emirate, booking.address);
+  const flags = [
+    pickup && "PICKUP DELIVERY",
+    area.western && "WESTERN REGION",
+    warnEm && `CHECK EMIRATE: ADDRESS LOOKS LIKE ${warnEm === "ABUDHABI" ? "ABU DHABI" : warnEm}`,
+  ].filter(Boolean) as string[];
   const showNotes = noteParts.length > 0 || flags.length > 0;
   // With no notes, the address gets the extra lines.
   const addrLines = sq ? (showNotes ? 2 : 3) : items.length > 14 ? 2 : showNotes ? 3 : 5;

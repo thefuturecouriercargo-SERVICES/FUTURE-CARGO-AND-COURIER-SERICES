@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import CustomerRiskBadge from "@/components/CustomerRiskBadge";
 import { Booking, BookingInput, EMIRATES, Vendor } from "@/types";
 import { parseWhatsappOrder } from "@/lib/parseWhatsappOrder";
-import { emirateFromAddress } from "@/lib/areas";
+import { emirateWarning } from "@/lib/areas";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { ESCALO_PRODUCTS, INSPIRED_PRODUCTS } from "@/lib/products";
 
@@ -26,17 +26,9 @@ const labelCls = "mb-1 block font-mono text-[10px] uppercase text-ink-soft";
 
 export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }: Props) {
   const [form, setForm] = useState(EMPTY);
-  // The emirate box stays on the previous order's emirate — when the address names an
-  // area of another emirate (Al Warqa, Jumeirah → Dubai), switch it to match.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setForm((cur) => {
-        const right = emirateFromAddress(cur.emirate, cur.address);
-        return right && right !== cur.emirate && EMIRATES.includes(right) ? { ...cur, emirate: right } : cur;
-      });
-    }, 500);
-    return () => clearTimeout(t);
-  }, [form.address]);
+  // The emirate is never switched by the app — when the address looks like another
+  // emirate, a CHECK warning shows under the emirate box and the person decides.
+  const emWarn = emirateWarning(form.emirate, form.address);
   const [vendorId, setVendorId] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -166,7 +158,7 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
       customerName: form.customerName.trim(),
       customerPhone: form.customerPhone.trim(),
       address: form.address.trim(),
-      emirate: emirateFromAddress(form.emirate, form.address) || form.emirate,
+      emirate: form.emirate,
       items: form.items.trim() || undefined,
       codAmount: Math.round(cod),
       notes: form.notes.trim() || undefined,
@@ -272,6 +264,11 @@ export default function BookingForm({ editing, vendors, onSubmit, onCancelEdit }
               </option>
             ))}
           </select>
+          {emWarn && (
+            <div className="mt-1 font-mono text-[10px] font-semibold uppercase text-amber-600">
+              CHECK: ADDRESS LOOKS LIKE {emWarn === "ABUDHABI" ? "ABU DHABI" : emWarn}
+            </div>
+          )}
         </div>
         <div>
           <label className={labelCls}>COD amount (AED) *</label>
