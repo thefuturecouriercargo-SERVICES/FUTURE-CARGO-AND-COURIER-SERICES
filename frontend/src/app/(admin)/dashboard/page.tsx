@@ -150,24 +150,32 @@ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({})
     await apiFetch(`/purchases/${entryId}`, { method: "DELETE" });
     await load();
   }
+  // Each load gets a number; an older load that finishes late (e.g. today's, after
+  // switching to yesterday) must not overwrite the newer one — otherwise one day's
+  // orders get mixed with another day's pending carryover and pending is double-counted.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
     const query: Record<string, string> = useRange
   ? { from: fromDate, to: toDate }
   : { date };
-const res = await apiFetch<DailyResponse>("/dashboard/daily", { query });
-        setData(res);
       // Carryover backlog should reflect what was still unresolved as of the date being
       // viewed — not always today's live backlog — so historical dates stay accurate.
-      const carryoverRes = await apiFetch<{ orders: Order[] }>("/orders/pending-carryover", {
-        query: { date: useRange ? toDate : date },
-      });
-        setPendingCarryover(carryoverRes.orders);
-        const purchasesRes = await apiFetch<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>("/purchases", { query: { date } });
-        setPurchases(purchasesRes);
+      // Day data and carryover are fetched together and applied together, same day only.
+      const [res, carryoverRes, purchasesRes] = await Promise.all([
+        apiFetch<DailyResponse>("/dashboard/daily", { query }),
+        apiFetch<{ orders: Order[] }>("/orders/pending-carryover", { query: { date: useRange ? toDate : date } }),
+        apiFetch<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>("/purchases", { query: { date } }),
+      ]);
+      if (stale()) return;
+      setData(res);
+      setPendingCarryover(carryoverRes.orders);
+      setPurchases(purchasesRes);
       } finally {
-        setLoading(false);
+        if (!stale()) setLoading(false);
       }
   }, [date, useRange, fromDate, toDate]);
 
