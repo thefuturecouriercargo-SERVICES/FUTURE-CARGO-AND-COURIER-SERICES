@@ -149,6 +149,33 @@ function detectEmirate(addr: WooAddress): string {
   return emirateFromText(`${addr.state ?? ""} ${addr.city ?? ""} ${addr.address_1 ?? ""} ${addr.address_2 ?? ""}`, addr.state);
 }
 
+const EMIRATE_LABEL: Record<string, string> = {
+  DUBAI: "Dubai",
+  SHARJAH: "Sharjah",
+  ABUDHABI: "Abu Dhabi",
+  AJMAN: "Ajman",
+  "RAS AL KHAIMAH": "Ras Al Khaimah",
+  FUJAIRAH: "Fujairah",
+  "UMM AL QUWAIN": "Umm Al Quwain",
+  "AL AIN": "Al Ain",
+};
+/** True when an emirate is written in the text itself (not just guessed from an area name). */
+function namesEmirate(text: string): boolean {
+  return /abu\s*dh?abi|abudh?abi|\bauh\b|ras\s*al\s*khaim|\brak\b|umm\s*al\s*q|\buaq\b|fujair|\bajm[a]*n\b|sh[a]?r[a]?j[a]?h|\bshj\b|\bdub[a]?[iy]\b|\bdxb\b|al\s*ain/i.test(text);
+}
+/**
+ * The emirate the customer picked on the website, added to the address when the address
+ * doesn't write one ("Corniche" + Ajman picked → "Corniche, Ajman"). Otherwise the picked
+ * emirate is lost and later checks can't tell Ajman Corniche from Abu Dhabi's (ORD10035).
+ */
+function withPickedEmirate(address: string, state?: string): string {
+  const st = (state ?? "").trim();
+  if (!st || !address || namesEmirate(address)) return address;
+  const em = emirateFromText(st, st);
+  const label = EMIRATE_LABEL[em];
+  return label ? `${address}, ${label}` : address;
+}
+
 /** Emirate from a free-text address (state code first when given). "OTHER" when unknown. */
 export function emirateFromText(raw: string, stateCode?: string): string {
   const text = raw.toLowerCase();
@@ -178,7 +205,7 @@ export function mapWooOrder(o: WooOrder) {
   const bill = o.billing ?? {};
   const name = `${ship.first_name || bill.first_name || ""} ${ship.last_name || bill.last_name || ""}`.trim() || "Customer";
   const phone = (ship.phone || bill.phone || "").trim();
-  const address = [ship.address_1, ship.address_2, ship.city].map((s) => (s ?? "").trim()).filter(Boolean).join(", ");
+  const address = withPickedEmirate([ship.address_1, ship.address_2, ship.city].map((s) => (s ?? "").trim()).filter(Boolean).join(", "), ship.state);
   // "2 × Akoya (AED 80)" — line total incl. tax, so the label shows each item's price.
   const items = (o.line_items ?? [])
     .map((li) => {
