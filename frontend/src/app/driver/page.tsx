@@ -1892,25 +1892,53 @@ function StatusScanModal({
     }
   }
 
+  const GOLD = "#b08a35";
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-5 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-xl font-semibold text-navy"><Icon name="scan" className="mr-1" />Scan to update status</h2>
-          <button onClick={onClose} className="text-2xl leading-none text-ink-soft">
-            ×
-          </button>
-        </div>
-        <p className="mb-3 text-sm text-ink-soft">Scan the parcel label (or type the CN). The status screen opens for that parcel.</p>
-        <BarcodeScanner onCode={onCode} autoCamera lastResult={error ? { ...error, tone: "bad" } : null} />
-        {error && (
-          <div className="mt-3 rounded border border-cancelled bg-cancelled-bg px-3 py-2 text-sm text-cancelled">
-            Not your parcel?
-            <button onClick={onClaim} className="ml-2 font-bold underline">
-              Assign it to me
+    <div className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
+      <div className="flex h-full w-full max-w-md flex-col">
+        <BarcodeScanner
+          variant="gold"
+          onCode={onCode}
+          autoCamera
+          placeholder="Type CN number"
+          leading={
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-lg"
+              style={{ borderColor: GOLD, color: "#e9c46a" }}
+            >
+              ✕
             </button>
-          </div>
-        )}
+          }
+          footer={
+            <div className="px-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+              <div className="rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
+                <p key={error?.id ?? 0} className="truncate font-mono text-xs font-bold uppercase tracking-wider" style={{ color: error ? "#f09595" : "#8d8163" }}>
+                  {error ? `✕ ${error.text}` : "Waiting for scan…"}
+                </p>
+                {error && (
+                  <button
+                    type="button"
+                    onClick={onClaim}
+                    className="mt-2 h-10 w-full rounded-lg font-mono text-xs font-bold uppercase tracking-wider active:scale-[0.98]"
+                    style={{ background: GOLD, color: "#141e33" }}
+                  >
+                    Assign it to me
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={onClose}
+                className="mt-2 h-11 w-full rounded-xl border-2 font-mono text-xs font-bold uppercase tracking-widest"
+                style={{ borderColor: GOLD, color: "#e9c46a" }}
+              >
+                Done
+              </button>
+            </div>
+          }
+        />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@
 export const RELEASE_NOTES = {
   driver: [
     "PAYROLL: NEW ‹ MONTH › SWITCHER — NO MORE CUT-OFF MONTH",
+    "SCAN TO UPDATE NOW USES THE BLACK & GOLD FULL-SCREEN SCANNER",
   ],
   admin: [],
 };
