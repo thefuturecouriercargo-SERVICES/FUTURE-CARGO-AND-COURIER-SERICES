@@ -4,6 +4,7 @@ import RegisterSW from "@/components/RegisterSW";
 import AppRefresh from "@/components/AppRefresh";
 import IOSDownloadFix from "@/components/IOSDownloadFix";
 import GoldDoors from "@/components/GoldDoors";
+import NoZoom from "@/components/NoZoom";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,9 +28,10 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
-  // Stops iPhone zooming the page in when a search/number box is tapped
-  // (iPhone still allows pinch-zoom).
+  // No zooming at all: stops iPhone zooming in when a box is tapped and stops
+  // accidental pinch / double-tap zoom (NoZoom + touch-action cover iPhone).
   maximumScale: 1,
+  userScalable: false,
   // Lets the app draw content behind the iPhone's notch/status bar and home
   // indicator, so the safe-area-inset-* CSS variables below actually activate —
   // without this, iOS just adds blank white bars instead.
@@ -45,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <IOSDownloadFix />
         <AuthProvider>{children}</AuthProvider>
         <GoldDoors />
+        <NoZoom />
       </body>
     </html>
   );

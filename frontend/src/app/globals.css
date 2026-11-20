@@ -73,6 +73,44 @@ body:has(.theme-midnight) {
   box-sizing: border-box;
 }
 
+/* No pinch / double-tap zoom anywhere in the app (scrolling still works). */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+
+/* Feel like an installed app on phones and tablets (touch screens only, so
+   admin on a computer can still select and copy text):
+   no browser pull-to-refresh / rubber-band, no grey tap flash, no long-press
+   text selection or "save image" menu, no dragging pictures, no font
+   auto-resize. Typing boxes stay selectable. */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+@media (hover: none) and (pointer: coarse) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+  img {
+    -webkit-user-drag: none;
+  }
+}
+
 /* ─── Midnight Gold component overrides (screen only — print stays light) ─ */
 @media screen {
   /* Cards and panels: "bg-white" means "surface" in the dark theme. */
