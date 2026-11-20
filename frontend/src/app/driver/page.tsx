@@ -1091,7 +1091,6 @@ export default function DriverPortalPage() {
   const areaPage = (
     <div>
       <div className="mb-2 flex items-center gap-2">
-        <button type="button" onClick={goHome} aria-label="Back" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
         <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-line">
           {([
             ["OPEN", "Left"],
@@ -1111,6 +1110,7 @@ export default function DriverPortalPage() {
       {(
         <div className="relative mb-3">
           <div className="flex items-center gap-2">
+            <button type="button" onClick={goHome} aria-label="Back" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
             <input
               value={areaFilter || areaTyped}
               onChange={(e) => {
@@ -1248,20 +1248,12 @@ export default function DriverPortalPage() {
                           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-bold ${pct === 100 ? "bg-delivered text-white" : "bg-[#F3EBDA] text-brass"}`}>{gi + 1}</span>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-display text-[16px] font-bold leading-tight text-navy">{g.area}</div>
-                            <div className="mt-0.5 font-mono text-[10.5px] uppercase text-ink-soft">{g.emirate}</div>
+                            <div className="mt-0.5 font-mono text-[10.5px] uppercase text-ink-soft">
+                              {g.emirate} ·{" "}
+                              {pr.left === 0 ? <span className="font-bold text-delivered">All done</span> : <><b className="text-navy">{pr.left}</b> left of {pr.total}</>}
+                              {pr.cancelled > 0 && <span className="text-cancelled"> · {pr.cancelled} cancelled</span>}
+                            </div>
                           </div>
-                          <span className="flex shrink-0 items-center gap-1">
-                            {[
-                              [pr.left, "#1D5FA8", "Left"],
-                              [pr.delivered, "#1F7A45", "Delivered"],
-                              [pr.cancelled, "#A32D2D", "Cancelled"],
-                              [pr.total, "#B38B36", "Total"],
-                            ].map(([n, c, t]) => (
-                              <span key={t as string} title={t as string} aria-label={`${t} ${n}`} className="grid h-[22px] min-w-[22px] place-items-center rounded-full px-1 font-mono text-[10.5px] font-bold text-white" style={{ background: c as string }}>
-                                {n}
-                              </span>
-                            ))}
-                          </span>
                           <span className={`shrink-0 text-xl leading-none text-[#C9B98F] transition-transform duration-300 ${open ? "rotate-90" : ""}`}>›</span>
                         </div>
                         <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-[#EEE7D6]">
