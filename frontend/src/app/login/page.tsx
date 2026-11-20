@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth, ApiClientError } from "@/context/AuthContext";
 
 import AuthSplit from "@/components/AuthSplit";
+import { closeGoldDoors } from "@/components/GoldDoors";
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const user = await login(username.trim(), password);
+      await closeGoldDoors(user.name || user.username);
       router.push(user.role === "SUPER_ADMIN" ? "/dashboard" : "/driver");
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Unable to sign in");
@@ -29,7 +31,7 @@ export default function LoginPage() {
 
   return (
     <AuthSplit eyebrow="Operations">
-      <div className="rounded-[22px] border border-line bg-white p-7 shadow-2xl shadow-black/40 sm:p-8">
+      <div className="fc-rise rounded-[22px] border border-line bg-white p-7 shadow-2xl shadow-black/40 sm:p-8">
         <h2 className="font-display text-2xl font-semibold text-white">Welcome back</h2>
         <p className="mb-7 mt-1 text-sm text-ink-soft">Sign in to the delivery management system.</p>
 
@@ -69,9 +71,10 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-xl bg-navy py-3 text-sm font-semibold text-paper transition hover:bg-navy-2 disabled:opacity-60"
+            className="relative w-full overflow-hidden rounded-xl bg-navy py-3 text-sm font-semibold text-paper transition hover:bg-navy-2"
           >
-            {busy ? "Signing in…" : "Sign in"}
+            {busy && <span className="fc-fill absolute inset-y-0 left-0 bg-white/25" aria-hidden />}
+            <span className="relative">{busy ? "Signing in…" : "Sign in"}</span>
           </button>
         </form>
 

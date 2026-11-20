@@ -3,6 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import RegisterSW from "@/components/RegisterSW";
 import AppRefresh from "@/components/AppRefresh";
 import IOSDownloadFix from "@/components/IOSDownloadFix";
+import GoldDoors from "@/components/GoldDoors";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AppRefresh />
         <IOSDownloadFix />
         <AuthProvider>{children}</AuthProvider>
+        <GoldDoors />
       </body>
     </html>
   );
