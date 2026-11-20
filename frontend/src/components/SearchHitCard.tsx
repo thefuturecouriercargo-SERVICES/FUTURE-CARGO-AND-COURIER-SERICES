@@ -82,6 +82,47 @@ async function copyToClipboard(text: string) {
   }
 }
 
+/* ---------- fonts for the shared picture ----------
+ * The picture tool fixes every box to the size measured on screen. If the
+ * picture is then drawn in a different font, text spills out of its boxes.
+ * So the app's own fonts (Inter + IBM Plex Mono, latin only) are fetched once
+ * and embedded into the picture, making it draw exactly like the screen. */
+const SHARE_FONTS_URL =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap";
+let shareFontCss: Promise<string | null> | null = null;
+
+function blobToDataUrl(b: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(b);
+  });
+}
+
+function loadShareFontCss(): Promise<string | null> {
+  if (!shareFontCss) {
+    shareFontCss = (async () => {
+      const css = await (await fetch(SHARE_FONTS_URL)).text();
+      // Google returns one @font-face per unicode subset; keep only "latin".
+      const blocks = css.split(/(?=\/\*\s*[\w-]+\s*\*\/)/).filter((x) => /^\/\*\s*latin\s*\*\//.test(x));
+      const faces = await Promise.all(
+        blocks.map(async (blk) => {
+          const m = blk.match(/url\((https:[^)]+)\)/);
+          if (!m) return blk;
+          const data = await blobToDataUrl(await (await fetch(m[1])).blob());
+          return blk.replace(m[1], data);
+        })
+      );
+      return faces.length ? faces.join("\n") : null;
+    })().catch(() => {
+      shareFontCss = null; // try again next time
+      return null;
+    });
+  }
+  return shareFontCss;
+}
+
 /* ---------- icons (line style) ---------- */
 const Svg = ({ children, size = 20, width = 2 }: { children: ReactNode; size?: number; width?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -266,18 +307,15 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
     // from a phone or a computer: buttons removed completely (no empty space left
     // at the bottom) and a dark frame around the card so chat apps don't cover
     // the top with their own bar.
-    // The picture is drawn in the phone's own system font: web fonts often fail to
-    // load inside the picture, and text measured in one font but drawn in another
-    // spills out of its boxes (wrapped labels, clipped amounts).
+    const fontEmbedCSS = await loadShareFontCss();
+    try {
+      await document.fonts?.ready;
+    } catch {
+      /* ignore */
+    }
     const frame = document.createElement("div");
-    frame.className = "fc-share-frame";
     frame.style.cssText =
       "position:fixed;left:-10000px;top:0;width:480px;padding:56px 20px;background:#070B16;box-sizing:border-box;pointer-events:none;";
-    const fontCss = document.createElement("style");
-    fontCss.textContent =
-      ".fc-share-frame *{font-family:system-ui,-apple-system,Roboto,'Segoe UI',Arial,sans-serif !important}" +
-      ".fc-share-frame .font-mono,.fc-share-frame .font-mono *{font-family:ui-monospace,Menlo,'Roboto Mono',monospace !important}";
-    frame.appendChild(fontCss);
     const copy = cardRef.current.cloneNode(true) as HTMLElement;
     copy.querySelectorAll("[data-share-hide]").forEach((n) => n.remove());
     copy.style.width = "100%";
@@ -292,6 +330,8 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       style: { left: "0", top: "0", position: "static" },
     };
     try {
+      return fontEmbedCSS ? await toBlob(frame, { ...opts, fontEmbedCSS }) : await toBlob(frame, opts);
+    } catch {
       return await toBlob(frame, { ...opts, skipFonts: true });
     } finally {
       frame.remove();
