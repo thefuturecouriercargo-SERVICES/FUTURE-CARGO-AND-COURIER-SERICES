@@ -6,8 +6,12 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
+  driver: [
+    "KM TRACKING RESTARTED FRESH FROM 21 NOV",
+    "ENTER TODAY'S START KM AGAIN BEFORE DELIVERIES",
+  ],
   admin: [
-    "VENDOR CREDIT, VENDOR CREDIT (NEW) AND VENDORS: LONG EXPLANATION TEXTS REMOVED",
+    "KM & FUEL: ALL KM AND FUEL ENTRIES BEFORE 21 NOV CLEARED",
+    "CASH CLOSING EXPENSES ARE NOT AFFECTED",
   ],
 };
