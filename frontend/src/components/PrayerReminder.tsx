@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { PRAYER_NAMES, PRAYER_QUOTES, type PrayerQuote } from "@/lib/prayerQuotes";
 import Icon from "@/components/Icon";
+import { isIOS } from "@/lib/savePdf";
 
 type PrayerInfo = {
   emirate: string;
@@ -81,6 +82,9 @@ export default function PrayerReminder() {
   const [active, setActive] = useState<{ name: string; at: string; quote: PrayerQuote } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  // iPhone: no "Azan ON" button in the header (owner's choice).
+  const [ios, setIos] = useState(true);
+  useEffect(() => setIos(isIOS()), []);
   const [push, setPush] = useState<"unsupported" | "off" | "on" | "denied">("unsupported");
 
   const load = useCallback(async () => {
@@ -273,7 +277,7 @@ export default function PrayerReminder() {
         </span>
       )}
 
-      {push === "off" && (
+      {push === "off" && !ios && (
         <button
           onClick={() => void subscribe(true)}
           className="w-full animate-pulse rounded-full border border-brass-light px-2 py-1 font-mono text-[10px] font-bold text-brass-light"

@@ -27,6 +27,9 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
+  // Stops iPhone zooming the page in when a search/number box is tapped
+  // (iPhone still allows pinch-zoom).
+  maximumScale: 1,
   // Lets the app draw content behind the iPhone's notch/status bar and home
   // indicator, so the safe-area-inset-* CSS variables below actually activate —
   // without this, iOS just adds blank white bars instead.

@@ -213,12 +213,16 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
   const step = Math.min(PIN + 8, width / Math.max(1, groups.length - 1));
   const xs = groups.map((g) => g[0].pos * 0.94 * width);
   for (let k = 1; k < xs.length; k++) xs[k] = Math.min(xs[k], xs[k - 1] - step);
-  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], 8);
-  for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step);
+  // Tied drivers stack as at most 2 circles behind the top pin, and the stack
+  // stays inside the road (it used to stick out on the left at the start).
+  const MAX_UNDER = 2;
+  const minX = (g: RacePin[]) => Math.max(8, Math.min(g.length - 1, MAX_UNDER) * 4 + 2);
+  if (xs.length) xs[xs.length - 1] = Math.max(xs[xs.length - 1], minX(groups[groups.length - 1]));
+  for (let k = xs.length - 2; k >= 0; k--) xs[k] = Math.max(xs[k], xs[k + 1] + step, minX(groups[k]));
   const placed = groups.flatMap((g, k) => {
     const x = Math.min(xs[k], width);
     // last in the group (latest to reach) is on top; the rest stack behind it
-    return g.map((p, j) => ({ ...p, x, under: g.length - 1 - j, top: j === g.length - 1 }));
+    return g.map((p, j) => ({ ...p, x, under: Math.min(g.length - 1 - j, MAX_UNDER), top: j === g.length - 1 }));
   });
   const noOneYet = !data.drivers.some((p) => p.pos > 0);
   const pool = noOneYet && data.yesterdayWinner
