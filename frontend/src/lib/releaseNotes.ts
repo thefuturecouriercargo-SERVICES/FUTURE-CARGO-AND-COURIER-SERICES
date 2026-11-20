@@ -6,12 +6,6 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "GOLD-CIRCLED R IN FUTURE COURIER NOW SITS LEVEL WITH THE TITLE",
-    "TAP IT TO REFRESH — PULL-DOWN REFRESH IS OFF",
-  ],
-  admin: [
-    "GOLD-CIRCLED R IN FUTURE COURIER NOW SITS LEVEL WITH THE TITLE",
-    "TAP IT TO REFRESH — PULL-DOWN REFRESH IS OFF",
-  ],
+  driver: [],
+  admin: [],
 };
