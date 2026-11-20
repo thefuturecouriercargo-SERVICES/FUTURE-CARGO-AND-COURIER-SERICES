@@ -6,9 +6,9 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "PAYROLL: NEW ‹ MONTH › SWITCHER — NO MORE CUT-OFF MONTH",
-    "SCAN TO UPDATE NOW USES THE BLACK & GOLD FULL-SCREEN SCANNER",
+  driver: [],
+  admin: [
+    "SERVER STORAGE DOUBLED TO 1 GB",
+    "ACTION HISTORY OLDER THAN 3 MONTHS IS NOW CLEARED AUTOMATICALLY",
   ],
-  admin: [],
 };

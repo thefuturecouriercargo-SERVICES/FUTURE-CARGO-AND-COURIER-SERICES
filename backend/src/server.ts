@@ -9,6 +9,7 @@ import { startWeeklyBackupScheduler } from "./services/backup.service";
 import { startNightlyBackupScheduler, nightlyConfigured } from "./services/nightlyBackup.service";
 import { startWooSyncScheduler } from "./services/inspiredWoo.service";
 import { startPhotoPruneScheduler } from "./services/photoReader.service";
+import { startAuditPruneScheduler } from "./services/auditPrune.service";
 import { runVendorLoginResetOnce } from "./services/vendorLogin.service";
 import { fixOtherEmirates } from "./services/inspiredWoo.service";
 import { startAzanPushScheduler } from "./services/azanPush.service";
@@ -38,6 +39,8 @@ async function main() {
   // Inspired website orders → Awaiting Pickup every 5 min (no-op until configured).
   startWooSyncScheduler();
   startPhotoPruneScheduler();
+  // Action history older than 3 months is cleared daily (keeps the database small).
+  startAuditPruneScheduler();
   startKmScheduler();
   // Azan push notifications to drivers at each prayer time.
   startAzanPushScheduler();
