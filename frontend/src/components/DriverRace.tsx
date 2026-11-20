@@ -231,9 +231,12 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
   const pinStyle = (p: RacePin) =>
     L
       ? {
-          background: p.me ? "var(--brass)" : "#E9E4D8",
+          background: p.me ? "#14213D" : "#E9E4D8",
           color: p.me ? "#FFFFFF" : "#14213D",
-          boxShadow: flash.has(p.code) ? "0 0 0 4px #0B7A3E" : p.me ? "0 0 0 2px #F3D58E" : undefined,
+          borderColor: p.me ? "#C9A24A" : undefined,
+          opacity: 1,
+          zIndex: p.me ? 5 : undefined,
+          boxShadow: flash.has(p.code) ? "0 0 0 4px #0B7A3E" : p.me ? "0 0 0 2px #14213D" : undefined,
         }
       : {
           background: colorOf(p.code),

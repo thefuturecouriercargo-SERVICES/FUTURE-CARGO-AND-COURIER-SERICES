@@ -6,10 +6,10 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
-  admin: [
-    "DAILY ENTRY PAGE NO LONGER AUTO-REFRESHES",
-    "DAILY REPORT NOW INCLUDES OLDER PENDING PARCELS FOR EACH DRIVER",
-    "SHARE BUTTON WAITS UNTIL THE DAY IS FULLY LOADED",
+  driver: [
+    "NEW HISTORY PAGE — MONTH CHART AND DAY CARDS",
+    "TAP A DAY OR A BAR TO SEE THAT DAY'S CNS",
+    "YOUR OWN PIN IN THE LIVE RACE IS NOW DARK BLUE",
   ],
+  admin: [],
 };
