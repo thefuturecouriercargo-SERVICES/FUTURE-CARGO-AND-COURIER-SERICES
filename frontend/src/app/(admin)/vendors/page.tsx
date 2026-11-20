@@ -76,11 +76,6 @@ export default function VendorsPage() {
     <div>
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Partners</p>
       <h1 className="mb-6 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Vendor Management</h1>
-      <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-        Each vendor has a fixed delivery charge. Whenever a vendor is selected while creating a consignment, its
-        delivery charge is populated automatically. Set a portal username and password to give a vendor their
-        own login — they can then view their own consignments and credit balance at <b>/vendor-login</b>.
-      </p>
       <div className="mb-6 flex flex-wrap items-center gap-3 border border-brass bg-paper-2 px-4 py-3 text-sm">
         <span>
           Default login for every vendor: <b className="font-mono">NAME</b> / <b className="font-mono">NAME321</b> (capitals, no spaces — e.g.{" "}

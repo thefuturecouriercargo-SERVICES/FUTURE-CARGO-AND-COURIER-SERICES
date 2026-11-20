@@ -244,11 +244,6 @@ export default function VendorCreditPage() {
             </a>
           </div>
         </div>
-        <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-          Shown as a ledger for <b>{fmtDate(date)}</b>: <b>Opening Amount</b> is everything up to the day before, <b>Today</b>{" "}
-          columns are just this date's activity, and <b>Total Amount</b> is the running total through this date.
-          Balance = Total Amount − Cancelled − Delivery Charge (on Delivered only) − Paid.
-        </p>
 
         <div className="mb-6 border border-line bg-white p-5">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
@@ -267,11 +262,6 @@ export default function VendorCreditPage() {
               <EntriesExport entries={newEntriesList} date={newEntriesDate} groupLabel="Vendor" fileLabel="Vendor entries" />
             </div>
           </div>
-          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            Everything each vendor gave us on <b>{fmtDate(newEntriesDate)}</b> — scanned, typed in, or still waiting for pickup —
-            with delivery charge and balance. Each entry counts on the day the vendor entered it. The PDF button on a row = that
-            vendor&apos;s full list for the day.
-          </p>
 
           {loadingNewEntries ? (
             <PageSkeleton rows={6} />
@@ -652,10 +642,6 @@ export default function VendorCreditPage() {
 
         <div className="mt-6 border border-line bg-white p-5">
           <h2 className="mb-1 font-display text-[18px] font-semibold text-navy">Pending Consignments Summary</h2>
-          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            View only — what&apos;s sitting in currently Pending orders per vendor, and what would be payable to
-            them (Pending Total minus Delivery Charge) once delivered. Not part of the Balance above.
-          </p>
 
           {/* Mobile: stacked cards */}
           <div className="space-y-2.5 md:hidden">
@@ -739,11 +725,6 @@ export default function VendorCreditPage() {
               </button>
             </div>
           </div>
-          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            View only — Delivered consignments per vendor for <b>{deliveredDate}</b>, with delivery charge
-            deducted to show what&apos;s payable. Grouped by the day each order was actually delivered. Not part
-            of the Balance above.
-          </p>
 
           {loadingDelivered ? (
             <PageSkeleton rows={6} />

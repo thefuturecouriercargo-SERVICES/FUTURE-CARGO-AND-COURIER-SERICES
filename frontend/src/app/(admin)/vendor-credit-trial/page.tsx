@@ -82,13 +82,6 @@ const KIND_LABEL: Record<Line["kind"], string> = {
   OPENING: "Opening balance",
   ADJUSTMENT: "Adjustment",
 };
-const MONEY_HELP: Record<MoneyType, string> = {
-  PAYMENT: "Money we gave the vendor. Also shows on the old Vendor Credit page.",
-  RECEIPT: "Money the vendor gave back to us (e.g. for cancelled advance parcels).",
-  OPENING: "What we already owed (+) or the vendor owed us (−) on the start day.",
-  ADJUSTMENT: "Correction: + we owe more, − we owe less.",
-};
-
 const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 
 function Balance({ n, big }: { n: number; big?: boolean }) {
@@ -232,11 +225,6 @@ export default function VendorCreditTrialPage() {
             </div>
           )}
         </div>
-        <p className="mb-5 max-w-3xl text-sm text-ink-soft">
-          Separate from the old Vendor Credit page. <b>Pay after delivery</b>: a parcel is owed to the vendor once it is delivered
-          (COD − delivery charge). <b>Paid in advance</b>: owed as soon as it&apos;s entered; if it&apos;s cancelled later it drops
-          out, so money already paid for it shows as owed back. Payments here are the same payments as the old page.
-        </p>
 
         {!data ? (
           <PageSkeleton rows={8} cards={4} />
@@ -477,7 +465,6 @@ export default function VendorCreditTrialPage() {
                   </button>
                 ))}
               </div>
-              <p className="mb-3 text-xs text-ink-soft">{MONEY_HELP[money.type]}</p>
               <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Date</label>
               <input
                 type="date"
