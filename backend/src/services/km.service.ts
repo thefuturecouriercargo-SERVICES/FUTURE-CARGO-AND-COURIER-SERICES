@@ -267,3 +267,45 @@ export async function runKmFreshStartOnce() {
     console.error("[km] fresh start failed:", err);
   }
 }
+
+/**
+ * One-time clean restart (asked 21 Nov 2026): deletes KM days, fuel logs and their
+ * KM/receipt photos dated before 21 Nov 2026. expense_entries and EXPENSE photos are
+ * kept. Runs once (marked in the audit log).
+ */
+export async function runKmFreshStart20261121Once() {
+  const MARK = "KM_FRESH_START_2026_11_21";
+  try {
+    const done = await prisma.auditLog.findFirst({ where: { action: MARK }, select: { id: true } });
+    if (done) return;
+    const cutoff = new Date(Date.UTC(2026, 10, 21));
+    const { logs, fuel, meter, receipts } = await prisma.$transaction(
+      async (tx) => {
+        const oldLogs = await tx.kmLog.findMany({ where: { date: { lt: cutoff } }, select: { startPhotoId: true, endPhotoId: true } });
+        const oldFuel = await tx.fuelLog.findMany({ where: { date: { lt: cutoff } }, select: { photoId: true } });
+        const kmPhotoIds = Array.from(new Set(oldLogs.flatMap((l) => [l.startPhotoId, l.endPhotoId]).filter((x): x is string => !!x)));
+        const fuelPhotoIds = Array.from(new Set(oldFuel.map((f) => f.photoId).filter((x): x is string => !!x)));
+        const kept = await tx.expenseEntry.findMany({ where: { photoId: { not: null } }, select: { photoId: true } });
+        const keepIds = new Set(kept.map((e) => e.photoId).filter((x): x is string => !!x));
+        const logs = await tx.kmLog.deleteMany({ where: { date: { lt: cutoff } } });
+        const fuel = await tx.fuelLog.deleteMany({ where: { date: { lt: cutoff } } });
+        const meterIds = kmPhotoIds.filter((id) => !keepIds.has(id));
+        const meter = meterIds.length ? await tx.kmPhoto.deleteMany({ where: { id: { in: meterIds }, kind: "METER" } }) : { count: 0 };
+        const receiptIds = fuelPhotoIds.filter((id) => !keepIds.has(id));
+        const receipts = receiptIds.length ? await tx.kmPhoto.deleteMany({ where: { id: { in: receiptIds }, kind: "RECEIPT" } }) : { count: 0 };
+        await tx.auditLog.create({
+          data: {
+            action: MARK,
+            entity: "KmLog",
+            meta: { cutoff: "2026-11-21", logs: logs.count, fuel: fuel.count, meterPhotos: meter.count, receiptPhotos: receipts.count },
+          },
+        });
+        return { logs, fuel, meter, receipts };
+      },
+      { timeout: 120000, maxWait: 10000 }
+    );
+    console.log(`[km] fresh start 21 Nov: deleted ${logs.count} KM days, ${fuel.count} fuel logs (${meter.count} meter + ${receipts.count} receipt photos) before 21 Nov 2026`);
+  } catch (err) {
+    console.error("[km] fresh start 21 Nov failed:", err);
+  }
+}
