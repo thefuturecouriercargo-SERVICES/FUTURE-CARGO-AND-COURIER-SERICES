@@ -36,8 +36,9 @@ function playSound() {
   if (!a) return;
   try {
     const t0 = a.currentTime + 0.05;
+    // "Sports car pass": higher, sharper engine sweeping left → right.
     const car = (t: number, v: number) => {
-      const d = 0.55;
+      const d = 0.5;
       const o = a.createOscillator();
       const o2 = a.createOscillator();
       const f = a.createBiquadFilter();
@@ -54,13 +55,13 @@ function playSound() {
       o2.type = "square";
       [o, o2].forEach((x, i) => {
         const k = i ? 0.5 : 1;
-        x.frequency.setValueAtTime(70 * k, t);
-        x.frequency.linearRampToValueAtTime(160 * k, t + d * 0.5);
-        x.frequency.linearRampToValueAtTime(95 * k, t + d);
+        x.frequency.setValueAtTime(140 * k, t);
+        x.frequency.linearRampToValueAtTime(330 * k, t + d * 0.5);
+        x.frequency.linearRampToValueAtTime(180 * k, t + d);
       });
       f.type = "lowpass";
       f.frequency.setValueAtTime(400, t);
-      f.frequency.linearRampToValueAtTime(1600, t + d * 0.5);
+      f.frequency.linearRampToValueAtTime(2600, t + d * 0.5);
       f.frequency.linearRampToValueAtTime(500, t + d);
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(v, t + d * 0.48);
@@ -73,14 +74,14 @@ function playSound() {
       o.stop(t + d + 0.05);
       o2.stop(t + d + 0.05);
     };
-    [0, 0.2, 0.4].forEach((d, i) => car(t0 + d, 0.18 + i * 0.04));
+    [0, 0.2, 0.4].forEach((d) => car(t0 + d, 0.16));
     // landing thud + gold shimmer
     const th = a.createOscillator();
     const tg = a.createGain();
     th.frequency.setValueAtTime(100, t0 + 0.84);
     th.frequency.exponentialRampToValueAtTime(40, t0 + 1.04);
     tg.gain.setValueAtTime(0.0001, t0 + 0.84);
-    tg.gain.exponentialRampToValueAtTime(0.45, t0 + 0.845);
+    tg.gain.exponentialRampToValueAtTime(0.35, t0 + 0.845);
     tg.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.09);
     th.connect(tg).connect(a.destination);
     th.start(t0 + 0.84);
