@@ -230,11 +230,6 @@ export default function AgentsPage() {
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Delivery partners</p>
         <h1 className="mb-2 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Agent Management</h1>
-        <p className="mb-6 max-w-2xl text-sm text-ink-soft">
-          Agents are tracked completely separately from drivers — their own performance, cash collection, and
-          credit balance never mix into employee reports. An agent keeps the delivery charge on their own
-          orders and owes the rest back to us.
-        </p>
 
         {isSuperAdmin && (
           <div id="agent-form" className="mb-6 border border-line bg-white p-5">
@@ -770,10 +765,6 @@ export default function AgentsPage() {
               <EntriesExport entries={newEntriesList} date={newEntriesDate} groupLabel="Agent" fileLabel="Agent entries" />
             </div>
           </div>
-          <p className="mb-4 max-w-2xl text-sm text-ink-soft">
-            Every consignment each agent got on <b>{fmtDate(newEntriesDate)}</b>: newly entered (by scan or typed in Daily
-            Entry) plus transferred to them that day. Orders only carried over from earlier days aren&apos;t counted.
-          </p>
 
           {loadingNewEntries ? (
             <PageSkeleton rows={6} />

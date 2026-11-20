@@ -319,10 +319,6 @@ export default function PayrollPage() {
           <h2 className="mb-4 font-display text-[18px] font-semibold text-navy">
             {editingStaffId ? "Edit Staff" : "Add Staff (Payroll Only)"}
           </h2>
-          <p className="mb-4 text-xs text-ink-soft">
-            For non-driver staff (e.g. accountants) who only need to be tracked for payroll. They will not appear in
-            delivery performance reports and will not be given app login access.
-          </p>
           <form onSubmit={onSubmitStaff} className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
               <label className="mb-1 block font-mono text-[10px] uppercase text-ink-soft">Full name</label>

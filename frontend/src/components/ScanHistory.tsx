@@ -571,7 +571,6 @@ export default function ScanHistory({ view = "list", inTab = false }: { view?: "
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-ink-soft">Scans are recorded from today onwards. Click a driver in the table above to filter.</p>
       </>
       )}
     </div>

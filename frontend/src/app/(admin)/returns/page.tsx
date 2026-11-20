@@ -113,9 +113,6 @@ export default function ReturnsPage() {
     <div className="max-w-6xl">
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Operations</p>
       <h1 className="mb-1 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Cancel &amp; Pickup</h1>
-      <p className="mb-5 max-w-2xl text-sm text-ink-soft">
-        Parcels to receive back at the office — from our drivers and the agent. Scan the CN when it&apos;s back; it goes to <b>Cancelled</b> or <b>Pickup</b> on its own. Counting from {data ? fmtDate(data.start) : "…"}.
-      </p>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[

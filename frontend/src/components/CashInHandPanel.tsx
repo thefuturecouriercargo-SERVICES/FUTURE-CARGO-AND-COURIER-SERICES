@@ -247,9 +247,6 @@ export default function CashInHandPanel() {
               </tr>
             </tfoot>
           </table>
-          <p className="mt-2 text-[11px] text-ink-soft">
-            Working days = days that are not Sunday (whole month; the running month counts up to today). Tap Edit to change a month&apos;s days, the per-day amount, or type the month&apos;s daily cost directly (e.g. what was actually taken). Auto puts it back.
-          </p>
         </div>
       )}
     </div>

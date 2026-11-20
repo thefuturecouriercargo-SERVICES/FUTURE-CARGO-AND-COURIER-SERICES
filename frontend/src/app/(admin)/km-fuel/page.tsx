@@ -421,9 +421,6 @@ export default function KmFuelPage() {
         </table>
       </div>
 
-      <p className="mt-3 text-[11px] tracking-wide text-ink-soft">
-        End KM missed = End taken from next morning&apos;s Start · Parked KM = Start higher than the last End (car stays at the office overnight) · Red rows = unusual KM or Start below last End — kept out of totals until corrected · Photos kept 7 days
-      </p>
 
       {/* Edit KM */}
       {editing && (

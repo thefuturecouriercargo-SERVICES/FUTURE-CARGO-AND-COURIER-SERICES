@@ -988,7 +988,6 @@ export default function MonthEndReport({ month }: { month: string }) {
       {data.agent && data.agent.current.orders > 0 && (
         <div className="mt-6 border-t border-line pt-5">
           <h3 className={h2}>Agent consignments — separate</h3>
-          <p className="mb-3 text-xs text-ink-soft">Parcels handed to our agent. Not counted anywhere above; shown on the last page of the PDF.</p>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
               { label: "Handed to agent", value: fmtNumber(data.agent.current.orders), change: <Change now={data.agent.current.orders} before={data.agent.previous.orders} /> },
@@ -1037,7 +1036,6 @@ export default function MonthEndReport({ month }: { month: string }) {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-display text-[18px] font-semibold text-navy">Notes for the team PDF</h3>
-              <p className="text-xs text-ink-soft">Filled in from the numbers — edit anything before making the PDF. Saved for this month on this device.</p>
             </div>
             <button onClick={resetNotes} className="text-xs text-ink-soft underline hover:text-navy">
               Reset to suggested

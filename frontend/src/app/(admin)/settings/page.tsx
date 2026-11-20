@@ -109,9 +109,6 @@ export default function SettingsPage() {
 
       <div className="mt-8 max-w-xl border border-line bg-white p-6">
         <h2 className="mb-3 font-display text-[18px] font-semibold text-navy">Backup</h2>
-        <p className="mb-4 text-sm text-ink-soft">
-          Downloads every record (orders, vendor bookings with customer details, vendors, staff, payroll, expenses, credits, cash handovers, audit log) as one JSON file. Keep a copy somewhere safe.
-        </p>
         <a
           href={settingsBackupUrl()}
           className="inline-block rounded bg-navy px-4 py-2 font-mono text-xs uppercase tracking-wide text-paper hover:bg-navy-2"

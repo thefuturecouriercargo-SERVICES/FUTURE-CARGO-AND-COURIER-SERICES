@@ -165,10 +165,6 @@ export default function AgentReportPage() {
     <div className="max-w-6xl">
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brass">Agents</p>
       <h1 className="mb-1 font-display text-[26px] font-semibold tracking-tight text-navy md:text-[32px]">Agent report upload</h1>
-      <p className="mb-5 max-w-2xl text-sm text-ink-soft">
-        Upload the agent&apos;s Excel status sheet or PDF cash-return report. Tracking number = our CN.
-        <b> Payment PDF</b> → Delivered. <b>Excel</b> → only <b>RTO</b> is used (→ Cancelled); Excel &quot;Delivered&quot; waits for the payment PDF, so missing payments stay visible. Anything else stays Pending. Nothing changes until you press Update.
-      </p>
 
       <label
         className={`mb-5 flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-brass bg-white px-4 py-8 text-center hover:bg-paper ${busy ? "pointer-events-none opacity-60" : ""}`}
@@ -379,7 +375,6 @@ function AmountDiffTable({ items, fileName }: { items: Item[]; fileName: string 
       <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="font-display text-lg font-semibold text-navy">Amount differences — agent vs ours ({rows.length})</h2>
-          <p className="text-xs text-ink-soft">CNs where the agent&apos;s COD is not the same as the amount in our Daily Entry. Difference = agent − ours.</p>
         </div>
         {rows.length > 0 && (
           <button onClick={downloadCsv} className="rounded border border-line bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-navy">

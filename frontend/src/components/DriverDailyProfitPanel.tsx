@@ -107,7 +107,6 @@ export default function DriverDailyProfitPanel() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
         <div>
           <h2 className="font-display text-[18px] font-semibold text-navy">Driver Daily Profit</h2>
-          <p className="text-[11px] text-ink-soft">Delivery charges − salary ÷ 30 − his expenses (fuel, Salik, parking…) = profit each day</p>
         </div>
         <input
           type="month"
@@ -277,9 +276,6 @@ export default function DriverDailyProfitPanel() {
                   </tfoot>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-ink-soft">
-                Only delivered orders count (agent orders excluded). Expenses are the ones entered against this driver; salary payment entries are left out because salary is already counted per day.
-              </p>
             </div>
           )}
         </div>

@@ -189,11 +189,6 @@ export default function CashHandoverPage() {
           )}
         </div>
       </div>
-      <p className="mb-5 max-w-3xl text-sm text-ink-soft">
-        Cash each driver should hand over for parcels marked <b>Delivered</b> on {fmtDay(date)} (cash COD only), minus that day&apos;s purchases and
-        expenses. Cash is collected every day, so each day stands on its own. For a salary advance or a short, enter it under <b>Less</b> with
-        a reason — it comes off that day&apos;s total.
-      </p>
 
       {!data ? (
         <PageSkeleton rows={6} cards={4} />

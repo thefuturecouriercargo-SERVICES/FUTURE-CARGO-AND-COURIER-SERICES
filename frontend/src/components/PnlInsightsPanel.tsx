@@ -232,9 +232,6 @@ export default function PnlInsightsPanel() {
                 <InsightList items={data[tab]} />
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-ink-soft">
-              Worked out from your own orders and expenses (agent orders excluded, same as the P&amp;L). Dots: green good · amber watch · red act now · gold note.
-            </p>
           </>
         )
       )}
