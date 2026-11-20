@@ -1178,7 +1178,7 @@ export default function DriverPortalPage() {
           {areaGroups.map((g, gi) => {
             const routes = routeLinks(g.orders);
             return (
-              <section key={g.key} className="space-y-2.5">
+              <section key={g.key}>
                 {(() => {
                   const pr = areaProgress.get(g.key) ?? { total: g.orders.length, done: 0, delivered: 0, cancelled: 0, left: g.orders.length };
                   const pct = pr.total > 0 ? Math.round((pr.done / pr.total) * 100) : 0;
@@ -1266,7 +1266,18 @@ export default function DriverPortalPage() {
                     </div>
                   );
                 })()}
-                {shownOpenKey === g.key && g.orders.map((o, oi) => (
+                <div
+                  className="grid"
+                  style={{
+                    gridTemplateRows: shownOpenKey === g.key ? "1fr" : "0fr",
+                    opacity: shownOpenKey === g.key ? 1 : 0,
+                    transition: "grid-template-rows .75s cubic-bezier(.65,0,.35,1), opacity .75s cubic-bezier(.65,0,.35,1)",
+                  }}
+                  aria-hidden={shownOpenKey !== g.key}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                   <div className="space-y-2.5 pb-1 pt-2.5">
+                    {g.orders.map((o, oi) => (
                   <div
                     key={o.id}
                     data-drag-group={g.key}
@@ -1333,7 +1344,10 @@ export default function DriverPortalPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                    ))}
+                   </div>
+                  </div>
+                </div>
               </section>
             );
           })}
