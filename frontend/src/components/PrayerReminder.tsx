@@ -281,9 +281,6 @@ export default function PrayerReminder() {
           <Icon name="bell" className="mr-1" />Azan ON
         </button>
       )}
-      {push === "denied" && (
-        <span className="w-full text-center font-mono text-[10px] text-cancelled" title="Allow notifications in phone settings"><Icon name="bellOff" className="mr-1" />Blocked</span>
-      )}
 
       {active && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center whitespace-normal break-words bg-black/80 p-4" role="dialog" aria-modal="true">
