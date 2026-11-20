@@ -134,9 +134,9 @@ function Line({ color }: { color: string }) {
 
 function Row({ label, children, tone }: { label: string; children: ReactNode; tone?: "note" | "hit" }) {
   return (
-    <div className={`flex justify-between gap-4 border-b border-[#1F2A44] px-3.5 py-3 last:border-b-0 ${tone === "note" ? "bg-[#1E1606]" : tone === "hit" ? "bg-[#1A1608]" : ""}`}>
-      <span className="shrink-0 text-[#94A3B8]">{label}</span>
-      <span className="min-w-0 text-right">{children}</span>
+    <div className={`grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3 border-b border-[#1F2A44] px-3.5 py-3 last:border-b-0 ${tone === "note" ? "bg-[#1E1606]" : tone === "hit" ? "bg-[#1A1608]" : ""}`}>
+      <span className="whitespace-nowrap text-[#94A3B8]">{label}</span>
+      <span className="min-w-0 break-words text-right">{children}</span>
     </div>
   );
 }
@@ -228,7 +228,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
     ) : cancelled ? (
       <span className="text-[#94A3B8]">AED {fmtNumber(cod)} · Not collected</span>
     ) : (
-      <b style={{ color: GOLD }}>
+      <b className="whitespace-nowrap" style={{ color: GOLD }}>
         AED {fmtNumber(cod)}
         {h.payment ? ` · ${h.payment === "BANK" ? "Bank" : "Cash"}` : ""}
       </b>
@@ -266,9 +266,18 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
     // from a phone or a computer: buttons removed completely (no empty space left
     // at the bottom) and a dark frame around the card so chat apps don't cover
     // the top with their own bar.
+    // The picture is drawn in the phone's own system font: web fonts often fail to
+    // load inside the picture, and text measured in one font but drawn in another
+    // spills out of its boxes (wrapped labels, clipped amounts).
     const frame = document.createElement("div");
+    frame.className = "fc-share-frame";
     frame.style.cssText =
       "position:fixed;left:-10000px;top:0;width:480px;padding:56px 20px;background:#070B16;box-sizing:border-box;pointer-events:none;";
+    const fontCss = document.createElement("style");
+    fontCss.textContent =
+      ".fc-share-frame *{font-family:system-ui,-apple-system,Roboto,'Segoe UI',Arial,sans-serif !important}" +
+      ".fc-share-frame .font-mono,.fc-share-frame .font-mono *{font-family:ui-monospace,Menlo,'Roboto Mono',monospace !important}";
+    frame.appendChild(fontCss);
     const copy = cardRef.current.cloneNode(true) as HTMLElement;
     copy.querySelectorAll("[data-share-hide]").forEach((n) => n.remove());
     copy.style.width = "100%";
@@ -283,8 +292,6 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       style: { left: "0", top: "0", position: "static" },
     };
     try {
-      return await toBlob(frame, opts);
-    } catch {
       return await toBlob(frame, { ...opts, skipFonts: true });
     } finally {
       frame.remove();
@@ -360,14 +367,14 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
       {/* header */}
       <div className="flex flex-col gap-1.5 px-5 pb-4 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <span className="truncate font-mono text-xs tracking-wider text-[#94A3B8]">
+          <span className="min-w-0 break-words font-mono text-xs tracking-wider text-[#94A3B8]">
             CN {h.cnNo} · {sub}
           </span>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
+          <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.text}</span>
         </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="truncate text-2xl font-bold">{b?.customerName ?? h.vendorName}</span>
-          <span className={`shrink-0 text-xl font-bold ${cancelled ? "text-[#94A3B8] line-through" : ""}`} style={cancelled ? undefined : { color: GOLD }}>
+        <div className="flex items-end justify-between gap-3">
+          <span className="min-w-0 break-words text-2xl font-bold leading-tight">{b?.customerName ?? h.vendorName}</span>
+          <span className={`shrink-0 whitespace-nowrap text-xl font-bold ${cancelled ? "text-[#94A3B8] line-through" : ""}`} style={cancelled ? undefined : { color: GOLD }}>
             {b && cod === 0 ? "Prepaid" : `AED ${fmtNumber(cod)}`}
           </span>
         </div>
@@ -423,7 +430,13 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
                 <span className="whitespace-pre-wrap">{address}</span>
                 {area ? <span className="block text-xs text-[#94A3B8]">Area · {area}</span> : null}
               </Row>
-              {b.items && <Row label="Items">{b.items}</Row>}
+              {b.items && (
+                <Row label="Items">
+                  {b.items.split(/,\s*(?=\d+\s*[×x]\s)/).map((it, i) => (
+                    <span key={i} className="block">{it}</span>
+                  ))}
+                </Row>
+              )}
               {isPickup(b) && (
                 <Row label="Type">
                   <b>⇄ Pickup delivery {b.codAmount > 0 ? "· collect delivery charge" : "· no payment"}</b>
@@ -435,7 +448,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
           )}
           {!b && area && <Row label="Area">{area}</Row>}
           <Row label="Emirate">{h.emirate}</Row>
-          <Row label="Driver">{h.driver ?? <span className="text-[#94A3B8]">Not assigned</span>}</Row>
+          <Row label="Driver">{h.driver ?? <span className="whitespace-nowrap text-[#94A3B8]">Not assigned</span>}</Row>
           <Row label="COD">
             {codView}
             {b && cod !== b.codAmount && <span className="block text-xs text-[#94A3B8]">Vendor entered {fmtNumber(b.codAmount)}</span>}
