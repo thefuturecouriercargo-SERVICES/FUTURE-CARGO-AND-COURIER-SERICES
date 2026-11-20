@@ -123,6 +123,72 @@ function loadShareFontCss(): Promise<string | null> {
   return shareFontCss;
 }
 
+/**
+ * The picture tool locks every box to its measured size and then lets the text
+ * wrap again on its own — text sitting right at a box edge then breaks onto an
+ * extra line and overlaps the next row. So, in the off-screen copy, every line
+ * break is written in as a real newline and automatic wrapping is switched off:
+ * the picture keeps exactly the lines measured on screen.
+ */
+function freezeLines(root: HTMLElement) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const t = n as Text;
+    if (t.parentElement && t.parentElement.tagName !== "STYLE" && t.data.trim()) nodes.push(t);
+  }
+  const range = document.createRange();
+  const parents = new Set<HTMLElement>();
+  // Last line position (and text node) seen inside each block, so a break that
+  // falls between two text pieces of the same block is kept too.
+  const blockOf = (el: HTMLElement) => {
+    let b: HTMLElement = el;
+    while (b !== root && b.parentElement && getComputedStyle(b).display.startsWith("inline")) b = b.parentElement;
+    return b;
+  };
+  const lastInBlock = new Map<HTMLElement, { top: number; node: Text }>();
+  const edits: { node: Text; text: string }[] = [];
+  for (const t of nodes) {
+    const parts = t.data.split(/(\s+)/); // words and the spaces between them
+    const block = blockOf(t.parentElement!);
+    const prev = lastInBlock.get(block);
+    let out = "";
+    let pos = 0;
+    let lastTop: number | null = null;
+    let first = true;
+    for (const part of parts) {
+      if (part && !/^\s+$/.test(part)) {
+        range.setStart(t, pos);
+        range.setEnd(t, pos + 1);
+        const rect = range.getClientRects()[0];
+        if (rect) {
+          if (first && prev && rect.top > prev.top + 2) {
+            // New line starts with this text piece: end the previous piece with a newline.
+            const e = edits.find((x) => x.node === prev.node);
+            if (e) e.text = e.text.replace(/\s+$/, "") + "\n";
+            out = out.replace(/^\s+/, "");
+          }
+          if (lastTop != null && rect.top > lastTop + 2) out = out.replace(/\s+$/, "") + "\n";
+          lastTop = rect.top;
+          first = false;
+        }
+      }
+      out += part;
+      pos += part.length;
+    }
+    edits.push({ node: t, text: out });
+    if (lastTop != null) lastInBlock.set(block, { top: lastTop, node: t });
+    parents.add(t.parentElement!);
+  }
+  // Measure everything first, then write the newlines in.
+  edits.forEach((e) => {
+    e.node.data = e.text;
+  });
+  parents.forEach((el) => {
+    el.style.whiteSpace = "pre";
+  });
+}
+
 /* ---------- icons (line style) ---------- */
 const Svg = ({ children, size = 20, width = 2 }: { children: ReactNode; size?: number; width?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -321,6 +387,7 @@ export default function SearchHitCard({ h, area, onEdit }: { h: SearchHitDetails
     copy.style.width = "100%";
     frame.appendChild(copy);
     document.body.appendChild(frame);
+    freezeLines(copy);
     const opts = {
       pixelRatio: 2,
       cacheBust: true,
