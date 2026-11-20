@@ -75,7 +75,7 @@ function playSound() {
       o2.stop(t + d + 0.05);
     };
     [0, 0.2, 0.4].forEach((d) => car(t0 + d, 0.16));
-    // landing thud + gold shimmer
+    // landing thud ("dum")
     const th = a.createOscillator();
     const tg = a.createGain();
     th.frequency.setValueAtTime(100, t0 + 0.84);
@@ -86,18 +86,6 @@ function playSound() {
     th.connect(tg).connect(a.destination);
     th.start(t0 + 0.84);
     th.stop(t0 + 1.15);
-    [2093, 2637, 3136, 4186].forEach((fq, i) => {
-      const o = a.createOscillator();
-      const g = a.createGain();
-      const t = t0 + 0.86 + i * 0.04;
-      o.frequency.value = fq;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.05, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-      o.connect(g).connect(a.destination);
-      o.start(t);
-      o.stop(t + 0.7);
-    });
   } catch {
     /* ignore */
   }
