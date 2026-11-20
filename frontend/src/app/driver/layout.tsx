@@ -27,7 +27,7 @@ function DriverTopbar() {
           <img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" />
         </div>
         <div className="min-w-0 flex-1 leading-tight">
-          <BrandName className="font-display text-lg font-bold tracking-wide block" />
+          <BrandName className="font-display text-lg font-bold tracking-wide" />
           <div className="truncate font-mono text-[10.5px] uppercase tracking-wide text-brass-light">{user?.name}</div>
         </div>
         <div className="flex w-[92px] shrink-0 flex-col items-stretch gap-1.5 whitespace-nowrap">

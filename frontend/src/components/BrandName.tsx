@@ -10,7 +10,7 @@ import { useState } from "react";
 export default function BrandName({ className = "" }: { className?: string }) {
   const [spin, setSpin] = useState(false);
   return (
-    <span className={className}>
+    <span className={`${className} inline-flex items-center whitespace-nowrap`}>
       Future Courie
       <button
         type="button"
@@ -22,10 +22,10 @@ export default function BrandName({ className = "" }: { className?: string }) {
           setSpin(true);
           window.dispatchEvent(new Event("fc-refresh-now"));
         }}
-        className="fc-r-ring relative -ml-[1px] inline-flex h-[1.25em] w-[1.25em] items-center justify-center rounded-full align-[-0.14em] active:scale-90"
+        className="fc-r-ring relative ml-[2px] inline-flex h-[1.22em] w-[1.22em] shrink-0 items-center justify-center rounded-full active:scale-90"
         style={{ border: "1.5px solid #D4AF37", font: "inherit", color: "inherit", lineHeight: 1, padding: 0, background: "transparent" }}
       >
-        <span className={spin ? "fc-r-spin" : undefined} style={{ display: "inline-block" }}>
+        <span className={spin ? "fc-r-spin" : undefined} style={{ display: "inline-block", lineHeight: 1, fontSize: "0.88em" }}>
           R
         </span>
       </button>
