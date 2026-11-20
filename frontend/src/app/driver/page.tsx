@@ -689,7 +689,8 @@ export default function DriverPortalPage() {
     return m;
   }, [orders]);
   // First visit: open the first area; if the open area disappears (all delivered), open the next one.
-  const shownOpenKey = openAreaKey === null ? null : openAreaKey && areaGroups.some((g) => g.key === openAreaKey) ? openAreaKey : areaFilter ? areaGroups[0]?.key ?? null : areaGroups[0]?.key ?? null;
+  // No area opens by itself — only the one the driver taps.
+  const shownOpenKey = openAreaKey && areaGroups.some((g) => g.key === openAreaKey) ? openAreaKey : null;
 
   /** Quick "not delivered" note on a parcel (tap the same one again to clear). */
   async function setDriverNote(o: Order, note: string) {
