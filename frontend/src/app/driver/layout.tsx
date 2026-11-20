@@ -20,7 +20,7 @@ export default function DriverLayout({ children }: { children: React.ReactNode }
 function DriverTopbar() {
   const { user, logout } = useAuth();
   return (
-    <div className="border-b-[3px] border-brass bg-navy px-4 pb-3 pt-2.5 uppercase text-paper">
+    <div className="border-b-[3px] border-brass bg-navy px-4 pb-3 uppercase text-paper" style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}>
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
           <img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" />

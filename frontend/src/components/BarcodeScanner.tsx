@@ -95,6 +95,38 @@ export default function BarcodeScanner({
     if (!disabled && !isTouchDevice()) inputRef.current?.focus();
   }, [disabled]);
 
+  // Gold strip: size the camera picture so it covers the whole 2:1 box (centre
+  // part shown — the same part that is read), on every phone.
+  useEffect(() => {
+    if (variant !== "gold") return;
+    const video = videoRef.current;
+    const box = video?.parentElement;
+    if (!video || !box) return;
+    const fit = () => {
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const bw = box.clientWidth;
+      const bh = box.clientHeight;
+      if (!vw || !vh || !bw || !bh) return;
+      const k = Math.max(bw / vw, bh / vh);
+      video.style.width = `${Math.ceil(vw * k)}px`;
+      video.style.height = `${Math.ceil(vh * k)}px`;
+      video.style.maxWidth = "none";
+    };
+    video.addEventListener("loadedmetadata", fit);
+    video.addEventListener("resize", fit);
+    video.addEventListener("playing", fit);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    ro?.observe(box);
+    fit();
+    return () => {
+      video.removeEventListener("loadedmetadata", fit);
+      video.removeEventListener("resize", fit);
+      video.removeEventListener("playing", fit);
+      ro?.disconnect();
+    };
+  }, [variant]);
+
   useEffect(() => {
     if (autoCamera) startCamera();
     return () => stopCamera();
@@ -300,7 +332,8 @@ export default function BarcodeScanner({
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3">
           {/* 2:1 camera strip — everything shown inside it is what gets read. */}
           <div className="fc-gold-in relative w-full overflow-hidden rounded-lg border-2 bg-black" style={{ borderColor: GOLD, aspectRatio: "2 / 1" }}>
-            <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+            {/* Sized by hand to fill the strip: iPhone ignores object-cover on a live camera. */}
+            <video ref={videoRef} className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 object-cover" muted playsInline />
             {cameraOn && <div className="fc-gold-line pointer-events-none absolute left-3 right-3 h-0.5" style={{ top: "50%", background: "#e9c46a" }} />}
             {!cameraOn && !error && (
               <p className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest" style={{ color: "#8d8163" }}>

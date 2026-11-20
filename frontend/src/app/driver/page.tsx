@@ -2,6 +2,7 @@
 
 import { isPickup } from "@/lib/notes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDate } from "@/lib/format";
 import { useSocketEvent } from "@/lib/useSocketEvent";
@@ -1149,7 +1150,7 @@ export default function DriverPortalPage() {
         </div>
       </div>
       {(
-        <div className="relative mb-3">
+        <div className="relative z-40 mb-3">
           <div className="flex items-center gap-2">
             <button type="button" onClick={goHome} aria-label="Back" className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-navy px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95">← Back</button>
             <input
@@ -1407,7 +1408,7 @@ export default function DriverPortalPage() {
           })}
         </div>
       )}
-      {priorityPick && (
+      {priorityPick && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={() => setPriorityPick(null)}>
           <div className="w-full max-w-sm rounded-3xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="font-mono text-[10.5px] font-bold uppercase tracking-widest text-brass">Priority number</div>
@@ -1435,7 +1436,8 @@ export default function DriverPortalPage() {
               Cancel
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1745,15 +1747,14 @@ export default function DriverPortalPage() {
         </>
       )}
       </div>
-      <style>{`.fc-stack{perspective:900px}
-.fc-stack>*,.fc-stack>:only-child>*{animation:fcStack .55s cubic-bezier(.32,.72,0,1) both}
+      <style>{`.fc-stack>*,.fc-stack>:only-child>*{animation:fcStack .55s cubic-bezier(.32,.72,0,1) backwards}
 .fc-stack>:only-child{animation:none}
 .fc-stack>:nth-child(2),.fc-stack>:only-child>:nth-child(2){animation-delay:.07s}
 .fc-stack>:nth-child(3),.fc-stack>:only-child>:nth-child(3){animation-delay:.14s}
 .fc-stack>:nth-child(4),.fc-stack>:only-child>:nth-child(4){animation-delay:.21s}
 .fc-stack>:nth-child(5),.fc-stack>:only-child>:nth-child(5){animation-delay:.28s}
 .fc-stack>:nth-child(n+6),.fc-stack>:only-child>:nth-child(n+6){animation-delay:.33s}
-@keyframes fcStack{0%{opacity:0;transform:translateZ(-200px) translateY(60px) rotateX(25deg)}100%{opacity:1;transform:none}}
+@keyframes fcStack{0%{opacity:0;transform:perspective(900px) translateZ(-200px) translateY(60px) rotateX(25deg)}100%{opacity:1;transform:perspective(900px)}}
 @media (prefers-reduced-motion:reduce){.fc-stack>*,.fc-stack>:only-child>*{animation:none}}`}</style>
 
       {claimOpen && (
@@ -1965,7 +1966,7 @@ function StatusScanModal({
 
   const GOLD = "#b08a35";
   return (
-    <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
+    <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
       <div className="flex h-full w-full max-w-md flex-col">
         <BarcodeScanner
           variant="gold"
@@ -2320,7 +2321,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
 
   return (
     <>
-      <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
+      <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex h-full w-full max-w-md flex-col">
           <BarcodeScanner
             variant="gold"
