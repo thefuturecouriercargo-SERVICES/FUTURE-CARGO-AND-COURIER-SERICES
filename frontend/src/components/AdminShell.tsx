@@ -12,6 +12,7 @@ import AdminSearch from "@/components/AdminSearch";
 import CommandPalette from "@/components/CommandPalette";
 import { FeedbackHost } from "@/components/ui/Feedback";
 import AlertsBell from "@/components/AlertsBell";
+import BrandName from "@/components/BrandName";
 
 type NavItem = { href: string; label: string; short: string; roles: string[]; group: string };
 
@@ -126,7 +127,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_24px_rgba(212,175,90,0.25)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" /></div>
           <div className="flex flex-col leading-tight">
-            <span className="font-display text-base font-semibold text-white md:text-[17px]">Future Courier</span>
+            <BrandName className="font-display text-base font-semibold text-white md:text-[17px]" />
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Operations</span>
           </div>
           <div className="ml-2 flex items-center gap-2.5">

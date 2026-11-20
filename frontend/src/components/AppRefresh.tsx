@@ -7,8 +7,7 @@ const PULL_TRIGGER = 85; // px of finger travel needed to refresh
 const SOFT_AFTER_MS = 5_000; // back after 5s+ → quietly re-fetch the data (no page reload)
 
 /**
- * 1. Pull down from the top to refresh (installed app only — normal Chrome
- *    already has its own pull-to-refresh, so we don't double it there).
+ * 1. Tap the gold-circled R in "FUTURE COURIER" to refresh (no pull-down refresh).
  * 2. Coming back to the app (other tab / other app / screen back on) quietly
  *    re-fetches each page's data in place. The page itself is NEVER reloaded,
  *    so turning the screen off and on doesn't flash or reset anything, and the
@@ -35,66 +34,16 @@ export default function AppRefresh() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  // Pull-to-refresh (installed app only).
+  // Manual refresh: tap the gold-circled R in "FUTURE COURIER" (pull-down
+  // refresh is switched off so scrolling never reloads by accident).
   useEffect(() => {
-    const standalone =
-      window.matchMedia?.("(display-mode: standalone)").matches ||
-      (navigator as unknown as { standalone?: boolean }).standalone === true;
-    if (!standalone) return;
-
-    let startY = 0;
-    let active = false;
-    let dist = 0;
-
-    const scrolledInside = (el: EventTarget | null) => {
-      let n = el as HTMLElement | null;
-      while (n && n !== document.body) {
-        if (n.scrollTop > 0) return true;
-        const pos = getComputedStyle(n).position;
-        if (pos === "fixed" && n.getAttribute("role") === "dialog") return true;
-        n = n.parentElement;
-      }
-      return false;
+    const onRefresh = () => {
+      setRefreshing(true);
+      setPull(70);
+      setTimeout(() => location.reload(), 150);
     };
-
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1 || window.scrollY > 0 || scrolledInside(e.target)) return;
-      startY = e.touches[0].clientY;
-      active = true;
-      dist = 0;
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!active) return;
-      dist = e.touches[0].clientY - startY;
-      if (dist <= 0 || window.scrollY > 0) {
-        setPull(0);
-        return;
-      }
-      setPull(Math.min(dist * 0.55, 110));
-    };
-    const onEnd = () => {
-      if (!active) return;
-      active = false;
-      if (dist >= PULL_TRIGGER) {
-        setRefreshing(true);
-        setPull(70);
-        setTimeout(() => location.reload(), 150);
-      } else {
-        setPull(0);
-      }
-    };
-
-    document.addEventListener("touchstart", onStart, { passive: true });
-    document.addEventListener("touchmove", onMove, { passive: true });
-    document.addEventListener("touchend", onEnd);
-    document.addEventListener("touchcancel", onEnd);
-    document.documentElement.style.overscrollBehaviorY = "contain";
-    return () => {
-      document.removeEventListener("touchstart", onStart);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onEnd);
-      document.removeEventListener("touchcancel", onEnd);
-    };
+    window.addEventListener("fc-refresh-now", onRefresh);
+    return () => window.removeEventListener("fc-refresh-now", onRefresh);
   }, []);
 
   if (pull <= 0 && !refreshing) return null;

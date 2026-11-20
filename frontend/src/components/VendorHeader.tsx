@@ -3,6 +3,7 @@
 import LiveBridge from "@/components/LiveBridge";
 
 import { FeedbackHost } from "@/components/ui/Feedback";
+import BrandName from "@/components/BrandName";
 
 /** Premium top bar for every vendor portal page (also mounts styled pop-ups). */
 export default function VendorHeader({ name, onLogout }: { name: string; onLogout: () => void }) {
@@ -15,7 +16,7 @@ export default function VendorHeader({ name, onLogout }: { name: string; onLogou
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_24px_rgba(212,175,90,0.25)]"><img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" /></div>
           <div className="flex flex-col leading-tight">
-            <span className="font-display text-base font-semibold text-white">Future Courier</span>
+            <BrandName className="font-display text-base font-semibold text-white" />
             <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#D4AF5A]">Vendor Portal</span>
           </div>
         </div>
