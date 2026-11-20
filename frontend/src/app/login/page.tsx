@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth, ApiClientError } from "@/context/AuthContext";
 
 import AuthSplit from "@/components/AuthSplit";
-import { closeGoldDoors } from "@/components/GoldDoors";
+import { closeGoldDoors, unlockWelcomeSound } from "@/components/GoldDoors";
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
@@ -16,6 +16,7 @@ export default function LoginPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    unlockWelcomeSound();
     setError(null);
     setBusy(true);
     try {

@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
 
+// Warp-speed streaks on the phone sign-in screen: [left %, top %, delay s].
+const WARP: [number, number, number][] = Array.from({ length: 30 }, (_, i) => {
+  const r = (n: number) => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
+  return [Math.round(r(1) * 100), Math.round(r(2) * 100), Math.round(r(3) * 1100) / 1000];
+});
+
 const POINTS = ["Every consignment tracked from entry to delivery", "Driver, agent and vendor portals in one place", "Daily cash closing, payroll and reports"];
 
 /**
@@ -48,19 +54,21 @@ export default function AuthSplit({ eyebrow, children }: { eyebrow: string; chil
       </aside>
 
       <main className="relative flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,rgba(212,175,90,0.08),transparent_60%)] px-4 py-10">
+        <div className="fc-warp pointer-events-none absolute inset-0 overflow-hidden lg:hidden" aria-hidden>
+          {WARP.map((w, i) => (
+            <i key={i} style={{ left: `${w[0]}%`, top: `${w[1]}%`, animationDelay: `${w[2]}s`, background: `linear-gradient(90deg,transparent,${i % 3 ? "#D4AF37" : "#ffffff"})` }} />
+          ))}
+        </div>
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
-              <img src="/fc-logo-mark.png" alt="Future Courier" className="h-full w-full object-contain" />
-              <span className="fc-shine pointer-events-none absolute inset-y-0 w-1/2 -skew-x-[20deg] bg-[rgba(212,175,55,0.6)]" aria-hidden />
+            <div className="relative h-11 w-11 shrink-0">
+              <div className="fc-tile absolute inset-0 rounded-xl" style={{ background: "#ffffff" }} />
+              <img src="/fc-logo-f.png" alt="" className="fc-pf absolute inset-0 h-full w-full" />
+              <img src="/fc-logo-c.png" alt="Future Courier" className="fc-pc absolute inset-0 h-full w-full" />
             </div>
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-lg font-semibold text-white" aria-label="Future Courier">
-                {"Future Courier".split("").map((ch, i) => (
-                  <span key={i} className="fc-letter inline-block" style={{ animationDelay: `${0.6 + i * 0.05}s` }} aria-hidden>
-                    {ch === " " ? "\u00a0" : ch}
-                  </span>
-                ))}
+              <span className="fc-fade font-display text-lg font-semibold text-white" style={{ animationDelay: "1.15s" }}>
+                Future Courier
               </span>
               <span className="fc-fade text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D4AF5A]" style={{ animationDelay: "1.35s" }}>{eyebrow}</span>
             </div>
@@ -73,12 +81,19 @@ export default function AuthSplit({ eyebrow, children }: { eyebrow: string; chil
 @keyframes fcLetter{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
 @keyframes fcRise{0%{opacity:0;transform:translateY(24px)}100%{opacity:1;transform:none}}
 @keyframes fcFill{0%{width:0}100%{width:100%}}
-.fc-shine{left:-80%;animation:fcShine .9s .2s cubic-bezier(.4,0,.2,1) both}
+.fc-warp i{position:absolute;height:1.5px;width:44px;border-radius:2px;opacity:0;animation:fcWarp .55s ease-in 2 both}
+@keyframes fcWarp{0%{transform:translateX(-260px) scaleX(.3);opacity:0}30%{opacity:1}100%{transform:translateX(320px) scaleX(2.2);opacity:0}}
+.fc-tile{animation:fcPop .45s .5s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes fcPop{0%{transform:scale(0)}100%{transform:none}}
+.fc-pf{animation:fcInL .5s .7s cubic-bezier(.2,.8,.2,1) both}
+.fc-pc{animation:fcInR .5s .8s cubic-bezier(.2,.8,.2,1) both}
+@keyframes fcInL{0%{transform:translateX(-300px) scaleX(2);filter:blur(4px);opacity:0}30%{opacity:1}100%{transform:none;filter:blur(0);opacity:1}}
+@keyframes fcInR{0%{transform:translateX(300px) scaleX(2);filter:blur(4px);opacity:0}30%{opacity:1}100%{transform:none;filter:blur(0);opacity:1}}
 .fc-letter{animation:fcLetter .3s both}
 .fc-fade{animation:fcLetter .5s both}
-.fc-rise{animation:fcRise .6s 1.1s cubic-bezier(.2,.8,.2,1) both}
+.fc-rise{animation:fcRise .6s 1.3s cubic-bezier(.2,.8,.2,1) both}
 .fc-fill{animation:fcFill .5s ease-out both}
-@media (prefers-reduced-motion:reduce){.fc-shine,.fc-letter,.fc-fade,.fc-rise,.fc-fill{animation:none}}
+@media (prefers-reduced-motion:reduce){.fc-warp,.fc-tile,.fc-pf,.fc-pc,.fc-fade,.fc-rise,.fc-fill{animation:none}.fc-warp{display:none}}
 `}</style>
     </div>
   );

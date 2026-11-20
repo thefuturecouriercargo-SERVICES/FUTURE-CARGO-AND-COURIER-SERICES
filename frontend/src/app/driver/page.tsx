@@ -618,6 +618,59 @@ export default function DriverPortalPage() {
   const areaGroups = useMemo(() => groupByArea(areaFiltered, areaOrder, parcelOrder), [areaFiltered, areaOrder, parcelOrder]);
   // Area cards (A1): one card per area; tap to open its parcels. Progress counts the whole day.
   const [openAreaKey, setOpenAreaKey] = useState<string | null | undefined>(undefined);
+  // Scroll feel on Deliveries / By Area / History: the page steps back a little
+  // while scrolling and settles when you stop; the counter box leans with the
+  // scroll speed.
+  const counterRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (view !== "list" && view !== "area" && view !== "history") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let last = window.scrollY;
+    let v = 0;
+    let raf = 0;
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    const tick = () => {
+      const cur = window.scrollY;
+      v = v * 0.8 + (cur - last) * 0.2;
+      last = cur;
+      const c = counterRef.current;
+      if (Math.abs(v) > 0.05) {
+        if (c) c.style.transform = `perspective(400px) rotateX(${Math.max(-14, Math.min(14, v * 0.6)).toFixed(1)}deg)`;
+        raf = requestAnimationFrame(tick);
+      } else {
+        v = 0;
+        if (c) c.style.transform = "";
+        raf = 0;
+      }
+    };
+    const onScroll = () => {
+      const el = contentRef.current;
+      // Never transform while a pop-up (fixed) sits inside the page.
+      if (el && !el.querySelector(".fixed")) {
+        const top = el.getBoundingClientRect().top;
+        el.style.transformOrigin = `50% ${Math.round(window.innerHeight / 2 - top)}px`;
+        el.style.transform = "scale(.96)";
+        el.style.borderRadius = "16px";
+      }
+      if (settle) clearTimeout(settle);
+      settle = setTimeout(() => {
+        if (contentRef.current) {
+          contentRef.current.style.transform = "";
+          contentRef.current.style.borderRadius = "";
+        }
+      }, 140);
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      if (settle) clearTimeout(settle);
+      if (counterRef.current) counterRef.current.style.transform = "";
+      if (contentRef.current) contentRef.current.style.transform = "";
+    };
+  }, [view]);
   const [priorityPick, setPriorityPick] = useState<AreaGroup | null>(null);
   const holdRef = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean; x: number; y: number }>({ t: null, fired: false, x: 0, y: 0 });
   const areaProgress = useMemo(() => {
@@ -1433,7 +1486,7 @@ export default function DriverPortalPage() {
         return (
           <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
             <div className="flex items-stretch gap-2">
-              <div className="min-w-0 flex-1">
+              <div ref={counterRef} className="min-w-0 flex-1" style={{ transformOrigin: "50% 0", willChange: "transform" }}>
                 <div key={kmLocked && (view === "list" || view === "area") ? "km" : raceShown ? "race" : "count"} className={`flip-in ${kmLocked && km && (view === "list" || view === "area") ? "h-full" : "h-[82px]"}`}>
                   {kmLocked && km && (view === "list" || view === "area") ? (
                     <KmStartCover km={km} onStart={() => setKmSheet(true)} />
@@ -1472,7 +1525,7 @@ export default function DriverPortalPage() {
         );
       })()}
 
-      <div key={view} className={view === "home" ? undefined : "fc-stack"}>
+      <div key={view} ref={contentRef} className={view === "home" ? undefined : "fc-stack"} style={{ transition: "transform .35s cubic-bezier(.32,.72,0,1), border-radius .35s" }}>
       {view === "area" ? (
         areaPage
       ) : view === "home" ? (
