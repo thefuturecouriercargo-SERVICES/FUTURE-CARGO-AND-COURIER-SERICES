@@ -633,12 +633,15 @@ export default function DriverPortalPage() {
   const [priorityPick, setPriorityPick] = useState<AreaGroup | null>(null);
   const holdRef = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean; x: number; y: number }>({ t: null, fired: false, x: 0, y: 0 });
   const areaProgress = useMemo(() => {
-    const m = new Map<string, { total: number; done: number }>();
+    const m = new Map<string, { total: number; done: number; delivered: number; cancelled: number; left: number }>();
     for (const o of orders) {
       const k = `${o.emirate}|${areaOf(o)}`;
-      const v = m.get(k) ?? { total: 0, done: 0 };
+      const v = m.get(k) ?? { total: 0, done: 0, delivered: 0, cancelled: 0, left: 0 };
       v.total += 1;
       if (o.status === "DELIVERED" || o.status === "CANCELLED") v.done += 1;
+      if (o.status === "DELIVERED") v.delivered += 1;
+      else if (o.status === "CANCELLED") v.cancelled += 1;
+      else v.left += 1;
       m.set(k, v);
     }
     return m;
@@ -1080,38 +1083,27 @@ export default function DriverPortalPage() {
     return links;
   };
 
+  const areaCounts = {
+    OPEN: orders.filter((o) => o.status === "PENDING" || o.status === "TRANSFER").length,
+    DONE: orders.filter((o) => o.status === "DELIVERED" || o.status === "CANCELLED").length,
+    ALL: orders.length,
+  };
   const areaPage = (
     <div>
-      <div className="mb-3">
-        <div className="flex items-center gap-3">
-                      <button type="button" onClick={goHome} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
-          <div className="min-w-0 flex-1">
-            <div className="font-mono text-[11px] font-bold uppercase tracking-wide text-navy">
-              {areaFiltered.length} parcel{areaFiltered.length === 1 ? "" : "s"} · AED {fmtNumber(areaFiltered.reduce((t, o) => t + o.total, 0))}
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              if (needStart()) return;
-              setStatusScanOpen(true);
-            }}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
-          >
-            <Icon name="scan" className="mr-1" />Scan
-          </button>
-        </div>
-        <div className="mt-2 grid grid-cols-3 gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-line">
+      <div className="mb-2 flex items-center gap-2">
+        <button type="button" onClick={goHome} aria-label="Back" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
+        <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-full bg-white p-1 shadow-sm ring-1 ring-line">
           {([
-            ["OPEN", "To deliver"],
+            ["OPEN", "Left"],
             ["DONE", "Done"],
             ["ALL", "All"],
           ] as const).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setAreaTab(k)}
-              className={`rounded-full py-2 font-mono text-[11px] font-bold uppercase tracking-wide transition ${areaTab === k ? "bg-navy text-paper shadow" : "text-ink-soft"}`}
+              className={`whitespace-nowrap rounded-full py-2 font-mono text-[11px] font-bold uppercase tracking-wide transition ${areaTab === k ? "bg-navy text-[#F3D58E] shadow" : "text-ink-soft"}`}
             >
-              {label}
+              {label} <span className={areaTab === k ? "text-white" : "text-navy"}>{areaCounts[k]}</span>
             </button>
           ))}
         </div>
@@ -1142,6 +1134,15 @@ export default function DriverPortalPage() {
                 ✕ All
               </button>
             )}
+            <button
+              onClick={() => {
+                if (needStart()) return;
+                setStatusScanOpen(true);
+              }}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
+            >
+              <Icon name="scan" className="mr-1" />Scan
+            </button>
           </div>
           {areaSuggestOpen && !areaFilter && (() => {
             const counts = new Map<string, number>();
@@ -1192,16 +1193,9 @@ export default function DriverPortalPage() {
             return (
               <section key={g.key} className="space-y-2.5">
                 {(() => {
-                  const pr = areaProgress.get(g.key) ?? { total: g.orders.length, done: 0 };
+                  const pr = areaProgress.get(g.key) ?? { total: g.orders.length, done: 0, delivered: 0, cancelled: 0, left: g.orders.length };
                   const pct = pr.total > 0 ? Math.round((pr.done / pr.total) * 100) : 0;
                   const open = shownOpenKey === g.key;
-                  const amount = fmtNumber(g.orders.reduce((t, o) => t + o.total, 0));
-                  const sub =
-                    areaTab === "OPEN"
-                      ? `${g.orders.length} left · AED ${amount}`
-                      : areaTab === "DONE"
-                        ? `${g.orders.length} done`
-                        : `${pr.done}/${pr.total} done · AED ${amount}`;
                   return (
                     <div className={`overflow-hidden rounded-2xl bg-white shadow-[0_2px_6px_rgba(20,31,51,0.06)] ring-1 transition ${open ? "ring-brass" : "ring-line"}`}>
                       <button
@@ -1254,8 +1248,20 @@ export default function DriverPortalPage() {
                           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-bold ${pct === 100 ? "bg-delivered text-white" : "bg-[#F3EBDA] text-brass"}`}>{gi + 1}</span>
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-display text-[16px] font-bold leading-tight text-navy">{g.area}</div>
-                            <div className="mt-0.5 font-mono text-[10.5px] uppercase text-ink-soft">{g.emirate} · {sub}</div>
+                            <div className="mt-0.5 font-mono text-[10.5px] uppercase text-ink-soft">{g.emirate}</div>
                           </div>
+                          <span className="flex shrink-0 items-center gap-1">
+                            {[
+                              [pr.left, "#1D5FA8", "Left"],
+                              [pr.delivered, "#1F7A45", "Delivered"],
+                              [pr.cancelled, "#A32D2D", "Cancelled"],
+                              [pr.total, "#B38B36", "Total"],
+                            ].map(([n, c, t]) => (
+                              <span key={t as string} title={t as string} aria-label={`${t} ${n}`} className="grid h-[22px] min-w-[22px] place-items-center rounded-full px-1 font-mono text-[10.5px] font-bold text-white" style={{ background: c as string }}>
+                                {n}
+                              </span>
+                            ))}
+                          </span>
                           <span className={`shrink-0 text-xl leading-none text-[#C9B98F] transition-transform duration-300 ${open ? "rotate-90" : ""}`}>›</span>
                         </div>
                         <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-[#EEE7D6]">
