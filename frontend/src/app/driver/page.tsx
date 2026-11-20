@@ -263,33 +263,21 @@ export default function DriverPortalPage() {
     return true;
   }
   // The counter box shows counters; a tap flips it to the live race and a tap on the race flips back.
-  // Only on the Deliveries page does it also auto-flip to the race for 15 s every 2 minutes.
-  const [autoOn, setAutoOn] = useState(false);
+  // Every 20 s the counter box tilts to the live race, shows it for 6 s, then tilts back (all driver pages).
   const kmLockedRef = useRef(false);
   kmLockedRef.current = kmLocked;
   useEffect(() => {
-    const sync = () => setAutoOn(window.location.hash === "#deliveries");
-    sync();
-    window.addEventListener("popstate", sync);
-    window.addEventListener("hashchange", sync);
-    return () => {
-      window.removeEventListener("popstate", sync);
-      window.removeEventListener("hashchange", sync);
-    };
-  }, []);
-  useEffect(() => {
-    if (!autoOn) return;
     let back: ReturnType<typeof setTimeout> | null = null;
     const i = setInterval(() => {
       if (document.hidden || kmLockedRef.current) return;
       setRaceShown(true);
-      back = setTimeout(() => setRaceShown(false), 15000);
-    }, 120000);
+      back = setTimeout(() => setRaceShown(false), 6000);
+    }, 20000);
     return () => {
       clearInterval(i);
       if (back) clearTimeout(back);
     };
-  }, [autoOn]);
+  }, []);
   const [search, setSearch] = useState("");
   // "By area" search: pick an area from suggestions (no spelling mistakes) → only its parcels.
   const [areaFilter, setAreaFilter] = useState("");
@@ -324,7 +312,6 @@ export default function DriverPortalPage() {
       else window.history.pushState(null, "", want);
     }
     setViewState(v);
-    setAutoOn(v === "list");
     setRaceShown(false);
     window.scrollTo(0, 0);
   }
