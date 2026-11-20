@@ -628,6 +628,23 @@ export default function DriverPortalPage() {
     }
   }, []);
   const areaGroups = useMemo(() => groupByArea(areaFiltered, areaOrder, parcelOrder), [areaFiltered, areaOrder, parcelOrder]);
+  // Area cards (A1): one card per area; tap to open its parcels. Progress counts the whole day.
+  const [openAreaKey, setOpenAreaKey] = useState<string | null | undefined>(undefined);
+  const [priorityPick, setPriorityPick] = useState<AreaGroup | null>(null);
+  const holdRef = useRef<{ t: ReturnType<typeof setTimeout> | null; fired: boolean; x: number; y: number }>({ t: null, fired: false, x: 0, y: 0 });
+  const areaProgress = useMemo(() => {
+    const m = new Map<string, { total: number; done: number }>();
+    for (const o of orders) {
+      const k = `${o.emirate}|${areaOf(o)}`;
+      const v = m.get(k) ?? { total: 0, done: 0 };
+      v.total += 1;
+      if (o.status === "DELIVERED" || o.status === "CANCELLED") v.done += 1;
+      m.set(k, v);
+    }
+    return m;
+  }, [orders]);
+  // First visit: open the first area; if the open area disappears (all delivered), open the next one.
+  const shownOpenKey = openAreaKey === null ? null : openAreaKey && areaGroups.some((g) => g.key === openAreaKey) ? openAreaKey : areaFilter ? areaGroups[0]?.key ?? null : areaGroups[0]?.key ?? null;
 
   /** Quick "not delivered" note on a parcel (tap the same one again to clear). */
   async function setDriverNote(o: Order, note: string) {
@@ -692,13 +709,10 @@ export default function DriverPortalPage() {
   const [contactEdit, setContactEdit] = useState<Order | null>(null);
 
   /** Move an area up/down in the driver's route order (saved on this phone). */
-  function moveArea(key: string, dir: -1 | 1) {
-    const shown = areaGroups.map((g) => g.key);
-    const i = shown.indexOf(key);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= shown.length) return;
-    [shown[i], shown[j]] = [shown[j], shown[i]];
-    // Keep the order of areas not on screen (other tab / search) too.
+  /** Press-and-hold an area card → pick its priority number (1 = deliver first). */
+  function setAreaPosition(key: string, pos: number) {
+    const shown = areaGroups.map((g) => g.key).filter((k) => k !== key);
+    shown.splice(Math.max(0, Math.min(pos - 1, shown.length)), 0, key);
     const keys = [...shown, ...areaOrder.filter((k) => !shown.includes(k))];
     setAreaOrder(keys);
     try {
@@ -1172,40 +1186,102 @@ export default function DriverPortalPage() {
           {areaTab === "OPEN" ? "No parcels left to deliver." : "No parcels match."}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-2.5">
           {areaGroups.map((g, gi) => {
             const routes = routeLinks(g.orders);
             return (
               <section key={g.key} className="space-y-2.5">
-                <div className="flex items-center gap-2.5 px-1 pt-1">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brass font-mono text-[12px] font-bold text-white">{gi + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-display text-[17px] font-bold leading-tight text-navy">{g.area}</div>
-                    <div className="font-mono text-[10.5px] uppercase text-ink-soft">
-                      {g.emirate} · {g.orders.length} parcel{g.orders.length === 1 ? "" : "s"} · AED {fmtNumber(g.orders.reduce((t, o) => t + o.total, 0))}
+                {(() => {
+                  const pr = areaProgress.get(g.key) ?? { total: g.orders.length, done: 0 };
+                  const pct = pr.total > 0 ? Math.round((pr.done / pr.total) * 100) : 0;
+                  const open = shownOpenKey === g.key;
+                  const amount = fmtNumber(g.orders.reduce((t, o) => t + o.total, 0));
+                  const sub =
+                    areaTab === "OPEN"
+                      ? `${g.orders.length} left · AED ${amount}`
+                      : areaTab === "DONE"
+                        ? `${g.orders.length} done`
+                        : `${pr.done}/${pr.total} done · AED ${amount}`;
+                  return (
+                    <div className={`overflow-hidden rounded-2xl bg-white shadow-[0_2px_6px_rgba(20,31,51,0.06)] ring-1 transition ${open ? "ring-brass" : "ring-line"}`}>
+                      <button
+                        type="button"
+                        onPointerDown={(e) => {
+                          const h = holdRef.current;
+                          h.fired = false;
+                          h.x = e.clientX;
+                          h.y = e.clientY;
+                          if (h.t) clearTimeout(h.t);
+                          h.t = setTimeout(() => {
+                            h.fired = true;
+                            try {
+                              navigator.vibrate?.(30);
+                            } catch {
+                              /* ignore */
+                            }
+                            setPriorityPick(g);
+                          }, 550);
+                        }}
+                        onPointerMove={(e) => {
+                          const h = holdRef.current;
+                          if (h.t && (Math.abs(e.clientX - h.x) > 10 || Math.abs(e.clientY - h.y) > 10)) {
+                            clearTimeout(h.t);
+                            h.t = null;
+                          }
+                        }}
+                        onPointerUp={() => {
+                          const h = holdRef.current;
+                          if (h.t) clearTimeout(h.t);
+                          h.t = null;
+                        }}
+                        onPointerCancel={() => {
+                          const h = holdRef.current;
+                          if (h.t) clearTimeout(h.t);
+                          h.t = null;
+                        }}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (holdRef.current.fired) {
+                            holdRef.current.fired = false;
+                            return;
+                          }
+                          setOpenAreaKey(open ? null : g.key);
+                        }}
+                        style={{ WebkitTouchCallout: "none", userSelect: "none" }}
+                        className="block w-full px-3.5 py-3 text-left active:bg-paper"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-bold ${pct === 100 ? "bg-delivered text-white" : "bg-[#F3EBDA] text-brass"}`}>{gi + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-display text-[16px] font-bold leading-tight text-navy">{g.area}</div>
+                            <div className="mt-0.5 font-mono text-[10.5px] uppercase text-ink-soft">{g.emirate} · {sub}</div>
+                          </div>
+                          <span className={`shrink-0 text-xl leading-none text-[#C9B98F] transition-transform duration-300 ${open ? "rotate-90" : ""}`}>›</span>
+                        </div>
+                        <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-[#EEE7D6]">
+                          <div className="h-full rounded-full bg-delivered transition-[width] duration-700" style={{ width: `${pct}%` }} />
+                        </div>
+                      </button>
+                      {open && (
+                        <div className="flex items-center gap-2 border-t border-line px-3.5 py-2">
+                          {routes.map((r) => (
+                            <a
+                              key={r.href}
+                              href={r.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 rounded-full bg-delivered px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase text-white shadow-sm"
+                            >
+                              <Icon name="route" className="mr-1" />Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
+                            </a>
+                          ))}
+                          <span className="ml-auto font-mono text-[9.5px] uppercase tracking-wide text-ink-soft">Hold card to change number</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  {routes.map((r) => (
-                    <a
-                      key={r.href}
-                      href={r.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 rounded-full bg-delivered px-3 py-1.5 font-mono text-[10.5px] font-bold uppercase text-white shadow-sm"
-                    >
-                      <Icon name="route" className="mr-1" />Route{routes.length > 1 ? ` ${r.from}–${r.to}` : ""}
-                    </a>
-                  ))}
-                  <span className="flex shrink-0 flex-col">
-                    <button onClick={() => moveArea(g.key, -1)} disabled={gi === 0} className="px-1 text-[11px] leading-none text-ink-soft disabled:opacity-20" title="Move area up" aria-label="Move area up">
-                      ▲
-                    </button>
-                    <button onClick={() => moveArea(g.key, 1)} disabled={gi === areaGroups.length - 1} className="px-1 text-[11px] leading-none text-ink-soft disabled:opacity-20" title="Move area down" aria-label="Move area down">
-                      ▼
-                    </button>
-                  </span>
-                </div>
-                {g.orders.map((o, oi) => (
+                  );
+                })()}
+                {shownOpenKey === g.key && g.orders.map((o, oi) => (
                   <div
                     key={o.id}
                     data-drag-group={g.key}
@@ -1276,6 +1352,36 @@ export default function DriverPortalPage() {
               </section>
             );
           })}
+        </div>
+      )}
+      {priorityPick && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={() => setPriorityPick(null)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="font-mono text-[10.5px] font-bold uppercase tracking-widest text-brass">Priority number</div>
+            <div className="mt-0.5 truncate font-display text-lg font-bold uppercase text-navy">{priorityPick.area}</div>
+            <div className="mt-3 grid grid-cols-5 gap-2">
+              {areaGroups.map((_, idx) => {
+                const cur = areaGroups.findIndex((x) => x.key === priorityPick.key) === idx;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setAreaPosition(priorityPick.key, idx + 1);
+                      showToast(`${priorityPick.area} is now number ${idx + 1}`, "info");
+                      setPriorityPick(null);
+                    }}
+                    className={`h-11 rounded-xl font-mono text-base font-extrabold active:scale-95 ${cur ? "bg-navy text-[#F3D58E]" : "bg-[#F3EBDA] text-navy"}`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setPriorityPick(null)} className="mt-3 w-full rounded-full border border-line py-2.5 font-mono text-[11px] font-bold uppercase text-ink-soft">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
     </div>
