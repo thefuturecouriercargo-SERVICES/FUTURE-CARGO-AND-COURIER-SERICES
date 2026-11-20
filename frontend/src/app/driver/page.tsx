@@ -12,6 +12,7 @@ import ContactEditModal from "@/components/ContactEditModal";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
 import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
+import { scanFeedback, scannerOpenFx } from "@/lib/scanFx";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import DriverRace from "@/components/DriverRace";
 import DriverHistoryPage from "./history/page";
@@ -1471,6 +1472,7 @@ export default function DriverPortalPage() {
         );
       })()}
 
+      <div key={view} className={view === "home" ? undefined : "fc-stack"}>
       {view === "area" ? (
         areaPage
       ) : view === "home" ? (
@@ -1689,6 +1691,17 @@ export default function DriverPortalPage() {
 
         </>
       )}
+      </div>
+      <style>{`.fc-stack{perspective:900px}
+.fc-stack>*,.fc-stack>:only-child>*{animation:fcStack .55s cubic-bezier(.32,.72,0,1) both}
+.fc-stack>:only-child{animation:none}
+.fc-stack>:nth-child(2),.fc-stack>:only-child>:nth-child(2){animation-delay:.07s}
+.fc-stack>:nth-child(3),.fc-stack>:only-child>:nth-child(3){animation-delay:.14s}
+.fc-stack>:nth-child(4),.fc-stack>:only-child>:nth-child(4){animation-delay:.21s}
+.fc-stack>:nth-child(5),.fc-stack>:only-child>:nth-child(5){animation-delay:.28s}
+.fc-stack>:nth-child(n+6),.fc-stack>:only-child>:nth-child(n+6){animation-delay:.33s}
+@keyframes fcStack{0%{opacity:0;transform:translateZ(-200px) translateY(60px) rotateX(25deg)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.fc-stack>*,.fc-stack>:only-child>*{animation:none}}`}</style>
 
       {claimOpen && (
         <ClaimModal
@@ -1875,6 +1888,10 @@ function StatusScanModal({
   onClaim: () => void;
 }) {
   const [error, setError] = useState<{ text: string; id: number } | null>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scannerOpenFx(shellRef.current);
+  }, []);
 
   function onCode(raw: string) {
     const code = raw.trim();
@@ -1888,13 +1905,14 @@ function StatusScanModal({
       onFound(o);
     } else {
       beep(false);
+      scanFeedback(shellRef.current, "err");
       setError({ text: `${code} is not in your list.`, id: Date.now() });
     }
   }
 
   const GOLD = "#b08a35";
   return (
-    <div className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
+    <div ref={shellRef} className="fixed inset-0 z-50 flex justify-center" style={{ background: "#05080f" }}>
       <div className="flex h-full w-full max-w-md flex-col">
         <BarcodeScanner
           variant="gold"
@@ -1914,7 +1932,7 @@ function StatusScanModal({
           }
           footer={
             <div className="px-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-              <div className="rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
+              <div data-scan-result className="rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
                 <p key={error?.id ?? 0} className="truncate font-mono text-xs font-bold uppercase tracking-wider" style={{ color: error ? "#f09595" : "#8d8163" }}>
                   {error ? `✕ ${error.text}` : "Waiting for scan…"}
                 </p>
@@ -2190,37 +2208,12 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
     else onClose();
   }
 
-  // Opening animation: Assign button → scan box.
+  // Opening animation: "focus zoom out" — scanner starts close and blurry, then pulls back sharp.
   useEffect(() => {
-    const shell = shellRef.current;
-    const m = morphRef.current;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    shell?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: reduce ? 120 : 260, easing: "ease-out" });
-    if (!m) return;
-    if (!from || reduce || !m.animate) {
-      m.style.display = "none";
-      return;
-    }
-    // Lands on the 2:1 camera strip (full width less the side padding).
-    const W = Math.min(window.innerWidth, 448);
-    const width = W - 24;
-    const left = (window.innerWidth - W) / 2 + 12;
-    const height = width / 2;
-    const top = window.innerHeight * 0.4 - height / 2;
-    const box = { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, borderRadius: "8px" };
-    const a = m.animate(
-      [
-        { left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`, borderRadius: "16px", backgroundColor: "rgba(176,138,53,1)", borderColor: "rgba(233,196,106,0)", opacity: 1 },
-        { ...box, offset: 0.65, backgroundColor: "rgba(176,138,53,0.18)", borderColor: "rgba(233,196,106,1)", opacity: 1 },
-        { ...box, backgroundColor: "rgba(176,138,53,0)", borderColor: "rgba(233,196,106,1)", opacity: 0 },
-      ],
-      { duration: 700, easing: "cubic-bezier(.3,1.15,.5,1)", fill: "forwards" }
-    );
-    a.onfinish = () => {
-      m.style.display = "none";
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (morphRef.current) morphRef.current.style.display = "none";
+    scannerOpenFx(shellRef.current);
   }, []);
+  const addedRef = useRef(0);
 
   async function onCode(code: string, confirm = false, vendorId?: string): Promise<void> {
     try {
@@ -2229,6 +2222,8 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
         body: { code, ...(vendorId ? { vendorId } : {}), ...(confirm ? { confirm: true } : {}) },
       });
       beep(r.result !== "ALREADY");
+      if (r.result === "ALREADY") scanFeedback(shellRef.current, "dup");
+      else scanFeedback(shellRef.current, "ok", ++addedRef.current);
       setNote("");
       setNoteState("");
       setLog((prev) => [{ ok: true, already: r.result === "ALREADY", text: r.message, at: new Date(), orderId: r.order?.id, cnNo: r.order?.cnNo }, ...prev]);
@@ -2244,6 +2239,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
       const pick = !vendorId ? pickClashChoice(err) : undefined;
       if (pick) return onCode(code, confirm, pick);
       beep(false);
+      scanFeedback(shellRef.current, "err");
       setLog((prev) => [{ ok: false, text: pick === null ? `Skipped — ${code}` : err instanceof Error ? err.message : "Failed", at: new Date() }, ...prev]);
     }
   }
@@ -2291,7 +2287,7 @@ function ClaimModal({ onClose, from }: { onClose: () => void; from?: DOMRect | n
             }
             footer={
               <div className="px-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-                <div className="fc-gold-in rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
+                <div data-scan-result className="fc-gold-in rounded-2xl border-2 p-3" style={{ borderColor: GOLD, background: "#0b111d" }}>
                   <div className="flex items-center justify-between gap-2">
                     <p key={last?.at.getTime() ?? 0} className="fc-result min-w-0 truncate font-mono text-xs font-bold uppercase tracking-wider" style={{ color: tone }}>
                       {last ? `${last.ok ? (last.already ? "• " : "✓ ") : "✕ "}${last.text}` : "Waiting for scan…"}
