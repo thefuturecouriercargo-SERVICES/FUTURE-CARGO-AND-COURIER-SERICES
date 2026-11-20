@@ -195,7 +195,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
 
   if (!data || data.drivers.length === 0)
     return L ? (
-      <div onClick={onTap} className="flex h-full min-h-[92px] items-center justify-center rounded-2xl bg-white p-3 text-center font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft shadow ring-1 ring-line">
+      <div onClick={onTap} className="flex h-full min-h-[82px] items-center justify-center rounded-2xl bg-white p-3 text-center font-mono text-[10.5px] font-bold uppercase tracking-wide text-ink-soft shadow ring-1 ring-line">
         {data ? "Race starts with the first delivery" : "Loading race…"}
       </div>
     ) : null;
@@ -252,7 +252,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
         type="button"
         onClick={() => (embedded ? onTap?.() : setOpen(true))}
         aria-label={embedded ? "Show counters" : "Open my month"}
-        className={`block w-full text-left active:scale-[0.99] ${L ? "h-full rounded-2xl bg-white p-3 text-navy shadow ring-1 ring-line" : "rounded-2xl bg-navy p-3 text-paper shadow-md"}`}
+        className={`block w-full text-left active:scale-[0.99] ${L ? "flex h-full flex-col justify-center rounded-2xl bg-white px-3 py-2.5 text-navy shadow ring-1 ring-line" : "rounded-2xl bg-navy p-3 text-paper shadow-md"}`}
       >
         <div className="flex items-center gap-2 font-mono text-[9.5px] font-bold uppercase tracking-widest">
           {!L && (
@@ -269,7 +269,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
             </span>
           </span>
         </div>
-        <div className={`race-road mt-2.5 flex h-[38px] items-center rounded-xl px-[17px] ${L ? "bg-paper" : "bg-black/25"}`}>
+        <div className={`race-road ${L ? "mt-1.5 h-[36px]" : "mt-2.5 h-[38px]"} flex items-center rounded-xl px-[17px] ${L ? "bg-paper" : "bg-black/25"}`}>
           <div ref={trackRef} className={`relative h-[3px] min-w-0 flex-1 rounded ${L ? "race-lane-light" : "race-lane"}`}>
             {width > 0 &&
               placed.map((p, i) => (
@@ -294,7 +294,7 @@ export default function DriverRace({ embedded = false, onTap }: { embedded?: boo
               ))}
           </div>
         </div>
-        <div key={line} className={`race-comment mt-2 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>
+        {!L && <div key={line} className={`race-comment mt-2 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide ${commentCls}`}>{line}</div>}
       </button>
 
       {open && typeof document !== "undefined" && createPortal(

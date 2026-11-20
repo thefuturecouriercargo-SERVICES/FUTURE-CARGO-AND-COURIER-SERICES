@@ -1110,7 +1110,7 @@ export default function DriverPortalPage() {
       {(
         <div className="relative mb-3">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={goHome} aria-label="Back" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white active:scale-95">←</button>
+            <button type="button" onClick={goHome} aria-label="Back" className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-navy px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95">← Back</button>
             <input
               value={areaFilter || areaTyped}
               onChange={(e) => {
@@ -1120,7 +1120,7 @@ export default function DriverPortalPage() {
               }}
               onFocus={() => setAreaSuggestOpen(true)}
               placeholder="Search area…"
-              className={`w-full rounded-full border px-4 py-2.5 text-sm shadow-sm outline-none focus:border-navy ${areaFilter ? "border-navy bg-navy/5 font-bold uppercase text-navy" : "border-line bg-white"}`}
+              className={`h-10 w-full min-w-0 rounded-full border px-4 text-sm shadow-sm outline-none focus:border-navy ${areaFilter ? "border-navy bg-navy/5 font-bold uppercase text-navy" : "border-line bg-white"}`}
             />
             {(areaFilter || areaTyped) && (
               <button
@@ -1432,13 +1432,13 @@ export default function DriverPortalPage() {
           <div className="sticky top-0 z-30 -mx-4 mb-3 bg-paper/95 px-4 pb-2 pt-1 backdrop-blur">
             <div className="flex items-stretch gap-2">
               <div className="min-w-0 flex-1">
-                <div key={kmLocked && (view === "list" || view === "area") ? "km" : raceShown ? "race" : "count"} className="flip-in h-full">
+                <div key={kmLocked && (view === "list" || view === "area") ? "km" : raceShown ? "race" : "count"} className={`flip-in ${kmLocked && km && (view === "list" || view === "area") ? "h-full" : "h-[82px]"}`}>
                   {kmLocked && km && (view === "list" || view === "area") ? (
                     <KmStartCover km={km} onStart={() => setKmSheet(true)} />
                   ) : raceShown ? (
                     <DriverRace embedded onTap={() => setRaceShown(false)} />
                   ) : (
-                    <div className="h-full cursor-pointer rounded-2xl bg-white p-3 shadow ring-1 ring-line" onClick={() => { if (!kmLocked) setRaceShown(true); }}>
+                    <div className="flex h-full cursor-pointer flex-col justify-center rounded-2xl bg-white px-3 py-2.5 shadow ring-1 ring-line" onClick={() => { if (!kmLocked) setRaceShown(true); }}>
                       <div className="grid grid-cols-4 gap-1.5">
                         {tiles.map(([k, label, n, color]) => (
                           <button
@@ -1448,14 +1448,14 @@ export default function DriverPortalPage() {
                               e.stopPropagation();
                               setStatusTab(k);
                             }}
-                            className={`rounded-xl px-1 py-2 text-center transition ${hl === k ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
+                            className={`rounded-xl px-1 py-1.5 text-center transition ${hl === k ? "bg-paper ring-1 ring-brass/60" : "bg-transparent"}`}
                           >
                             <div className={`text-lg font-extrabold leading-none ${color}`}>{n}</div>
                             <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-ink-soft">{label}</div>
                           </button>
                         ))}
                       </div>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${pct}% delivered`}>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${pct}% delivered`}>
                         <div className="h-full rounded-full bg-delivered transition-all" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
