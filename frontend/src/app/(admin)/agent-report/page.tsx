@@ -189,12 +189,12 @@ export default function AgentReportPage() {
       >
         <span className="text-2xl"><Icon name="file" /></span>
         <span className="mt-1 font-semibold text-navy">{busy === "reading" ? "Reading report…" : "Choose or drop Excel / PDF report"}</span>
-        <span className="text-xs text-ink-soft">.xlsx or .pdf · you can pick several at once</span>
+        <span className="text-xs text-ink-soft">.xlsx, .csv or .pdf · you can pick several at once</span>
         <input
           ref={fileRef}
           type="file"
           multiple
-          accept=".xlsx,.xlsm,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".xlsx,.xlsm,.csv,text/csv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="hidden"
           onChange={(e) => onFiles(e.target.files)}
         />

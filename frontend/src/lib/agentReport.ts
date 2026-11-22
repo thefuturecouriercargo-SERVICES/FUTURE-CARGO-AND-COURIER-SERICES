@@ -1,6 +1,7 @@
 /**
  * Reads the status reports agents send us, in the browser.
  *  - Excel: every sheet; finds the header row with a tracking/AWB column and a Status column.
+ *  - CSV: same header rules (e.g. the "Shipment Order" export: ID, Receiver Emirate, COD, Status = RTO).
  *  - PDF ("Cash Return Report"): every row on it is a delivered parcel.
  * Returns plain rows; the server matches them to our orders by CN.
  */
@@ -72,55 +73,105 @@ function num(v: string): number | null {
   return v.trim() !== "" && Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Rows of one table (an Excel sheet or a CSV file) → report rows.
+ * Each row is 1-based like ExcelJS row.values: index 0 is unused.
+ * Finds the header row (a tracking/ID column and a Status column), then reads every row under it.
+ */
+function rowsFromTable(table: unknown[][], sheet: string, file: File, source: "excel" = "excel"): ReportRow[] {
+  const out: ReportRow[] = [];
+  let cols: { tracking: number; status: number; cod: number; emirate: number; sender: number; date: number } | null = null;
+  for (const raw of table) {
+    const vals = raw.map(cellText);
+    if (!cols) {
+      const low = vals.map((v) => v.toLowerCase());
+      const find = (...keys: string[]) => low.findIndex((h) => keys.some((k) => h.includes(k)));
+      // Tracking column: older sheets say AWB / Tracking, the "Shipment Summary" says "Shipment ID",
+      // the "Shipment Order" CSV just says "ID".
+      let tracking = find("awb", "tracking", "cn no", "consignment", "shipment id", "shipment no", "shipment #");
+      if (tracking <= 0) tracking = low.findIndex((h, i) => i > 0 && (h === "id" || h === "cn" || h === "shipment"));
+      const status = find("status");
+      if (tracking > 0 && status > 0) {
+        // Delivered date: prefer a delivery/status date column, else any "date" column —
+        // but never the booking/pickup date (that is when it was sent, not delivered).
+        let date = find("deliver date", "delivered date", "delivery date", "delivered on", "status date", "last update", "updated");
+        if (date <= 0 || !low[date].includes("date") && !low[date].includes("updat"))
+          date = low.findIndex((h) => h.includes("date") && !/book|pick|creat|order/.test(h));
+        // Customer's emirate: "Receiver Emirate", not "Sender Emirate".
+        let emirate = find("receiver emirate", "consignee emirate", "destination");
+        if (emirate <= 0) emirate = low.findIndex((h) => h.includes("emirate") && !h.includes("sender"));
+        let sender = find("sender name", "shipper");
+        // Plain "Sender" column — not "Net Payable to Sender" / "Sender Emirate".
+        if (sender <= 0) sender = low.findIndex((h) => h.includes("sender") && !/payable|net|emirate|amount|charge|phone|mobile/.test(h));
+        cols = { tracking, status, cod: find("cod", "amount"), emirate, sender, date };
+      }
+      continue;
+    }
+    const tracking = vals[cols.tracking] ?? "";
+    const status = vals[cols.status] ?? "";
+    if (!/\d{3,}/.test(tracking) || !status) continue;
+    out.push({
+      tracking: tracking.trim(),
+      status: status.trim(),
+      cod: cols.cod > 0 ? num(vals[cols.cod] ?? "") : null,
+      emirate: cols.emirate > 0 ? vals[cols.emirate] || null : null,
+      sender: cols.sender > 0 ? vals[cols.sender] || null : null,
+      sheet,
+      source,
+      reportDate: cols.date > 0 ? cellDate(raw[cols.date]) : null,
+      file: file.name,
+    });
+  }
+  return out;
+}
+
 export async function readExcelReport(file: File): Promise<ReportRow[]> {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
   const out: ReportRow[] = [];
-
   wb.eachSheet((ws) => {
-    let cols: { tracking: number; status: number; cod: number; emirate: number; sender: number; date: number } | null = null;
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const raw = Array.from(row.values as unknown[]); // 1-based; fills empty cells
-      const vals = raw.map(cellText);
-      if (!cols) {
-        const low = vals.map((v) => v.toLowerCase());
-        const find = (...keys: string[]) => low.findIndex((h) => keys.some((k) => h.includes(k)));
-        // Tracking column: older sheets say AWB / Tracking, the newer "Shipment Summary" says "Shipment ID".
-        const tracking = find("awb", "tracking", "cn no", "consignment", "shipment id", "shipment no", "shipment #");
-        const status = find("status");
-        if (tracking > 0 && status > 0) {
-          // Delivered date: prefer a delivery/status date column, else any "date" column —
-          // but never the booking/pickup date (that is when it was sent, not delivered).
-          let date = find("deliver date", "delivered date", "delivery date", "delivered on", "status date", "last update", "updated");
-          if (date <= 0 || !low[date].includes("date") && !low[date].includes("updat"))
-            date = low.findIndex((h) => h.includes("date") && !/book|pick|creat|order/.test(h));
-          // Customer's emirate: "Receiver Emirate", not "Sender Emirate".
-          let emirate = find("receiver emirate", "consignee emirate", "destination");
-          if (emirate <= 0) emirate = low.findIndex((h) => h.includes("emirate") && !h.includes("sender"));
-          let sender = find("sender name", "shipper");
-          if (sender <= 0) sender = find("sender");
-          cols = { tracking, status, cod: find("cod", "amount"), emirate, sender, date };
-        }
-        return;
-      }
-      const tracking = vals[cols.tracking] ?? "";
-      const status = vals[cols.status] ?? "";
-      if (!/\d{3,}/.test(tracking) || !status) return;
-      out.push({
-        tracking: tracking.trim(),
-        status: status.trim(),
-        cod: cols.cod > 0 ? num(vals[cols.cod] ?? "") : null,
-        emirate: cols.emirate > 0 ? vals[cols.emirate] || null : null,
-        sender: cols.sender > 0 ? vals[cols.sender] || null : null,
-        sheet: ws.name,
-        source: "excel",
-        reportDate: cols.date > 0 ? cellDate(raw[cols.date]) : null,
-        file: file.name,
-      });
-    });
+    const table: unknown[][] = [];
+    ws.eachRow({ includeEmpty: false }, (row) => table.push(Array.from(row.values as unknown[]))); // 1-based; fills empty cells
+    out.push(...rowsFromTable(table, ws.name, file));
   });
   return out;
+}
+
+/** Splits CSV text into rows of cells (handles quotes, "" inside quotes, CRLF, a leading BOM, ; or tab separators). */
+export function parseCsv(text: string): string[][] {
+  const t = text.replace(/^\uFEFF/, "");
+  const first = t.split(/\r?\n/, 1)[0] ?? "";
+  const count = (c: string) => first.split(c).length - 1;
+  const sep = [",", ";", "\t"].sort((a, b) => count(b) - count(a))[0];
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) {
+      if (c === '"' && t[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === sep) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && t[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((x) => x.trim() !== "")) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.some((x) => x.trim() !== "")) rows.push(row);
+  return rows;
+}
+
+/** CSV export of an agent's shipments (e.g. "Shipment Order": ID, Receiver Emirate, COD Amount to Collect, Status). */
+export async function readCsvReport(file: File): Promise<ReportRow[]> {
+  const rows = parseCsv(await file.text()).map((r) => ["", ...r.map((x) => x.trim())]); // 1-based like Excel
+  return rowsFromTable(rows, "CSV", file);
 }
 
 const PDF_VERSION = "3.11.174";
@@ -186,5 +237,6 @@ export async function readAgentReport(file: File): Promise<ReportRow[]> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") return readPdfReport(file);
   if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) return readExcelReport(file);
-  throw new Error("Upload the agent's Excel (.xlsx) or PDF report");
+  if (name.endsWith(".csv") || file.type === "text/csv") return readCsvReport(file);
+  throw new Error("Upload the agent's Excel (.xlsx), CSV or PDF report");
 }
