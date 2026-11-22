@@ -18,6 +18,7 @@ interface Entry {
   customer: string | null;
   holder: string | null;
   total: number | null;
+  amountFrom?: number | null;
   statusNow: string | null;
 }
 
@@ -129,7 +130,10 @@ export default function AgentReportHistory({ refreshKey }: { refreshKey: number 
                         <span className="text-xs text-ink-soft">{e.vendor}</span>
                       </td>
                       <td className="p-2 text-xs">{e.holder}</td>
-                      <td className="p-2 text-right font-mono text-xs">{e.total != null ? fmtNumber(e.total) : "—"}</td>
+                      <td className="p-2 text-right font-mono text-xs">
+                        {e.total != null ? fmtNumber(e.total) : "—"}
+                        {e.amountFrom != null && <span className="block text-[10px] text-pending">WAS {fmtNumber(e.amountFrom)}</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

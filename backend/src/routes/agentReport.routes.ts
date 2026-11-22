@@ -98,22 +98,27 @@ router.post(
       // Only the tracking number counts. Sender Name is the vendor's bill no (repeats),
       // so matching on it hit unrelated old orders — never used.
 
+      // Amount on the agent's report differs from ours (only the payment PDF's Delivered rows set the amount).
+      const amountDiff = !!order && r.cod != null && Math.round(r.cod) !== order.total;
+      const fixAmount = amountDiff && target === "DELIVERED" && r.source !== "excel";
+
       let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver" | "waitPdf";
       if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
       // Never touch consignments held by our own drivers — only the agent's.
       else if (!order.employee?.isAgent) action = "driver";
       else if (target === "PENDING") action = "pending";
-      else if (order.status === target) action = "already";
+      // Already Delivered but the payment PDF has another amount → update the amount only.
+      else if (order.status === target) action = fixAmount ? "change" : "already";
       // Excel no longer marks Delivered — only the payment PDF does, so unpaid ones stay visible.
       else if (r.source === "excel" && target === "DELIVERED") action = "waitPdf";
       // The report always wins: Delivered → Delivered, RTO → Cancelled, whatever we had before.
       else action = "change";
 
       const warnings: string[] = [];
-      const amountDiff = !!order && r.cod != null && r.cod !== order.total;
       const notWithAgent = !!order && !order.employee?.isAgent;
       const dup = !!order && dupCn.has(order.cnNo);
-      if (amountDiff) warnings.push(`Amount differs: report ${r.cod}, ours ${order!.total} — check it's the same parcel`);
+      if (amountDiff) warnings.push(`Amount differs: report ${r.cod}, ours ${order!.total}`);
+      if (fixAmount && order!.employee?.isAgent) warnings.push(`Amount will be set to ${Math.round(r.cod!)} (as per report)`);
       if (notWithAgent) warnings.push(`With driver ${order!.employee?.name ?? "—"} — not touched`);
       if (dup) warnings.push(`CN ${order!.cnNo} is on more than one order — check the date`);
       if (order && target === "CANCELLED" && order.status === "DELIVERED") warnings.push("Was Delivered — report says RTO");
@@ -128,9 +133,10 @@ router.post(
         sheet: r.sheet ?? null,
         action,
         matchedBy,
-        // Ticked by default only when it's clearly the same parcel: CN equal, with the agent,
-        // same amount, CN used once. Anything doubtful is shown but left for you to tick.
-        selected: action === "change" && matchedBy === "cn" && !amountDiff && !notWithAgent && !dup,
+        // Ticked by default when it's clearly the same parcel: CN equal, with the agent, CN used once.
+        // A different amount no longer blocks it — Update sets the amount as per the report.
+        selected: action === "change" && matchedBy === "cn" && !notWithAgent && !dup,
+        fixAmount: action === "change" && fixAmount,
         warnings,
         order: order
           ? {
@@ -169,7 +175,15 @@ router.post(
 const applySchema = z.object({
   fileName: z.string().max(200).optional(),
   updates: z
-    .array(z.object({ orderId: z.string().min(1), status: z.enum(["DELIVERED", "CANCELLED"]), tracking: z.string().max(40).optional() }))
+    .array(
+      z.object({
+        orderId: z.string().min(1),
+        status: z.enum(["DELIVERED", "CANCELLED"]),
+        tracking: z.string().max(40).optional(),
+        // Agent's amount from the payment PDF — set on Delivered orders (as per report).
+        amount: z.number().min(0).max(1_000_000).nullable().optional(),
+      })
+    )
     .min(1)
     .max(3000),
 });
@@ -194,13 +208,16 @@ router.post(
         skipped.push({ orderId: u.orderId, reason: `With driver ${existing.employee?.name ?? "—"} — not touched` });
         continue;
       }
-      if (existing.status === u.status) {
+      const newTotal = u.status === "DELIVERED" && u.amount != null ? Math.round(u.amount) : null;
+      const amountChange = newTotal != null && newTotal !== existing.total;
+      if (existing.status === u.status && !amountChange) {
         skipped.push({ orderId: u.orderId, reason: "Already " + u.status.toLowerCase() });
         continue;
       }
+      const amountOnly = existing.status === u.status;
       const reason = u.status === "CANCELLED" ? "RTO — agent report" : undefined;
       // Same rule as marking by hand: an older order that gets resolved moves to today's sheet.
-      const isCarryover = existing.date.getTime() < todayStart.getTime();
+      const isCarryover = !amountOnly && existing.date.getTime() < todayStart.getTime();
 
       const order = await prisma.$transaction(async (tx) => {
         let carry: { date?: Date; slNo?: number } = {};
@@ -210,12 +227,15 @@ router.post(
         }
         return tx.order.update({
           where: { id: existing.id },
-          data: {
-            status: u.status,
-            ...carry,
-            resolvedAt: new Date(),
-            ...(u.status === "CANCELLED" ? { remarks: reason } : existing.status === "CANCELLED" ? { remarks: null } : {}),
-          },
+          data: amountOnly
+            ? { total: newTotal! }
+            : {
+                status: u.status,
+                ...carry,
+                resolvedAt: new Date(),
+                ...(amountChange ? { total: newTotal! } : {}),
+                ...(u.status === "CANCELLED" ? { remarks: reason } : existing.status === "CANCELLED" ? { remarks: null } : {}),
+              },
           include: { vendor: true, employee: { select: { id: true, name: true } } },
         });
       });
@@ -237,6 +257,7 @@ router.post(
           cnNo: order.cnNo,
           vendor: order.vendor.name,
           total: order.total,
+          ...(amountChange ? { amountFrom: existing.total, amountTo: newTotal } : {}),
           orderDate: existing.date.toISOString(),
         },
       });
@@ -311,6 +332,7 @@ router.get(
         customer: o?.booking?.customerName ?? null,
         holder: o?.employee?.name ?? null,
         total: o?.total ?? (m.total as number) ?? null,
+        amountFrom: typeof m.amountFrom === "number" ? m.amountFrom : null,
         statusNow: o?.status ?? null,
       };
     });

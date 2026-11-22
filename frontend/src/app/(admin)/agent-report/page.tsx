@@ -22,6 +22,7 @@ interface Item {
   action: Action;
   matchedBy: "cn" | "sender" | null;
   selected: boolean;
+  fixAmount?: boolean;
   warnings: string[];
   order: {
     id: string;
@@ -132,7 +133,8 @@ export default function AgentReportPage() {
 
   async function apply() {
     if (chosen.length === 0) return;
-    const msg = `Mark ${chosenDeliver} as DELIVERED and ${chosenCancel} as CANCELLED (RTO)?\n\nOlder orders move to today's sheet, same as marking by hand.`;
+    const amt = chosen.filter((i) => i.fixAmount).length;
+    const msg = `Mark ${chosenDeliver} as DELIVERED and ${chosenCancel} as CANCELLED (RTO)?${amt ? `\n\n${amt} amount${amt === 1 ? "" : "s"} will be set as per the report.` : ""}\n\nOlder orders move to today's sheet, same as marking by hand.`;
     if (!(await confirmDialog(msg))) return;
     setBusy("applying");
     setError("");
@@ -141,7 +143,12 @@ export default function AgentReportPage() {
         method: "POST",
         body: {
           fileName,
-          updates: chosen.map((i) => ({ orderId: i.order!.id, status: i.target, tracking: i.tracking })),
+          updates: chosen.map((i) => ({
+            orderId: i.order!.id,
+            status: i.target,
+            tracking: i.tracking,
+            amount: i.target === "DELIVERED" && i.fixAmount ? i.cod : null,
+          })),
         },
       });
       setHistoryKey((k) => k + 1);
@@ -324,7 +331,7 @@ export default function AgentReportPage() {
                           <span className="block text-pending">ours {fmtNumber(i.order.total)}</span>
                         )}
                       </td>
-                      <td className="p-2 text-[11px] text-pending">{i.warnings.filter((w) => !w.startsWith("Amount")).join(" · ")}</td>
+                      <td className="p-2 text-[11px] text-pending">{i.warnings.filter((w) => !w.startsWith("Amount differs")).join(" · ")}</td>
                     </tr>
                   );
                 })}
