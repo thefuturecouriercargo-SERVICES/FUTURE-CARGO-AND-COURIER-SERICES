@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate } from "@/lib/format";
 import { readAgentReport, ReportRow } from "@/lib/agentReport";
 import AgentReportHistory from "@/components/AgentReportHistory";
+import AgentAgeing from "@/components/AgentAgeing";
 
 import { confirmDialog } from "@/components/ui/Feedback";
 import EmptyState from "@/components/ui/EmptyState";
@@ -197,6 +198,8 @@ export default function AgentReportPage() {
       <p className="mb-6 text-xs text-ink-soft">
         RTO and pickup parcels to receive back: <Link href="/returns" className="font-semibold text-navy underline">Cancel &amp; Pickup page →</Link>
       </p>
+
+      <AgentAgeing refreshKey={historyKey} />
 
       {error && <p className="mb-4 rounded border border-cancelled bg-cancelled-bg p-3 text-sm text-cancelled">{error}</p>}
       {result && <p className="mb-4 rounded border border-delivered bg-delivered-bg p-3 text-sm font-semibold text-delivered">{result}</p>}

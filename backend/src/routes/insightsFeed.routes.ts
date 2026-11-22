@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { displayDate, dubaiDateStr } from "../utils/dates";
+import { agentAgeing } from "./agentReport.routes";
 
 /**
  * Comment feed for the rotating box under Employee-wise Performance.
@@ -263,6 +264,8 @@ router.get(
         }
         if (xlDays === 0 && pdfDays !== null && pdfDays > 0) add(`EXCEL UPLOADED TODAY, BUT THE PAYMENT PDF IS STILL PENDING`, "warn");
         if (pdfDays === 0 && xlDays !== null && xlDays > 0) add(`PAYMENT PDF UPLOADED, BUT THE EXCEL IS MISSING — RTO CAN'T BE CHECKED`, "warn");
+        const late = await agentAgeing(5);
+        if (late.length) add(`${late.length} CN${late.length > 1 ? "S" : ""} WITH ${agentName} FOR 5+ DAYS · AED ${late.reduce((t, r) => t + r.total, 0).toLocaleString("en-US")} STUCK · OLDEST ${late[0].days} DAYS`, late[0].days >= 10 ? "bad" : "warn");
         if (lastPdf?.reportDate) add(`LAST AGENT PAYMENT PDF DATED ${displayDate(lastPdf.reportDate)}`, "info");
         if ((xlDays ?? 9) >= 2 && (pdfDays ?? 9) >= 2) add(pick([
           `${agentName}'S REPORT IS PLAYING HIDE AND SEEK AGAIN 🙈`,

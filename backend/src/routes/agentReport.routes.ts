@@ -342,6 +342,83 @@ router.get(
 );
 
 /**
+ * ── Agent ageing: CNs still pending with the agent for N+ days ───────────────
+ * Handed date = latest scan/assign or transfer to the agent; else the entry date.
+ * Days are Dubai calendar days. Leaves the list once Delivered (payment PDF) or Cancelled (RTO).
+ */
+export async function agentAgeing(minDays = 5) {
+  const orders = await prisma.order.findMany({
+    where: { status: { in: ["PENDING", "TRANSFER"] }, employee: { isAgent: true } },
+    select: {
+      id: true,
+      cnNo: true,
+      date: true,
+      total: true,
+      emirate: true,
+      area: true,
+      custPhone: true,
+      custAddress: true,
+      employeeId: true,
+      vendor: { select: { name: true } },
+      employee: { select: { name: true } },
+      booking: { select: { customerName: true, customerPhone: true, address: true, billNo: true } },
+    },
+  });
+  if (!orders.length) return [];
+  const ids = orders.map((o) => o.id);
+  const [scans, transfers] = await Promise.all([
+    prisma.scanLog.findMany({
+      where: { orderId: { in: ids }, result: { in: ["ACCEPTED", "REASSIGNED"] } },
+      select: { orderId: true, driverId: true, createdAt: true },
+    }),
+    prisma.orderTransfer.findMany({ where: { orderId: { in: ids } }, select: { orderId: true, toEmployeeId: true, transferredAt: true } }),
+  ]);
+  const handed = new Map<string, Date>();
+  const bump = (id: string, d: Date) => {
+    const cur = handed.get(id);
+    if (!cur || d > cur) handed.set(id, d);
+  };
+  const holderOf = new Map(orders.map((o) => [o.id, o.employeeId]));
+  for (const s of scans) if (s.orderId && s.driverId === holderOf.get(s.orderId)) bump(s.orderId, s.createdAt);
+  for (const t of transfers) if (t.toEmployeeId === holderOf.get(t.orderId)) bump(t.orderId, t.transferredAt);
+
+  const today = parseDateParam(dubaiDateStr(new Date())).getTime();
+  const DAY = 24 * 60 * 60 * 1000;
+  return orders
+    .map((o) => {
+      const h = handed.get(o.id);
+      const day = h ? parseDateParam(dubaiDateStr(h)) : o.date; // order.date is already a calendar day
+      const days = Math.round((today - day.getTime()) / DAY);
+      return {
+        orderId: o.id,
+        cnNo: o.cnNo,
+        handedOn: day.toISOString().slice(0, 10),
+        days,
+        agent: o.employee.name,
+        vendor: o.vendor.name,
+        billNo: o.booking?.billNo ?? null,
+        customer: o.booking?.customerName ?? null,
+        phone: o.booking?.customerPhone ?? o.custPhone ?? null,
+        address: o.booking?.address ?? o.custAddress ?? null,
+        emirate: o.emirate,
+        area: o.area,
+        total: o.total,
+      };
+    })
+    .filter((r) => r.days >= minDays)
+    .sort((a, b) => b.days - a.days || a.cnNo - b.cnNo);
+}
+
+router.get(
+  "/ageing",
+  asyncHandler(async (req, res) => {
+    const min = Math.max(1, Math.min(60, Number(req.query.days) || 5));
+    const rows = await agentAgeing(min);
+    res.json({ minDays: min, rows, total: rows.reduce((s, r) => s + r.total, 0) });
+  })
+);
+
+/**
  * ── Payment check: Excel "Delivered" vs payment PDF ───────────────────────────
  * Every upload is recorded: Excel rows marked Delivered (with their delivered date)
  * and every CN on the agent's payment PDF (with the PDF's date).
