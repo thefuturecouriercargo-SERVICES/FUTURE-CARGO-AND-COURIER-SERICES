@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { fmtNumber } from "@/lib/format";
-import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
+import BarcodeScanner, { scanSound, pickClashChoice } from "@/components/BarcodeScanner";
 import ScanHistory, { DriverScanExport } from "@/components/ScanHistory";
 import ScanProgressPanel from "@/components/ScanProgressPanel";
 import OutsideCountBox from "@/components/OutsideCountBox";
@@ -65,7 +65,7 @@ export default function AssignPage() {
         message: string;
         order: { cnNo: number; total: number; vendor: { name: string }; booking?: { customerName: string } | null };
       }>("/bookings/scan-assign", { method: "POST", body: { code, employeeId: driverId, ...(vendorId ? { vendorId } : {}), ...(confirm ? { confirm: true } : {}) } });
-      beep(r.result !== "ALREADY");
+      scanSound(r.result === "ACCEPTED" ? "NEW" : r.result === "REASSIGNED" ? "MOVE" : "ALREADY");
       setLog((prev) => [
         {
           at: new Date(),
@@ -82,7 +82,7 @@ export default function AssignPage() {
     } catch (err) {
       // A match by vendor bill No., or moving a parcel from another driver: ask first.
       if (!confirm && err instanceof ApiClientError && (err.details as { code?: string } | undefined)?.code === "CONFIRM_SCAN") {
-        beep(true);
+        scanSound("ASK");
         if (await confirmDialog(err.message)) return onCode(code, true, vendorId);
         setLog((prev) => [{ at: new Date(), code, ok: false, kind: "ERROR", message: `Skipped — ${err.message}`, driver: driverName }, ...prev]);
         return;
@@ -90,7 +90,7 @@ export default function AssignPage() {
       // Same number is our CN and a vendor bill No. — ask which one.
       const pick = !vendorId ? pickClashChoice(err) : undefined;
       if (pick) return onCode(code, confirm, pick);
-      beep(false);
+      scanSound("ERROR");
       setLog((prev) => [
         { at: new Date(), code, ok: false, kind: "ERROR", message: pick === null ? `Skipped — ${code}` : err instanceof Error ? err.message : "Failed", driver: driverName },
         ...prev,

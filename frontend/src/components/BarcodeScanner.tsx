@@ -19,6 +19,48 @@ export function beep(ok = true) {
   }
 }
 
+/**
+ * Distinct scan sounds (admin Scan & Assign):
+ * NEW = the usual sharp beep · MOVE = two rising chimes · ALREADY = two soft low taps
+ * ERROR = falling buzz · ASK = "attention" two-tone before a confirm popup.
+ */
+export type ScanSound = "NEW" | "MOVE" | "ALREADY" | "ERROR" | "ASK";
+export function scanSound(kind: ScanSound) {
+  if (kind === "NEW") return beep(true);
+  try {
+    navigator.vibrate?.(kind === "MOVE" ? [50, 50, 50] : kind === "ALREADY" ? 30 : kind === "ASK" ? [40, 40, 120] : [120, 60, 120]);
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    const t0 = ctx.currentTime;
+    // [start s, length s, freq from, freq to, wave, volume]
+    const notes: [number, number, number, number, OscillatorType, number][] =
+      kind === "MOVE"
+        ? [[0, 0.11, 880, 880, "sine", 0.5], [0.12, 0.16, 1320, 1320, "sine", 0.5]]
+        : kind === "ALREADY"
+        ? [[0, 0.06, 520, 520, "triangle", 0.6], [0.1, 0.06, 520, 520, "triangle", 0.6]]
+        : kind === "ASK"
+        ? [[0, 0.12, 1050, 1050, "square", 0.18], [0.15, 0.18, 760, 760, "square", 0.18]]
+        : [[0, 0.38, 320, 150, "sawtooth", 0.3]];
+    for (const [at, len, f1, f2, wave, vol] of notes) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = wave;
+      o.frequency.setValueAtTime(f1, t0 + at);
+      if (f2 !== f1) o.frequency.linearRampToValueAtTime(f2, t0 + at + len);
+      g.gain.setValueAtTime(0, t0 + at);
+      g.gain.linearRampToValueAtTime(vol, t0 + at + 0.01);
+      g.gain.setValueAtTime(vol, t0 + at + len - 0.02);
+      g.gain.linearRampToValueAtTime(0, t0 + at + len);
+      o.connect(g).connect(ctx.destination);
+      o.start(t0 + at);
+      o.stop(t0 + at + len + 0.02);
+    }
+    setTimeout(() => ctx.close().catch(() => undefined), 1000);
+  } catch {
+    /* no sound — fine */
+  }
+}
+
 /** Phones/tablets: don't focus the CN box by itself — that pops the keyboard over the camera. */
 export function isTouchDevice() {
   try {
