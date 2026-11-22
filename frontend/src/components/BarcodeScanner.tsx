@@ -21,7 +21,7 @@ export function beep(ok = true) {
 
 /**
  * Distinct scan sounds (admin Scan & Assign):
- * NEW = the usual sharp beep · MOVE = two rising chimes · ALREADY = two soft low taps
+ * NEW = the usual sharp beep · MOVE = upward swoop + two high dings · ALREADY = deep double "duh-duh"
  * ERROR = falling buzz · ASK = "attention" two-tone before a confirm popup.
  */
 export type ScanSound = "NEW" | "MOVE" | "ALREADY" | "ERROR" | "ASK";
@@ -35,9 +35,9 @@ export function scanSound(kind: ScanSound) {
     // [start s, length s, freq from, freq to, wave, volume]
     const notes: [number, number, number, number, OscillatorType, number][] =
       kind === "MOVE"
-        ? [[0, 0.11, 880, 880, "sine", 0.5], [0.12, 0.16, 1320, 1320, "sine", 0.5]]
+        ? [[0, 0.28, 420, 1500, "triangle", 0.7], [0.3, 0.09, 1500, 1500, "triangle", 0.6], [0.42, 0.14, 1900, 1900, "triangle", 0.6]]
         : kind === "ALREADY"
-        ? [[0, 0.06, 520, 520, "triangle", 0.6], [0.1, 0.06, 520, 520, "triangle", 0.6]]
+        ? [[0, 0.14, 240, 240, "square", 0.22], [0.22, 0.2, 180, 180, "square", 0.22]]
         : kind === "ASK"
         ? [[0, 0.12, 1050, 1050, "square", 0.18], [0.15, 0.18, 760, 760, "square", 0.18]]
         : [[0, 0.38, 320, 150, "sawtooth", 0.3]];
