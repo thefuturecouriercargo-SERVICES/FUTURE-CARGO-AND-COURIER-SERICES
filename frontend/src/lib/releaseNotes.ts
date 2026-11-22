@@ -6,11 +6,10 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "START KM NOW NEEDED ONLY TO MARK DELIVERED",
-    "PENDING, CANCEL AND SCAN WORK BEFORE START DELIVERY",
-    "CASH CLOSING OPENS AFTER END DELIVERY + END KM PHOTO",
-    "BANK PAYMENT NEEDS THE RECEIPT — DELIVERED DOES NOT",
+  driver: [],
+  admin: [
+    "SCAN & ASSIGN: NEW SOUND FOR EACH SCAN RESULT",
+    "MOVED = SWOOP UP + DINGS, ALREADY = DEEP DOUBLE TONE",
+    "ERROR = LOW BUZZ, CONFIRM POPUP = ATTENTION TONE",
   ],
-  admin: [],
 };
