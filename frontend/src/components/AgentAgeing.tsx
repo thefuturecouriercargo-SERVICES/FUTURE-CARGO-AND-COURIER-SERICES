@@ -33,7 +33,7 @@ const who = (r: Row) => [r.vendor, r.billNo ? `BILL ${r.billNo}` : r.customer].f
 const place = (r: Row) => [r.area, r.emirate].filter(Boolean).join(", ");
 
 /** CNs still pending with the agent for 5 or more days — oldest first, with Excel and PDF. */
-export default function AgentAgeing({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function AgentAgeing({ refreshKey = 0, onCount }: { refreshKey?: number; onCount?: (n: number) => void }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [agent, setAgent] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,10 +42,11 @@ export default function AgentAgeing({ refreshKey = 0 }: { refreshKey?: number })
     try {
       const r = await apiFetch<{ rows: Row[] }>(`/agent-report/ageing?days=${MIN_DAYS}`);
       setRows(r.rows);
+      onCount?.(r.rows.length);
     } catch {
       setRows([]);
     }
-  }, []);
+  }, [onCount]);
   useEffect(() => {
     load();
   }, [load, refreshKey]);
@@ -142,7 +143,7 @@ export default function AgentAgeing({ refreshKey = 0 }: { refreshKey?: number })
   if (rows === null) return null;
 
   return (
-    <section className="mb-6 border border-brass bg-white p-4">
+    <section className="bg-white">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-navy">
           <Icon name="hourglass" />

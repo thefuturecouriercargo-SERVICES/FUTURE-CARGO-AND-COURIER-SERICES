@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { fmtNumber, fmtDate } from "@/lib/format";
@@ -85,6 +85,10 @@ export default function AgentReportPage() {
   const [tab, setTab] = useState("change");
   const [result, setResult] = useState("");
   const [historyKey, setHistoryKey] = useState(0);
+  // Option 3 layout: four tiles, tap one to open its table below (tap again to close).
+  const [open, setOpen] = useState<"" | "late" | "result" | "amount" | "history">("");
+  const [lateCount, setLateCount] = useState<number | null>(null);
+  const onLateCount = useCallback((n: number) => setLateCount(n), []);
 
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -106,6 +110,7 @@ export default function AgentReportPage() {
       const r = await apiFetch<{ items: Item[]; summary: Summary }>("/agent-report/preview", { method: "POST", body: { rows } });
       setItems(r.items);
       setSummary(r.summary);
+      setOpen("result");
       setTab(r.summary.toDeliver + r.summary.toCancel > 0 ? "change" : r.summary.conflict ? "conflict" : "notFound");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read the file");
@@ -199,13 +204,52 @@ export default function AgentReportPage() {
         RTO and pickup parcels to receive back: <Link href="/returns" className="font-semibold text-navy underline">Cancel &amp; Pickup page →</Link>
       </p>
 
-      <AgentAgeing refreshKey={historyKey} />
-
       {error && <p className="mb-4 rounded border border-cancelled bg-cancelled-bg p-3 text-sm text-cancelled">{error}</p>}
       {result && <p className="mb-4 rounded border border-delivered bg-delivered-bg p-3 text-sm font-semibold text-delivered">{result}</p>}
 
-      {summary && items && (
-        <>
+      {(() => {
+        const amountCount = (items ?? []).filter((i) => i.order && i.cod != null && i.cod !== i.order.total).length;
+        const tiles = [
+          { key: "late" as const, label: "5+ DAYS", icon: "hourglass" as const, n: lateCount, cls: "text-cancelled" },
+          { key: "result" as const, label: "RESULT", icon: "file" as const, n: summary ? summary.toDeliver + summary.toCancel : null, cls: "text-delivered" },
+          { key: "amount" as const, label: "AMOUNT", icon: "card" as const, n: items ? amountCount : null, cls: "text-pending" },
+          { key: "history" as const, label: "HISTORY", icon: "note" as const, n: null, cls: "text-ink-soft" },
+        ];
+        return (
+          <div className="mb-3 grid grid-cols-4 gap-2">
+            {tiles.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setOpen((o) => (o === t.key ? "" : t.key))}
+                className={`flex flex-col items-center rounded-lg border p-3 text-center transition ${open === t.key ? "border-2 border-brass bg-paper" : "border-line bg-white"}`}
+              >
+                <Icon name={t.icon} size={18} className="text-brass" />
+                <span className="mt-1 font-mono text-[11px] font-semibold uppercase tracking-wide text-navy">{t.label}</span>
+                <span className={`font-display text-xl font-semibold ${t.n ? t.cls : "text-ink-soft"}`}>{t.n ?? "—"}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
+      <div className={open === "late" ? "mb-6 rounded-lg border border-brass bg-white p-3" : "hidden"}>
+        <AgentAgeing refreshKey={historyKey} onCount={onLateCount} />
+      </div>
+
+      {open === "result" && !(summary && items) && (
+        <p className="mb-6 rounded-lg border border-brass bg-white p-3 text-sm text-ink-soft">UPLOAD A REPORT TO SEE THE RESULT.</p>
+      )}
+      {open === "amount" && !items && (
+        <p className="mb-6 rounded-lg border border-brass bg-white p-3 text-sm text-ink-soft">UPLOAD A REPORT TO SEE AMOUNT DIFFERENCES.</p>
+      )}
+      {open === "amount" && items && (
+        <div className="mb-6 rounded-lg border border-brass bg-white p-3 [&>section]:mt-0">
+          <AmountDiffTable items={items} fileName={fileName} />
+        </div>
+      )}
+
+      {open === "result" && summary && items && (
+        <div className="mb-6 rounded-lg border border-brass bg-white p-3">
           <p className="mb-3 text-xs text-ink-soft">
             {fileName} · {summary.rows} rows · {summary.unique} unique CNs
           </p>
@@ -341,11 +385,12 @@ export default function AgentReportPage() {
               </tbody>
             </table>
           </div>
-          <AmountDiffTable items={items} fileName={fileName} />
-        </>
+        </div>
       )}
 
-      <AgentReportHistory refreshKey={historyKey} />
+      <div className={open === "history" ? "mb-6 rounded-lg border border-brass bg-white p-3 [&>section]:mt-0" : "hidden"}>
+        <AgentReportHistory refreshKey={historyKey} />
+      </div>
     </div>
   );
 }
