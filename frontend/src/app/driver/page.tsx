@@ -565,7 +565,8 @@ export default function DriverPortalPage() {
   }, [checkMonthlyAchievement]);
 
   async function updateStatus(order: Order, status: OrderStatus, payment: "CASH" | "BANK", reason?: string, bankPaymentConfirmed?: boolean) {
-    if (needStart()) {
+    // Only marking DELIVERED needs Start KM; pending / cancelled / payment changes stay open.
+    if (status === "DELIVERED" && needStart()) {
       showToast("Start delivery first — enter your Start KM", "reminder");
       return;
     }
@@ -836,7 +837,6 @@ export default function DriverPortalPage() {
           <button onClick={() => setAreaEdit(o)} className={round} title={`Change location (${areaOf(o)})`} aria-label="Change location"><Icon name="pin" /></button>
           <button
             onClick={() => {
-              if (needStart()) return;
               setStatusOrder(o);
             }}
             className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full font-mono text-[12.5px] font-bold uppercase tracking-wide text-white active:scale-[0.98] ${
@@ -1179,7 +1179,6 @@ export default function DriverPortalPage() {
             )}
             <button
               onClick={() => {
-                if (needStart()) return;
                 setStatusScanOpen(true);
               }}
               className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brass px-4 font-mono text-[11.5px] font-bold uppercase tracking-wide text-white shadow active:scale-95"
@@ -1675,7 +1674,6 @@ export default function DriverPortalPage() {
         />
         <button
           onClick={() => {
-            if (needStart()) return;
             setStatusScanOpen(true);
           }}
           title="Scan a label to update its status"
@@ -2147,7 +2145,8 @@ function StatusModal({
       setError("Enter a reason for cancelling.");
       return;
     }
-    const needReceipt = payment === "BANK" && selected === "DELIVERED" && !hasReceipt;
+    // BANK can never be chosen without the receipt (any status); CASH / DELIVERED alone need none.
+    const needReceipt = payment === "BANK" && !hasReceipt;
     if (needReceipt && !receipt) {
       setError("ADD THE BANK RECEIPT (PHOTO OR PDF).");
       return;

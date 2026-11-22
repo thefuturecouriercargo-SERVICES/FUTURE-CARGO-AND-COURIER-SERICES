@@ -6,9 +6,11 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
-  admin: [
-    "AGENT REPORT NOW TAKES CSV FILES TOO",
-    "NEW AGENT'S SHIPMENT ORDER CSV: RTO ROWS MARK CNS CANCELLED",
+  driver: [
+    "START KM NOW NEEDED ONLY TO MARK DELIVERED",
+    "PENDING, CANCEL AND SCAN WORK BEFORE START DELIVERY",
+    "CASH CLOSING OPENS AFTER END DELIVERY + END KM PHOTO",
+    "BANK PAYMENT NEEDS THE RECEIPT — DELIVERED DOES NOT",
   ],
+  admin: [],
 };

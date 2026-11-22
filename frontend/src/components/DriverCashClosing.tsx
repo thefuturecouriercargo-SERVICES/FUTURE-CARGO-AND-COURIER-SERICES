@@ -347,6 +347,8 @@ export default function DriverCashClosing({
   }
 
   if (!preview) return null;
+  // KM-tracked driver whose day is still open: show only END DELIVERY until End KM is saved.
+  const kmGate = Boolean(!readOnly && km?.enabled && km.open);
   const balance = preview.cashPayments - preview.totalExpenses - preview.totalPurchases;
   const cashCount = preview.cashCount ?? 0;
   const bankCount = preview.bankCount ?? 0;
@@ -370,6 +372,24 @@ export default function DriverCashClosing({
         </span>
       </div>
 
+      {kmGate ? (
+        <>
+          {/* END DELIVERY first: the cash closing opens only after the End KM photo is saved. */}
+          <div className="mb-2.5 rounded-2xl px-4 py-4 text-center shadow-sm" style={{ background: NAVY }}>
+            <div className="font-mono text-[12px] font-extrabold uppercase tracking-wide" style={{ color: GOLD }}>End delivery first</div>
+            <div className="mt-1 font-mono text-[10px] font-bold uppercase text-white/75">Upload End KM photo to see your cash closing</div>
+          </div>
+          <KmEndButton
+            km={km!}
+            busy={busy}
+            onEnded={async () => {
+              await onKmEnded?.();
+              if (km!.open?.date.slice(0, 10) === date) await submit();
+            }}
+          />
+        </>
+      ) : (
+      <>
       {/* Cash / bank boxes */}
       <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1.4fr" }}>
         <div className={tile}>
@@ -507,6 +527,9 @@ export default function DriverCashClosing({
           </p>
         )}
       </div>
+
+      </>
+      )}
 
       {sheet === "expense" && (
         <AddExpenseSheet
