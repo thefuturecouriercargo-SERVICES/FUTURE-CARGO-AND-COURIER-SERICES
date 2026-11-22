@@ -427,8 +427,8 @@ router.patch(
     if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
       throw new ApiError(403, "You can only update your own deliveries");
     }
-    // KM-tracked drivers must enter Start KM before any delivery update.
-    if (req.user!.role === "DRIVER") await assertDeliveryStarted(req.user!.sub);
+    // KM-tracked drivers must enter Start KM before marking a consignment DELIVERED (other status changes are open).
+    if (req.user!.role === "DRIVER" && status === "DELIVERED") await assertDeliveryStarted(req.user!.sub);
 
   const { start: todayStart } = dayRange();
       const isCarryover = status !== "PENDING" && existing.date.getTime() < todayStart.getTime();
@@ -475,6 +475,11 @@ router.patch(
 
     if (req.user!.role === "DRIVER" && existing.employeeId !== req.user!.sub) {
       throw new ApiError(403, "You can only update your own deliveries");
+    }
+    // Drivers can't switch a consignment to BANK without uploading the customer's receipt first.
+    if (req.user!.role === "DRIVER" && payment === "BANK" && existing.payment !== "BANK") {
+      const receipt = await prisma.bankReceipt.findFirst({ where: { orderId: existing.id }, select: { id: true } });
+      if (!receipt) throw new ApiError(400, "ADD THE BANK RECEIPT (PHOTO OR PDF) TO SELECT BANK");
     }
 
     const order = await prisma.order.update({
