@@ -33,6 +33,7 @@ import monthEndRoutes from "./monthEnd.routes";
 import reminderRoutes from "./reminder.routes";
 import shareTaskRoutes from "./shareTask.routes";
 import kmRoutes from "./km.routes";
+import bankReceiptRoutes from "./bankReceipt.routes";
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
@@ -45,6 +46,7 @@ router.use("/driver", driverRoutes);
 router.use("/reminders", reminderRoutes);
 router.use("/share-tasks", shareTaskRoutes);
 router.use("/km", kmRoutes);
+router.use("/bank-receipts", bankReceiptRoutes);
 router.use("/cash-closings", cashClosingRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/reports", reportsRoutes);

@@ -711,3 +711,47 @@ model ShareTaskDone {
   @@unique([day, task])
   @@map("share_task_done")
 }
+
+// Bank-payment receipts the driver uploads when a CN is paid by BANK (photo or PDF).
+// The file is kept 7 days only; the row (amounts, result) stays. Checked against the
+// bank statement admin uploads: WAITING → RECEIVED / NOT_RECEIVED.
+model BankReceipt {
+  id           String    @id @default(cuid())
+  orderId      String
+  cnNo         Int
+  employeeId   String
+  employeeName String
+  amount       Int       // CN total when the receipt was added
+  mime         String
+  data         Bytes?    // removed after 7 days
+  readAmount   Float?
+  readDate     String?   // YYYY-MM-DD printed on the receipt
+  readRef      String?
+  readFrom     String?
+  readNote     String?
+  readDone     Boolean   @default(false)
+  status       String    @default("WAITING") // WAITING | RECEIVED | NOT_RECEIVED
+  matchLine    String?
+  checkedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([orderId])
+  @@map("bank_receipts")
+}
+
+// Bank statements admin uploads; credits read from them (money in).
+model BankStatement {
+  id         String   @id @default(cuid())
+  fileName   String
+  uploadedBy String?
+  fromDate   String?
+  toDate     String?
+  credits    Json
+  state      String   @default("DONE") // READING | DONE | FAILED
+  result     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("bank_statements")
+}

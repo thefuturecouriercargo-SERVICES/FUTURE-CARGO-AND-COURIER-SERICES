@@ -19,6 +19,8 @@ export function createApp() {
       credentials: true,
     })
   );
+  // Bank receipts (PDF/photo) and bank statements are bigger than normal requests.
+  app.use("/api/bank-receipts", express.json({ limit: "14mb" }));
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());

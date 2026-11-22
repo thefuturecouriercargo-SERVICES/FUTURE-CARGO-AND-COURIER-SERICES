@@ -22,7 +22,7 @@ import DriverReturns from "@/components/DriverReturns";
 import DriverTargets from "@/components/DriverTargets";
 import DriverIcon from "@/components/DriverIcon";
 import DriverCashClosing from "@/components/DriverCashClosing";
-import { useKmStatus, KmStartCover, KmEntrySheet } from "@/components/DriverKm";
+import { useKmStatus, KmStartCover, KmEntrySheet, shrink } from "@/components/DriverKm";
 import Icon from "@/components/Icon";
 
 interface Summary {
@@ -2108,10 +2108,20 @@ function StatusModal({
 }) {
   const [selected, setSelected] = useState<OrderStatus | null>(order.status);
   const [payment, setPayment] = useState<"CASH" | "BANK">(order.payment);
-  const [bankPaymentConfirmed, setBankPaymentConfirmed] = useState(order.bankPaymentConfirmed ?? false);
+  const [bankPaymentConfirmed] = useState(order.bankPaymentConfirmed ?? false);
   const [reason, setReason] = useState(order.status === "CANCELLED" ? order.remarks ?? "" : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Bank payment: the customer's transfer receipt (photo or PDF) is required — no typing.
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const [hasReceipt, setHasReceipt] = useState<boolean | null>(null);
+  const receiptRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (payment !== "BANK" || hasReceipt !== null) return;
+    apiFetch<{ has: boolean }>(`/bank-receipts/has/${order.id}`)
+      .then((r) => setHasReceipt(r.has))
+      .catch(() => setHasReceipt(false));
+  }, [payment, hasReceipt, order.id]);
 
   // Speaks the payment method out loud so the driver can confirm by ear without
   // needing to look at the screen — uses the browser's built-in text-to-speech.
@@ -2137,9 +2147,29 @@ function StatusModal({
       setError("Enter a reason for cancelling.");
       return;
     }
+    const needReceipt = payment === "BANK" && selected === "DELIVERED" && !hasReceipt;
+    if (needReceipt && !receipt) {
+      setError("ADD THE BANK RECEIPT (PHOTO OR PDF).");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      if (payment === "BANK" && receipt) {
+        const isPdf = receipt.type === "application/pdf" || /\.pdf$/i.test(receipt.name);
+        if (isPdf && receipt.size > 4_400_000) throw new ApiClientError(413, "PDF IS TOO BIG — SEND A PHOTO OR SCREENSHOT INSTEAD.");
+        const dataUrl = isPdf
+          ? await new Promise<string>((ok, bad) => {
+              const fr = new FileReader();
+              fr.onload = () => ok(String(fr.result).replace(/^data:[^;]*;/, "data:application/pdf;"));
+              fr.onerror = () => bad(fr.error);
+              fr.readAsDataURL(receipt);
+            })
+          : await shrink(receipt, 1600, 0.82);
+        await apiFetch("/bank-receipts", { method: "POST", body: { orderId: order.id, dataUrl } });
+        setHasReceipt(true);
+        setReceipt(null);
+      }
       await onConfirm(selected, payment, selected === "CANCELLED" ? reason.trim() : undefined, payment === "BANK" ? bankPaymentConfirmed : undefined);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Failed to update status");
@@ -2197,12 +2227,29 @@ function StatusModal({
             ))}
           </div>
           {payment === "BANK" && (
-            <label className="mt-2 flex items-center gap-2 rounded border border-pending bg-pending-bg px-3 py-2 text-xs">
-              <input type="checkbox" checked={bankPaymentConfirmed} onChange={(e) => setBankPaymentConfirmed(e.target.checked)} className="h-4 w-4" />
-              <span className={bankPaymentConfirmed ? "text-ink" : "font-semibold text-pending"}>
-                {bankPaymentConfirmed ? "✓ Payment received" : "Payment not yet confirmed received"}
-              </span>
-            </label>
+            <div className="mt-2">
+              <input
+                ref={receiptRef}
+                type="file"
+                accept="image/*,application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  setReceipt(e.target.files?.[0] ?? null);
+                  setError(null);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => receiptRef.current?.click()}
+                className={`flex w-full items-center justify-center gap-2 rounded border px-3 py-2.5 font-mono text-xs font-bold uppercase tracking-wide ${
+                  receipt || hasReceipt ? "border-delivered bg-delivered-bg text-delivered" : "border-pending bg-pending-bg text-pending"
+                }`}
+              >
+                <Icon name={receipt || hasReceipt ? "checkCircle" : "camera"} size={16} />
+                {receipt ? `RECEIPT: ${receipt.name.slice(0, 22)}` : hasReceipt ? "RECEIPT ADDED · TAP TO CHANGE" : "ADD BANK RECEIPT (PHOTO / PDF)"}
+              </button>
+            </div>
           )}
         </div>
 
