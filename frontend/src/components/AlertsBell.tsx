@@ -110,6 +110,7 @@ export default function AlertsBell() {
   const isStaff = user?.role === "SUPER_ADMIN" || user?.role === "MANAGER";
   const [shares, setShares] = useState<ShareTask[]>([]);
   const knownShare = useRef<Set<string> | null>(null);
+  const knownFake = useRef<Set<string> | null>(null);
 
   const loadShares = useCallback(async () => {
     if (!isStaff) return;
@@ -194,13 +195,29 @@ export default function AlertsBell() {
   const load = useCallback(async () => {
     setLoading(true);
     const today = todayStr();
-    const [carry, bank, bookings, kmAlerts] = await Promise.allSettled([
+    const [carry, bank, bookings, kmAlerts, fakes] = await Promise.allSettled([
       apiFetch<{ orders: Order[] }>("/orders/pending-carryover", { query: { date: today } }),
       apiFetch<{ orders: Order[] }>("/orders/unconfirmed-bank-carryover", { query: { date: today } }),
       apiFetch<{ awaitingCount: number }>("/bookings"),
       apiFetch<{ alerts: { name: string; date: string; flag: string }[] }>("/km/alerts"),
+      apiFetch<{ list: { id: string; cnNo: number; employeeName: string; suspectWhy: string | null }[] }>("/bank-receipts/suspect"),
     ]);
     const out: AlertGroup[] = [];
+    if (fakes.status === "fulfilled" && fakes.value.list.length) {
+      const f = fakes.value.list;
+      // Sound when a new doubtful receipt comes in (not on first load of the page).
+      if (knownFake.current && f.some((x) => !knownFake.current!.has(x.id))) chime();
+      knownFake.current = new Set(f.map((x) => x.id));
+      out.push({
+        key: "fakeReceipt",
+        count: f.length,
+        title: "Bank receipts look fake",
+        sub: f.slice(0, 2).map((x) => `CN ${x.cnNo} · ${x.employeeName} · ${(x.suspectWhy ?? "").split(" · ")[0]}`).join(" — "),
+        href: "/bank-receipts?suspect=1",
+        cta: "Check",
+        tone: "red",
+      });
+    } else if (fakes.status === "fulfilled") knownFake.current = new Set();
     if (carry.status === "fulfilled") {
       const old = carry.value.orders
         .map((o) => ({ o, days: agingDays(o.status, o.date) ?? 0 }))
@@ -258,6 +275,7 @@ export default function AlertsBell() {
     setLoading(false);
   }, []);
 
+  useSocketEvent("bankreceipt:suspect", () => load());
   useEffect(() => {
     try {
       setSeen(Number(localStorage.getItem(SEEN_KEY)) || 0);

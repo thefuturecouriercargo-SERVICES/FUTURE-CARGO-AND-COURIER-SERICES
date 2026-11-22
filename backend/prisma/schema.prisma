@@ -730,6 +730,10 @@ model BankReceipt {
   readFrom     String?
   readNote     String?
   readDone     Boolean   @default(false)
+  hash         String?   // sha256 of the file — same file used twice is flagged
+  suspect      Boolean   @default(false) // looks fake / reused — admin is notified on the bell
+  suspectWhy   String?
+  suspectOk    Boolean   @default(false) // admin checked it and cleared the flag
   status       String    @default("WAITING") // WAITING | RECEIVED | NOT_RECEIVED
   matchLine    String?
   checkedAt    DateTime?

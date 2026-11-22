@@ -5,6 +5,8 @@ import { asyncHandler, ApiError } from "../utils/asyncHandler";
 import { authenticate, requireRole } from "../middleware/auth";
 import { dubaiDateStr } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
+import { emitGlobal } from "../lib/socket";
+import { createHash } from "crypto";
 
 /**
  * Bank-payment receipts (planned 20 Nov 2026, built 22 Nov 2026).
@@ -74,18 +76,30 @@ const RECEIPT_TOOL = {
       reference: { type: ["string", "null"], description: "Transaction / reference number" },
       from: { type: ["string", "null"], description: "Sender name or account" },
       note: { type: ["string", "null"], description: "Anything odd, e.g. 'failed', 'pending', 'not a receipt'" },
+      fakeRisk: { type: "string", enum: ["low", "medium", "high"], description: "How likely the receipt is fake, edited or not a real completed transfer" },
+      fakeSigns: { type: "array", items: { type: "string" }, description: "Short reasons, in capital letters, e.g. 'AMOUNT DIGITS IN A DIFFERENT FONT'. Empty when it looks genuine." },
     },
-    required: ["amount", "date", "reference", "from", "note"],
+    required: ["amount", "date", "reference", "from", "note", "fakeRisk", "fakeSigns"],
   },
 };
 
 async function readReceipt(id: string) {
   const r = await prisma.bankReceipt.findUnique({ where: { id } });
   if (!r?.data) return;
-  const out = await readWithClaude<{ amount: number | null; date: string | null; reference: string | null; from: string | null; note: string | null }>(
+  const out = await readWithClaude<{
+    amount: number | null;
+    date: string | null;
+    reference: string | null;
+    from: string | null;
+    note: string | null;
+    fakeRisk?: "low" | "medium" | "high";
+    fakeSigns?: string[];
+  }>(
     { type: r.mime === "application/pdf" ? "document" : "image", mime: r.mime, base64: Buffer.from(r.data).toString("base64") },
     RECEIPT_TOOL,
-    "This is a bank transfer / payment receipt (UAE, AED) a customer sent to pay for a delivery. Read the amount transferred, the date, the reference number and the sender. If it is not a successful transfer receipt, say so in note. Use null for anything not clearly printed."
+    "This is a bank transfer / payment receipt (UAE, AED) a customer sent to pay for a delivery. Read the amount transferred, the date, the reference number and the sender. If it is not a successful transfer receipt, say so in note. Use null for anything not clearly printed.\n\n" +
+      "Also check carefully whether it could be FAKE or EDITED: digits or text in a different font, size, colour or alignment from the rest; blurred, smudged or pasted-looking patches around the amount, date or name; numbers that don't add up; a missing or odd-looking reference / transaction ID; layout that doesn't match a real UAE bank app or bank slip; status pending / failed / scheduled / draft; a beneficiary that isn't a courier company; a photo of a screen showing an editing app; a date in the future. Give fakeRisk low when it looks like a normal genuine receipt.",
+    1200
   );
   await prisma.bankReceipt.update({
     where: { id },
@@ -98,6 +112,37 @@ async function readReceipt(id: string) {
       readNote: out ? out.note ?? null : "COULD NOT READ",
     },
   });
+  await checkSuspect(id, out?.fakeRisk ?? null, out?.fakeSigns ?? []);
+}
+
+/** Flags a receipt that looks fake or reused, and rings the admin bell. */
+async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, signs: string[]) {
+  const r = await prisma.bankReceipt.findUnique({ where: { id } });
+  if (!r) return;
+  const why: string[] = [];
+  if (risk === "high" || risk === "medium") why.push(...(signs.length ? signs : [`LOOKS ${risk === "high" ? "FAKE" : "DOUBTFUL"}`]).map((x) => x.toUpperCase()));
+  if (r.hash) {
+    const same = await prisma.bankReceipt.findFirst({ where: { hash: r.hash, id: { not: r.id }, orderId: { not: r.orderId } }, select: { cnNo: true } });
+    if (same) why.push(`SAME FILE ALREADY USED FOR CN ${same.cnNo}`);
+  }
+  const ref = norm(r.readRef);
+  if (ref.length >= 5) {
+    const others = await prisma.bankReceipt.findMany({ where: { id: { not: r.id }, orderId: { not: r.orderId }, readRef: { not: null } }, select: { cnNo: true, readRef: true }, orderBy: { createdAt: "desc" }, take: 2000 });
+    const dup = others.find((o) => norm(o.readRef) === ref);
+    if (dup) why.push(`SAME REFERENCE ALREADY USED FOR CN ${dup.cnNo}`);
+  }
+  if (r.readAmount != null && r.readAmount > 0 && Math.abs(r.readAmount - r.amount) >= 0.5) why.push(`RECEIPT AED ${r.readAmount} BUT CN AED ${r.amount}`);
+  if (r.readDate) {
+    const up = dubaiDateStr(r.createdAt);
+    const gap = (new Date(up).getTime() - new Date(r.readDate).getTime()) / DAY;
+    if (gap < -1) why.push(`RECEIPT DATE ${r.readDate} IS IN THE FUTURE`);
+    else if (gap > 3) why.push(`RECEIPT DATED ${r.readDate} — ${Math.round(gap)} DAYS BEFORE DELIVERY`);
+  }
+  if (r.readNote && /fail|pending|schedul|draft|not a/i.test(r.readNote)) why.push(r.readNote.toUpperCase());
+  const unique = [...new Set(why)];
+  const suspect = unique.length > 0;
+  await prisma.bankReceipt.update({ where: { id }, data: { suspect, suspectWhy: suspect ? unique.join(" · ").slice(0, 600) : null } });
+  if (suspect && !r.suspectOk) emitGlobal("bankreceipt:suspect", { cnNo: r.cnNo });
 }
 
 // ---------- Statement reading + matching ----------
@@ -204,7 +249,16 @@ router.post(
     // A new receipt replaces the earlier one for the same CN.
     await prisma.bankReceipt.deleteMany({ where: { orderId, status: { not: "RECEIVED" } } });
     const r = await prisma.bankReceipt.create({
-      data: { orderId, cnNo: order.cnNo, employeeId: order.employeeId, employeeName: order.employee.name, amount: order.total, mime, data: buf },
+      data: {
+        orderId,
+        cnNo: order.cnNo,
+        employeeId: order.employeeId,
+        employeeName: order.employee.name,
+        amount: order.total,
+        mime,
+        data: buf,
+        hash: createHash("sha256").update(buf).digest("hex"),
+      },
       select: { id: true },
     });
     void readReceipt(r.id).then(() => matchAll()).catch(() => undefined);
@@ -247,6 +301,7 @@ router.get(
       select: {
         id: true, orderId: true, cnNo: true, employeeName: true, amount: true, mime: true, readAmount: true, readDate: true, readRef: true,
         readFrom: true, readNote: true, readDone: true, status: true, matchLine: true, checkedAt: true, createdAt: true,
+        suspect: true, suspectWhy: true, suspectOk: true,
       },
     });
     const withFile = new Set(
@@ -348,6 +403,32 @@ router.post(
       }
     })();
     res.json({ ok: true, id: st.id });
+  })
+);
+
+/** Bell: receipts that look fake / reused and nobody has checked yet. */
+router.get(
+  "/suspect",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (_req, res) => {
+    const list = await prisma.bankReceipt.findMany({
+      where: { suspect: true, suspectOk: false },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, cnNo: true, employeeName: true, amount: true, suspectWhy: true, createdAt: true },
+      take: 100,
+    });
+    res.json({ list });
+  })
+);
+
+/** Admin checked a flagged receipt and it is fine. */
+router.post(
+  "/:id/suspect-ok",
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  asyncHandler(async (req, res) => {
+    await prisma.bankReceipt.update({ where: { id: req.params.id }, data: { suspectOk: true } });
+    emitGlobal("bankreceipt:suspect", {});
+    res.json({ ok: true });
   })
 );
 

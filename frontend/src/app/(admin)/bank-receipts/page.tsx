@@ -30,6 +30,9 @@ interface Receipt {
   customer: string | null;
   orderStatus: string | null;
   payment: string | null;
+  suspect: boolean;
+  suspectWhy: string | null;
+  suspectOk: boolean;
 }
 interface Missing {
   orderId: string;
@@ -50,8 +53,9 @@ interface Statement {
   result: string | null;
 }
 
-type TileKey = "NOT_RECEIVED" | "WAITING" | "RECEIVED" | "MISSING";
+type TileKey = "SUSPECT" | "NOT_RECEIVED" | "WAITING" | "RECEIVED" | "MISSING";
 const TILES: { key: TileKey; label: string; icon: "ban" | "hourglass" | "checkCircle" | "alert"; cls: string }[] = [
+  { key: "SUSPECT", label: "LOOKS FAKE", icon: "alert", cls: "text-cancelled" },
   { key: "NOT_RECEIVED", label: "NOT RECEIVED", icon: "ban", cls: "text-cancelled" },
   { key: "WAITING", label: "WAITING", icon: "hourglass", cls: "text-pending" },
   { key: "RECEIVED", label: "RECEIVED", icon: "checkCircle", cls: "text-delivered" },
@@ -111,7 +115,12 @@ export default function BankReceiptsPage() {
     return r;
   }, []);
   useEffect(() => {
-    load().catch(() => setReceipts([]));
+    load()
+      .then((r) => {
+        // Opened from the bell → show the doubtful receipts straight away.
+        if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("suspect") && r.receipts.some((x) => x.suspect && !x.suspectOk)) setOpen("SUSPECT");
+      })
+      .catch(() => setReceipts([]));
   }, [load]);
 
   // While a statement is being read, check every 5 s.
@@ -158,8 +167,16 @@ export default function BankReceiptsPage() {
     await load();
   }
 
-  const count = (k: TileKey) => (k === "MISSING" ? missing.length : (receipts ?? []).filter((r) => r.status === k).length);
-  const list = (receipts ?? []).filter((r) => r.status === open);
+  const isSuspect = (r: Receipt) => r.suspect && !r.suspectOk;
+  const count = (k: TileKey) =>
+    k === "MISSING" ? missing.length : k === "SUSPECT" ? (receipts ?? []).filter(isSuspect).length : (receipts ?? []).filter((r) => r.status === k).length;
+  const list = (receipts ?? []).filter((r) => (open === "SUSPECT" ? isSuspect(r) : r.status === open));
+
+  async function clearSuspect(r: Receipt) {
+    if (!(await confirmDialog(`CN ${r.cnNo}: YOU CHECKED THE RECEIPT AND IT IS GENUINE?`))) return;
+    await apiFetch(`/bank-receipts/${r.id}/suspect-ok`, { method: "POST" });
+    await load();
+  }
   const reading = statement?.state === "READING";
 
   return (
@@ -197,7 +214,7 @@ export default function BankReceiptsPage() {
         <p className={`mb-4 rounded border p-3 text-sm font-semibold ${msg.ok ? "border-delivered bg-delivered-bg text-delivered" : "border-cancelled bg-cancelled-bg text-cancelled"}`}>{msg.text}</p>
       )}
 
-      <div className="mb-3 grid grid-cols-4 gap-2">
+      <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
         {TILES.map((t) => {
           const n = receipts ? count(t.key) : null;
           return (
@@ -267,10 +284,20 @@ export default function BankReceiptsPage() {
                       )}
                     </td>
                     <td className="p-2 text-xs">
+                      {isSuspect(r) && (
+                        <span className="mb-1 block rounded border border-cancelled bg-cancelled-bg px-2 py-1 text-[10px] font-bold text-cancelled">
+                          LOOKS FAKE: {r.suspectWhy}
+                        </span>
+                      )}
                       <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${PILL[r.status]}`}>{LABEL[r.status]}</span>
                       {r.matchLine && <span className="mt-1 block text-[10px] text-ink-soft">{r.matchLine}</span>}
                     </td>
-                    <td className="p-2 text-right">
+                    <td className="space-y-1 p-2 text-right">
+                      {isSuspect(r) && (
+                        <button onClick={() => clearSuspect(r)} className="block w-full rounded border border-navy px-2 py-1 font-mono text-[10px] font-bold uppercase text-navy">
+                          Looks OK
+                        </button>
+                      )}
                       {r.status !== "RECEIVED" ? (
                         <button onClick={() => mark(r, "RECEIVED")} className="rounded border border-delivered px-2 py-1 font-mono text-[10px] font-bold uppercase text-delivered">
                           Received
