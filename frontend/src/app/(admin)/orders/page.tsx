@@ -794,11 +794,11 @@ required
           order={contactEdit}
           onClose={() => setContactEdit(null)}
           onSaved={(u) => {
-            const patch = (list: Order[]) => list.map((x) => (x.id === u.id ? { ...x, booking: u.booking } : x));
+            const patch = (list: Order[]) => list.map((x) => (x.id === u.id ? { ...x, booking: u.booking, emirate: u.emirate, deliveryCharge: u.deliveryCharge } : x));
             setOrders(patch);
             setPendingCarryover(patch);
             setContactEdit(null);
-            toast(`CN ${u.cnNo} address & phone saved`, "success");
+            toast(`CN ${u.cnNo} saved`, "success");
           }}
         />
       )}

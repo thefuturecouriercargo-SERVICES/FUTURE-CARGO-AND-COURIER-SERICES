@@ -6,9 +6,9 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "CASH CLOSING OPEN AGAIN: ADD EXPENSES AND VENDOR PAYMENTS ANYTIME",
-    "BALANCE CASH SHOWS AFTER END DELIVERY + END KM PHOTO",
+  driver: [],
+  admin: [
+    "EDIT CN POPUP: EMIRATE CAN NOW BE CHANGED",
+    "DELIVERY CHARGE AND LABEL UPDATE WITH THE NEW EMIRATE",
   ],
-  admin: [],
 };

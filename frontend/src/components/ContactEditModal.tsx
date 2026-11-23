@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { Order } from "@/types";
+import { EMIRATES, Order } from "@/types";
+import { emirateWarning } from "@/lib/areas";
 
 /**
- * "⋯ → Edit address & phone" for one CN. Admin saves through /orders/:id/contact,
+ * "⋯ → Edit address & phone" for one CN (admin can also change the emirate). Admin saves through /orders/:id/contact,
  * a driver through /driver/orders/:id/contact (only his own parcels).
  * Booked orders update the booking itself; office-typed orders keep it on the order.
  */
@@ -22,6 +23,9 @@ export default function ContactEditModal({
 }) {
   const [phone, setPhone] = useState(order.booking?.customerPhone ?? "");
   const [address, setAddress] = useState(order.booking?.address ?? "");
+  const startEmirate = (order.booking?.emirate || order.emirate || "").toUpperCase();
+  const [emirate, setEmirate] = useState(startEmirate);
+  const warn = emirateWarning(emirate, address);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const isBooked = Boolean(order.booking) && !order.booking?.manual;
@@ -35,7 +39,12 @@ export default function ContactEditModal({
     setError("");
     try {
       const url = asDriver ? `/driver/orders/${order.id}/contact` : `/orders/${order.id}/contact`;
-      const updated = await apiFetch<Order>(url, { method: "PATCH", body: { phone: phone.trim(), address: address.trim() } });
+      const updated = await apiFetch<Order>(url, { method: "PATCH", body: {
+          phone: phone.trim(),
+          address: address.trim(),
+          ...(!asDriver && emirate && emirate !== startEmirate ? { emirate } : {}),
+        },
+      });
       onSaved(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
@@ -73,6 +82,28 @@ export default function ContactEditModal({
           placeholder="Building, street, area"
           className="mb-3 w-full rounded border border-line px-3 py-2"
         />
+        {!asDriver && (
+          <>
+            <label className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-ink-soft">Emirate</label>
+            <select
+              value={emirate}
+              onChange={(e) => setEmirate(e.target.value)}
+              className="mb-1 w-full rounded border border-line px-3 py-2"
+            >
+              {!EMIRATES.includes(emirate) && <option value={emirate}>{emirate || "SELECT…"}</option>}
+              {EMIRATES.map((em) => (
+                <option key={em} value={em}>
+                  {em}
+                </option>
+              ))}
+            </select>
+            {warn ? (
+              <p className="mb-3 text-xs font-semibold text-amber-500">CHECK: ADDRESS LOOKS LIKE {warn}</p>
+            ) : (
+              <div className="mb-3" />
+            )}
+          </>
+        )}
         {error && <p className="mb-2 text-sm text-cancelled">{error}</p>}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 rounded border border-line px-3 py-2 text-sm">

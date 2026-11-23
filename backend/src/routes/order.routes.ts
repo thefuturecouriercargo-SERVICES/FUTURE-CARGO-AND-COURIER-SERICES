@@ -148,7 +148,7 @@ router.patch(
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
     const r = await updateOrderContact(req.params.id, req.body ?? {});
-    await writeAuditLog({ userId: req.user!.sub, action: "EDIT_CONTACT", entity: "Order", entityId: r.order.id, meta: { cnNo: r.cnNo, before: r.before, phone: req.body?.phone, address: req.body?.address } });
+    await writeAuditLog({ userId: req.user!.sub, action: "EDIT_CONTACT", entity: "Order", entityId: r.order.id, meta: { cnNo: r.cnNo, before: r.before, phone: req.body?.phone, address: req.body?.address, emirate: req.body?.emirate } });
     emitGlobal("order:changed", { type: "updated", order: r.order });
     if (r.order.employeeId) emitToUser(r.order.employeeId, "order:changed", { order: r.order });
     res.json(r.order);
