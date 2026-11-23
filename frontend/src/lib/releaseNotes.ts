@@ -6,10 +6,9 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
-  admin: [
-    "SCAN & ASSIGN: NEW SOUND FOR EACH SCAN RESULT",
-    "MOVED = SWOOP UP + DINGS, ALREADY = DEEP DOUBLE TONE",
-    "ERROR = LOW BUZZ, CONFIRM POPUP = ATTENTION TONE",
+  driver: [
+    "CASH CLOSING OPEN AGAIN: ADD EXPENSES AND VENDOR PAYMENTS ANYTIME",
+    "BALANCE CASH SHOWS AFTER END DELIVERY + END KM PHOTO",
   ],
+  admin: [],
 };
