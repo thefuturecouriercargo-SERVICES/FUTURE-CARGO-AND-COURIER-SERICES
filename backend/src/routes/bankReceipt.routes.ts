@@ -41,16 +41,30 @@ async function readWithClaude<T>(part: Part, tool: { name: string; description: 
         model: MODEL(),
         max_tokens: maxTokens,
         tools: [tool],
-        tool_choice: { type: "tool", name: tool.name },
-        messages: [{ role: "user", content: [...content, { type: "text", text: prompt }] }],
+        // Forced tool_choice ("tool"/"any") is refused by newer models — ask for the tool in the prompt instead.
+        tool_choice: { type: "auto" },
+        messages: [{ role: "user", content: [...content, { type: "text", text: `${prompt}\n\nGive your answer ONLY by calling the ${tool.name} tool.` }] }],
       }),
     });
-    const body = (await res.json().catch(() => ({}))) as { content?: { type: string; name?: string; input?: T }[] };
+    const body = (await res.json().catch(() => ({}))) as { content?: { type: string; name?: string; input?: T; text?: string }[] };
     if (!res.ok) {
       console.error("[bank] reader HTTP", res.status, JSON.stringify(body).slice(0, 300));
       return null;
     }
-    return body.content?.find((c) => c.type === "tool_use" && c.name === tool.name)?.input ?? null;
+    const used = body.content?.find((c) => c.type === "tool_use" && c.name === tool.name)?.input;
+    if (used) return used;
+    // Fallback: the answer came back as plain JSON text.
+    const text = (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) {
+      try {
+        return JSON.parse(m[0]) as T;
+      } catch {
+        /* ignore */
+      }
+    }
+    console.error("[bank] reader gave no answer", text.slice(0, 200));
+    return null;
   } catch (err) {
     console.error("[bank] reader failed", err);
     return null;
@@ -247,6 +261,19 @@ export async function pruneBankReceipts() {
     .catch(() => undefined);
 }
 void pruneBankReceipts();
+
+/** After a restart: statements left half-read are marked failed (upload again), and receipts that could not be read are read again. */
+async function recoverOnStart() {
+  await prisma.bankStatement
+    .updateMany({ where: { state: "READING" }, data: { state: "FAILED", result: "READING WAS INTERRUPTED — PLEASE UPLOAD THE STATEMENT AGAIN" } })
+    .catch(() => undefined);
+  const failed = await prisma.bankReceipt
+    .findMany({ where: { data: { not: null }, createdAt: { gte: FROM_TIME }, OR: [{ readDone: false }, { readNote: "COULD NOT READ" }] }, select: { id: true } })
+    .catch(() => [] as { id: string }[]);
+  for (const f of failed) await readReceipt(f.id).catch(() => undefined);
+  if (failed.length) await matchAll().catch(() => undefined);
+}
+setTimeout(() => void recoverOnStart(), 15_000);
 setInterval(() => void pruneBankReceipts(), 6 * 60 * 60 * 1000);
 
 // ---------- Routes ----------
@@ -420,7 +447,10 @@ router.post(
           data: { fromDate: valid(out.from), toDate: valid(out.to) ?? credits.map((c) => c.date ?? "").sort().pop() ?? null, credits },
         });
         // Make sure every receipt has been read before matching.
-        const unread = await prisma.bankReceipt.findMany({ where: { readDone: false, data: { not: null } }, select: { id: true } });
+        const unread = await prisma.bankReceipt.findMany({
+          where: { data: { not: null }, createdAt: { gte: FROM_TIME }, OR: [{ readDone: false }, { readNote: "COULD NOT READ" }] },
+          select: { id: true },
+        });
         for (const u of unread) await readReceipt(u.id);
         const result = await matchAll();
         await prisma.bankStatement.update({
