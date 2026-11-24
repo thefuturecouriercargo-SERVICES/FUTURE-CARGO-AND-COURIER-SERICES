@@ -11,6 +11,7 @@ import { emitGlobal, emitToUser } from "../lib/socket";
 import { lockOrderCreation } from "../services/booking.service";
 import { chargeFor, correctEmirate } from "../lib/deliveryCharge";
 import { updateOrderContact, withContact } from "../lib/orderContact";
+import { BANK_CHECK_FROM_DATE } from "../lib/bankCheck";
 
 const router = Router();
 router.use(authenticate);
@@ -597,8 +598,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const { start } = dayRange(req.query.date as string | undefined);
 
+    // Bank checking starts fresh from 23 Nov 2026 — everything up to 22 Nov is cleared.
     const where: Prisma.OrderWhereInput = {
-      date: { lt: start },
+      date: { lt: start, gte: BANK_CHECK_FROM_DATE },
       payment: "BANK",
       bankPaymentConfirmed: false,
     };

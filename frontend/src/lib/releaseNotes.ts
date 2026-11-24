@@ -6,8 +6,10 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [
-    "HOME PAGE CLEANER: UNCONFIRMED BANK PAYMENTS BOX REMOVED",
+  driver: [],
+  admin: [
+    "BANK CHECK STARTS FRESH FROM 23 NOV — OLD NO-RECEIPT LIST CLEARED",
+    "BANK STATEMENT READING CHECKED AGAINST THE STATEMENT'S OWN TOTALS",
+    "RECEIPTS MATCHED BY SENDER NAME WHEN AMOUNTS ARE THE SAME",
   ],
-  admin: [],
 };

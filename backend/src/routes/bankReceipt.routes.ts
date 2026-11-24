@@ -7,6 +7,7 @@ import { dubaiDateStr } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 import { createHash } from "crypto";
+import { BANK_CHECK_FROM_DATE, BANK_CHECK_FROM_TIME } from "../lib/bankCheck";
 
 /**
  * Bank-payment receipts (planned 20 Nov 2026, built 22 Nov 2026).
@@ -21,6 +22,7 @@ router.use(authenticate);
 const MODEL = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 const DAY = 24 * 60 * 60 * 1000;
 const KEEP_DAYS = 7;
+const FROM_TIME = BANK_CHECK_FROM_TIME;
 
 type Part = { type: "image" | "document"; mime: string; base64: string } | { type: "text"; text: string };
 
@@ -157,6 +159,8 @@ const STATEMENT_TOOL = {
     properties: {
       from: { type: ["string", "null"], description: "Statement period start YYYY-MM-DD" },
       to: { type: ["string", "null"], description: "Statement period end / last transaction date YYYY-MM-DD" },
+      totalCredits: { type: ["number", "null"], description: "'Total no of credits' printed in the statement header, null if not printed" },
+      totalCreditAmount: { type: ["number", "null"], description: "'Total Credit Amount' printed in the statement header, null if not printed" },
       credits: {
         type: "array",
         items: {
@@ -164,7 +168,7 @@ const STATEMENT_TOOL = {
           properties: {
             date: { type: ["string", "null"], description: "YYYY-MM-DD" },
             amount: { type: "number", description: "Credit amount in AED (money IN only)" },
-            description: { type: "string", description: "Narration / sender / reference text as printed" },
+            description: { type: "string", description: "Sender name (after B/O), bank reference no, customer reference no and payment details, joined with ' · '" },
           },
           required: ["date", "amount", "description"],
         },
@@ -175,6 +179,13 @@ const STATEMENT_TOOL = {
 };
 
 const norm = (s: string | null | undefined) => String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+/** Sender name words (3+ letters) from a receipt, e.g. "MUHAMMED ANSHAD S IBRAHIM" → MUHAMMED, ANSHAD, IBRAHIM. */
+const nameWords = (s: string | null | undefined) =>
+  String(s ?? "").toUpperCase().split(/[^A-Z]+/).filter((w) => w.length >= 3 && !["MR", "MRS", "MBTRF", "THE", "AND", "LLC"].includes(w));
+const nameHits = (words: string[], text: string) => {
+  const t = String(text ?? "").toUpperCase().replace(/[^A-Z]+/g, " ");
+  return words.filter((w) => t.includes(w)).length;
+};
 
 /** Check every receipt that is not RECEIVED yet against all statements from the last 30 days. */
 async function matchAll() {
@@ -189,7 +200,7 @@ async function matchAll() {
   }
   // Credits already used by a received receipt can't pay a second one.
   const used = new Set((await prisma.bankReceipt.findMany({ where: { status: "RECEIVED", matchLine: { not: null } }, select: { matchLine: true } })).map((r) => r.matchLine!.split(" | ")[0]));
-  const open = await prisma.bankReceipt.findMany({ where: { status: { not: "RECEIVED" } }, orderBy: { createdAt: "asc" } });
+  const open = await prisma.bankReceipt.findMany({ where: { status: { not: "RECEIVED" }, createdAt: { gte: FROM_TIME } }, orderBy: { createdAt: "asc" } });
 
   let received = 0;
   let notReceived = 0;
@@ -198,6 +209,7 @@ async function matchAll() {
     const day = r.readDate ?? dubaiDateStr(r.createdAt);
     const t = new Date(day).getTime();
     const ref = norm(r.readRef);
+    const names = nameWords(r.readFrom);
     const cands = credits
       .filter((c) => !used.has(c.key) && Math.abs(c.amount - want) < 0.5)
       .filter((c) => !c.date || (new Date(c.date).getTime() >= t - 2 * DAY && new Date(c.date).getTime() <= t + 4 * DAY))
@@ -205,6 +217,9 @@ async function matchAll() {
         const ra = ref.length >= 5 && norm(a.description).includes(ref) ? 0 : 1;
         const rb = ref.length >= 5 && norm(b.description).includes(ref) ? 0 : 1;
         if (ra !== rb) return ra - rb;
+        const na = nameHits(names, a.description);
+        const nb = nameHits(names, b.description);
+        if (na !== nb) return nb - na;
         return Math.abs(new Date(a.date ?? day).getTime() - t) - Math.abs(new Date(b.date ?? day).getTime() - t);
       });
     const hit = cands[0];
@@ -294,9 +309,9 @@ router.get(
   "/",
   requireRole("SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (_req, res) => {
-    const since = new Date(Date.now() - 14 * DAY);
+    const since = new Date(Math.max(Date.now() - 14 * DAY, FROM_TIME.getTime()));
     const receipts = await prisma.bankReceipt.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { status: { not: "RECEIVED" } }] },
+      where: { createdAt: { gte: FROM_TIME }, OR: [{ createdAt: { gte: since } }, { status: { not: "RECEIVED" } }] },
       orderBy: { createdAt: "desc" },
       select: {
         id: true, orderId: true, cnNo: true, employeeName: true, amount: true, mime: true, readAmount: true, readDate: true, readRef: true,
@@ -315,7 +330,7 @@ router.get(
 
     // BANK deliveries in the last 7 days with no receipt at all.
     const bankDone = await prisma.order.findMany({
-      where: { payment: "BANK", status: "DELIVERED", resolvedAt: { gte: new Date(Date.now() - KEEP_DAYS * DAY) } },
+      where: { payment: "BANK", status: "DELIVERED", date: { gte: BANK_CHECK_FROM_DATE }, resolvedAt: { gte: new Date(Math.max(Date.now() - KEEP_DAYS * DAY, FROM_TIME.getTime())) } },
       select: { id: true, cnNo: true, total: true, resolvedAt: true, bankPaymentConfirmed: true, vendor: { select: { name: true } }, employee: { select: { name: true } }, booking: { select: { customerName: true } } },
       orderBy: { resolvedAt: "desc" },
     });
@@ -370,12 +385,28 @@ router.post(
     // Reading a statement can take a minute — done in the background; the page polls GET /.
     void (async () => {
       try {
-        const out = await readWithClaude<{ from: string | null; to: string | null; credits: Credit[] }>(
-          part,
-          STATEMENT_TOOL,
-          "This is a UAE bank statement of a courier company. List EVERY credit (money IN) line with its date, amount in AED and the narration/sender/reference text exactly as printed. Skip debits (money out), balances and totals. Also give the statement period.",
-          16000
-        );
+        type StOut = { from: string | null; to: string | null; totalCredits?: number | null; totalCreditAmount?: number | null; credits: Credit[] };
+        const PROMPT =
+          "This is a UAE bank statement (e.g. ADCB / Emirates Islamic layout) of a courier company. List EVERY credit (money IN) line with its date, amount in AED and the text that identifies it. " +
+          "Each transaction row can wrap over several printed lines — keep one entry per Sr.No. The Credit Amount column holds the money in; the Debit column shows '-' for credits; Running Balance is NOT the amount. " +
+          "Dates like 23-Nov-2026 become 2026-11-23. In description put the sender name (the name after B/O, or Remitter Info), the bank reference no, the customer reference no and any payment details (e.g. 'escalo perfume'), joined with ' · '. " +
+          "Skip debits, balances and totals. Also give the statement period (Start Date / End Date) and the header's 'Total no of credits' and 'Total Credit Amount'.";
+        const sumOf = (o: StOut) => Math.round((o.credits ?? []).filter((c) => typeof c.amount === "number" && c.amount > 0).reduce((a, c) => a + c.amount, 0) * 100) / 100;
+        const agrees = (o: StOut) =>
+          (o.totalCredits == null || (o.credits ?? []).filter((c) => c.amount > 0).length === o.totalCredits) &&
+          (o.totalCreditAmount == null || Math.abs(sumOf(o) - o.totalCreditAmount) < 0.5);
+        let out = await readWithClaude<StOut>(part, STATEMENT_TOOL, PROMPT, 16000);
+        // The statement prints its own totals — if what was read doesn't add up, read it once more.
+        if (out && !agrees(out)) {
+          const again = await readWithClaude<StOut>(part, STATEMENT_TOOL, PROMPT + " Read very carefully: the number of credits and their sum must equal the header totals.", 16000);
+          if (again && (agrees(again) || !out)) out = again;
+        }
+        const totalsNote =
+          out && !agrees(out)
+            ? ` · CHECK: READ ${(out.credits ?? []).length} CREDITS = AED ${sumOf(out)}, STATEMENT SAYS ${out.totalCredits ?? "?"} = AED ${out.totalCreditAmount ?? "?"}`
+            : out && out.totalCreditAmount != null
+              ? ` · TOTAL AED ${out.totalCreditAmount} MATCHES`
+              : "";
         if (!out) {
           await prisma.bankStatement.update({ where: { id: st.id }, data: { state: "FAILED", result: "COULD NOT READ THE STATEMENT — TRY A CLEARER FILE" } });
           return;
@@ -394,7 +425,7 @@ router.post(
         const result = await matchAll();
         await prisma.bankStatement.update({
           where: { id: st.id },
-          data: { state: "DONE", result: `${credits.length} CREDITS READ · ${result.received} RECEIVED · ${result.notReceived} NOT RECEIVED YET` },
+          data: { state: "DONE", result: `${credits.length} CREDITS READ · ${result.received} RECEIVED · ${result.notReceived} NOT RECEIVED YET${totalsNote}` },
         });
         await writeAuditLog({ userId, action: "BANK_STATEMENT", entity: "BankStatement", entityId: st.id, meta: { file: body.fileName, credits: credits.length, ...result } });
       } catch (err) {
