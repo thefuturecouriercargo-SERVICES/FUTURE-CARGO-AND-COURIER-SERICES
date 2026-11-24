@@ -6,9 +6,8 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
-  admin: [
-    "EDIT CN POPUP: EMIRATE CAN NOW BE CHANGED",
-    "DELIVERY CHARGE AND LABEL UPDATE WITH THE NEW EMIRATE",
+  driver: [
+    "HOME PAGE CLEANER: UNCONFIRMED BANK PAYMENTS BOX REMOVED",
   ],
+  admin: [],
 };

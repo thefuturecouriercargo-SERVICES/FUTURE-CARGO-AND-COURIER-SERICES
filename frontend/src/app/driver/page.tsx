@@ -1532,25 +1532,7 @@ export default function DriverPortalPage() {
         areaPage
       ) : view === "home" ? (
         <>
-      {unconfirmedBankCarryover.length > 0 && (
-        <div className="mb-6 border border-pending bg-pending-bg p-4">
-          <h2 className="mb-1 font-display text-base font-semibold text-pending">
-            <Icon name="alert" className="mr-1" />{unconfirmedBankCarryover.length} bank payment{unconfirmedBankCarryover.length === 1 ? "" : "s"} still unconfirmed
-          </h2>
-          <p className="mb-3 text-xs text-pending">
-            From previous days — admin or manager will confirm these once the money is verified received.
-          </p>
-          <div className="space-y-2">
-            {unconfirmedBankCarryover.map((o) => (
-              <div key={o.id} className="rounded border border-pending bg-white px-3 py-2 text-xs">
-                <span className="font-mono font-semibold">CN {o.cnNo}</span> · {o.brandName} · {fmtNumber(o.total)} AED
-                <span className="ml-1 text-ink-soft">({o.date.slice(0, 10)})</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* Unconfirmed bank payments are shown to admin only (removed from driver home 24 Nov 2026). */}
       <div ref={homeBoxesRef} className="flex flex-col gap-2" style={{ height: homeBoxesH ?? undefined }}>
         <button
           onClick={(e) => {
