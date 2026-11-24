@@ -245,12 +245,6 @@ export default function CashHandoverPage() {
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-brass">{initials(r.driver.name)}</span>
                           <div className="min-w-0">
                             <p className="font-semibold text-navy">{r.driver.name}</p>
-                            {r.missingDays.length > 0 && (
-                              <button className="text-[11px] text-pending hover:underline" onClick={() => setDate(r.missingDays[0])}>
-                                Not recorded: {r.missingDays.slice(0, 2).map(fmtDate).join(", ")}
-                                {r.missingDays.length > 2 ? ` +${r.missingDays.length - 2}` : ""}
-                              </button>
-                            )}
                             {r.handover?.stale && <p className="text-[11px] text-pending">Changed after saving — save again</p>}
                           </div>
                         </div>
