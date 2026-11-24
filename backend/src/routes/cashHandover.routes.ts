@@ -45,7 +45,7 @@ function dubaiDayOf(ts: Date) {
   return new Date(ts.getTime() + DUBAI_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-type DayFigures = { collected: number; spent: number; expected: number; cashParcels: number; bankParcels: number };
+type DayFigures = { collected: number; purchases: number; expenses: number; spent: number; expected: number; cashParcels: number; bankParcels: number };
 
 /** Live figures for a set of drivers on one day. */
 async function figuresFor(driverIds: string[], date: Date): Promise<Map<string, DayFigures>> {
@@ -63,7 +63,7 @@ async function figuresFor(driverIds: string[], date: Date): Promise<Map<string, 
   ]);
 
   const out = new Map<string, DayFigures>();
-  for (const id of driverIds) out.set(id, { collected: 0, spent: 0, expected: 0, cashParcels: 0, bankParcels: 0 });
+  for (const id of driverIds) out.set(id, { collected: 0, purchases: 0, expenses: 0, spent: 0, expected: 0, cashParcels: 0, bankParcels: 0 });
   for (const o of orders) {
     const f = out.get(o.employeeId)!;
     if (o.payment === "CASH") {
@@ -71,9 +71,12 @@ async function figuresFor(driverIds: string[], date: Date): Promise<Map<string, 
       f.cashParcels++;
     } else f.bankParcels++;
   }
-  for (const p of purchases) out.get(p.employeeId)!.spent += p.amount;
-  for (const e of expenses) if (e.employeeId) out.get(e.employeeId)!.spent += e.amount;
-  for (const f of out.values()) f.expected = f.collected - f.spent;
+  for (const p of purchases) out.get(p.employeeId)!.purchases += p.amount;
+  for (const e of expenses) if (e.employeeId) out.get(e.employeeId)!.expenses += e.amount;
+  for (const f of out.values()) {
+    f.spent = f.purchases + f.expenses;
+    f.expected = f.collected - f.spent;
+  }
   return out;
 }
 
@@ -169,6 +172,8 @@ router.get(
       rows,
       totals: {
         collected: sum((r) => r.collected),
+        purchases: sum((r) => r.purchases),
+        expenses: sum((r) => r.expenses),
         spent: sum((r) => r.spent),
         expected: sum((r) => r.expected),
         less: sum((r) => r.handover?.lessAmount ?? 0),

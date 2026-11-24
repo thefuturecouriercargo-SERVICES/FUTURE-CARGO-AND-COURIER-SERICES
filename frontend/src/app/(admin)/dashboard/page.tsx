@@ -63,12 +63,13 @@ import EmployeeLeaderboard from "@/components/EmployeeLeaderboard";
 import AdminRace from "@/components/AdminRace";
 import LiveFlowPanel from "@/components/LiveFlowPanel";
 import BarChart from "@/components/charts/BarChart";
-import { Order, OrderStatus, Summary, Vendor } from "@/types";
+import { Order, OrderStatus, Summary } from "@/types";
 
 import { DashboardSkeleton, PageSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import ShareReportButton from "@/components/ShareReportButton";
 import ManagerReminder from "@/components/ManagerReminder";
+import CashHandoverTable from "@/components/CashHandoverTable";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 interface DailyResponse {
   date: string;
@@ -120,36 +121,6 @@ const [minAmount, setMinAmount] = useState("");
 const [maxAmount, setMaxAmount] = useState("");
   const [globalResults, setGlobalResults] = useState<Order[] | null>(null);
 const [globalSearching, setGlobalSearching] = useState(false);
-const [deductionInput, setDeductionInput] = useState<Record<string, string>>({});
-  const [deductionVendor, setDeductionVendor] = useState<Record<string, string>>({});
-  const [savingDeduction, setSavingDeduction] = useState<string | null>(null);
-  const [purchases, setPurchases] = useState<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-
-  function adjTotal(employeeId: string) {
-    return purchases.filter((p) => p.employeeId === employeeId).reduce((s, p) => s + p.amount, 0);
-  }
-
-  async function addDeduction(employeeId: string) {
-    const amount = Number(deductionInput[employeeId]);
-    if (!amount || amount <= 0) return;
-    setSavingDeduction(employeeId);
-    try {
-      await apiFetch("/purchases", {
-        method: "POST",
-        body: { date, amount, employeeId, vendorId: deductionVendor[employeeId] || undefined },
-      });
-      setDeductionInput((prev) => ({ ...prev, [employeeId]: "" }));
-      setDeductionVendor((prev) => ({ ...prev, [employeeId]: "" }));
-      await load();
-    } finally {
-      setSavingDeduction(null);
-    }
-  }
-  async function removeDeduction(entryId: string) {
-    await apiFetch(`/purchases/${entryId}`, { method: "DELETE" });
-    await load();
-  }
   // Each load gets a number; an older load that finishes late (e.g. today's, after
   // switching to yesterday) must not overwrite the newer one — otherwise one day's
   // orders get mixed with another day's pending carryover and pending is double-counted.
@@ -165,15 +136,13 @@ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({})
       // Carryover backlog should reflect what was still unresolved as of the date being
       // viewed — not always today's live backlog — so historical dates stay accurate.
       // Day data and carryover are fetched together and applied together, same day only.
-      const [res, carryoverRes, purchasesRes] = await Promise.all([
+      const [res, carryoverRes] = await Promise.all([
         apiFetch<DailyResponse>("/dashboard/daily", { query }),
         apiFetch<{ orders: Order[] }>("/orders/pending-carryover", { query: { date: useRange ? toDate : date } }),
-        apiFetch<{ id: string; employeeId: string; amount: number; vendor?: { id: string; name: string } | null }[]>("/purchases", { query: { date } }),
       ]);
       if (stale()) return;
       setData(res);
       setPendingCarryover(carryoverRes.orders);
-      setPurchases(purchasesRes);
       } finally {
         if (!stale()) setLoading(false);
       }
@@ -213,9 +182,6 @@ const [deductionInput, setDeductionInput] = useState<Record<string, string>>({})
       cancelled = true;
     };
   }, [date, useRange]);
-  useEffect(() => {
-    apiFetch<Vendor[]>("/vendors").then(setVendors);
-  }, []);
   useEffect(() => {
   if (!search.trim()) {
     setGlobalResults(null);
@@ -524,110 +490,9 @@ return (
 
 <div className="mb-5 border border-line bg-white p-5">
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
-              Cash Closing Summary — {data.date}
+              Cash Handover — {fmtDate(useRange ? toDate : date)}
             </h2>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th className="text-right">Cash Collected</th>
-                    <th className="text-right">Expenses</th>
-                    <th className="text-right">Other Deduction</th>
-                    <th className="text-right">Final Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employeeRows.map((r) => {
-                  const finalBalance = r.cashCollected - r.totalExpenses - adjTotal(r.employee.id);
-                    return (
-                      <tr key={r.employee.id}>
-                        <td>{r.employee.name}</td>
-                        <td className="text-right font-mono">{fmtNumber(r.cashCollected)}</td>
-                        <td className="text-right font-mono">{fmtNumber(r.totalExpenses)}</td>
-                     <td className="text-right font-mono">
-                          <div className="flex flex-col items-end gap-1">
-                            {purchases.filter((p) => p.employeeId === r.employee.id).map((entry) => (
-                              <span
-                                key={entry.id}
-                                className="flex items-center gap-1 rounded bg-paper px-1.5 py-0.5 text-xs"
-                                title={entry.vendor ? `Paid to ${entry.vendor.name}` : "General deduction"}
-                              >
-                                {fmtNumber(entry.amount)}
-                                {entry.vendor && (
-                                  <span className="rounded bg-brass/20 px-1 text-[9px] uppercase text-brass">
-                                    {entry.vendor.name}
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => removeDeduction(entry.id)}
-                                  className="text-red-600 hover:text-red-800"
-                                  title="Remove"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                            <div className="flex items-center gap-1.5">
-                              <select
-                                value={deductionVendor[r.employee.id] ?? ""}
-                                onChange={(e) =>
-                                  setDeductionVendor((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
-                                }
-                                className="rounded border border-line px-1 py-0.5 text-[10px]"
-                                title="Vendor (optional) — leave blank for a general deduction"
-                              >
-                                <option value="">No vendor</option>
-                                {vendors.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <input
-                                type="number"
-                                placeholder="+ add"
-                                value={deductionInput[r.employee.id] ?? ""}
-                                onChange={(e) =>
-                                  setDeductionInput((prev) => ({ ...prev, [r.employee.id]: e.target.value }))
-                                }
-                                onKeyDown={(e) => e.key === "Enter" && addDeduction(r.employee.id)}
-                                className="w-16 rounded border border-line px-1.5 py-0.5 text-right text-xs"
-                              />
-                              <button
-                                onClick={() => addDeduction(r.employee.id)}
-                                disabled={savingDeduction === r.employee.id}
-                                className="rounded bg-navy px-2 py-0.5 text-xs text-paper hover:bg-navy-2 disabled:opacity-50"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="text-right font-mono font-semibold">{fmtNumber(finalBalance)}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="font-semibold border-t-2 border-line">
-                    <td>TOTAL</td>
-                    <td className="text-right font-mono">
-                      {fmtNumber(employeeRows.reduce((s, r) => s + r.cashCollected, 0))}
-                    </td>
-                    <td className="text-right font-mono">
-                      {fmtNumber(employeeRows.reduce((s, r) => s + r.totalExpenses, 0))}
-                    </td>
-                    <td className="text-right font-mono">
-                     {fmtNumber(employeeRows.reduce((s, r) => s + adjTotal(r.employee.id), 0))}
-                    </td>
-                    <td className="text-right font-mono">
-                      {fmtNumber(
-                       employeeRows.reduce((s, r) => s + (r.cashCollected - r.totalExpenses - adjTotal(r.employee.id)), 0)
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <CashHandoverTable date={useRange ? toDate : date} showSpend />
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">
