@@ -103,6 +103,15 @@ const BANK_GUIDE = [
   "Mark fakeRisk high ONLY for clear editing (mismatched fonts/alignment/pasted patches), a FAILED / REJECTED / CANCELLED transfer, money sent to a different account number than ours, or something that is not a transfer at all.",
 ].join("\n");
 
+/** Keep the note only for a real problem (failed / rejected / not a transfer), short — no AI essays on the page. */
+const PROBLEM = /\b(fail|failed|reject|rejected|declin|cancell?ed|not a (transfer|receipt))/i;
+function shortNote(note: string | null | undefined): string | null {
+  const n = String(note ?? "").replace(/\s+/g, " ").trim();
+  if (!n || !PROBLEM.test(n)) return null;
+  const first = n.split(/(?<=[.!])\s/)[0];
+  return first.length > 90 ? `${first.slice(0, 87)}…` : first;
+}
+
 /** Date hidden inside a reference: MLC DDMMYY…, IPP-YYYYMMDD-…, FT/BNK YY + day-of-year. */
 function dateFromRef(ref: string | null | undefined): string | null {
   const t = String(ref ?? "").toUpperCase().replace(/\s/g, "");
@@ -167,7 +176,7 @@ async function readReceipt(id: string, fileName?: string | null) {
       readDate: out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : dateFromRef(out?.reference),
       readRef: out?.reference ?? null,
       readFrom: out?.from ?? null,
-      readNote: out ? out.note ?? null : "COULD NOT READ",
+      readNote: out ? shortNote(out.note) : "COULD NOT READ",
     },
   });
   // Hard file-detail checks (PDF maker, created/modified dates, edit layer, file-name reference).
@@ -205,7 +214,7 @@ async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, 
     else if (gap > 3) why.push(`RECEIPT DATED ${r.readDate} — ${Math.round(gap)} DAYS BEFORE DELIVERY`);
   }
   // Only a clearly failed / rejected transfer or a non-receipt — "initiated", "submitted", "pending" wording is normal.
-  if (r.readNote && /\b(fail|failed|reject|rejected|declin|cancell?ed|not a (transfer|receipt))/i.test(r.readNote)) why.push(r.readNote.toUpperCase());
+  if (r.readNote && PROBLEM.test(r.readNote)) why.push(r.readNote.toUpperCase());
   const unique = [...new Set(why)];
   const suspect = unique.length > 0;
   await prisma.bankReceipt.update({ where: { id }, data: { suspect, suspectWhy: suspect ? unique.join(" · ").slice(0, 600) : null } });
@@ -339,6 +348,16 @@ void pruneBankReceipts();
 
 /** After a restart: statements left half-read are marked failed (upload again), and receipts that could not be read are read again. */
 async function recoverOnStart() {
+  const noted = await prisma.bankReceipt
+    .findMany({ where: { readNote: { not: null }, NOT: { readNote: "COULD NOT READ" } }, select: { id: true, readNote: true, readRef: true, readDate: true } })
+    .catch(() => [] as { id: string; readNote: string | null; readRef: string | null; readDate: string | null }[]);
+  for (const n of noted) {
+    const fixed = shortNote(n.readNote);
+    const refDate = dateFromRef(n.readRef);
+    if (fixed !== n.readNote || (refDate && refDate !== n.readDate)) {
+      await prisma.bankReceipt.update({ where: { id: n.id }, data: { readNote: fixed, ...(refDate ? { readDate: refDate } : {}) } }).catch(() => undefined);
+    }
+  }
   const paid = await prisma.bankReceipt.findMany({ where: { status: "RECEIVED", suspect: true }, select: { id: true } }).catch(() => [] as { id: string }[]);
   for (const p of paid) await clearFlagIfPaid(p.id).catch(() => undefined);
   await prisma.bankStatement
