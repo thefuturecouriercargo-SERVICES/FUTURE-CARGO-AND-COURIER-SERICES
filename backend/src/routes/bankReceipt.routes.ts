@@ -114,7 +114,9 @@ async function readReceipt(id: string) {
     { type: r.mime === "application/pdf" ? "document" : "image", mime: r.mime, base64: Buffer.from(r.data).toString("base64") },
     RECEIPT_TOOL,
     "This is a bank transfer / payment receipt (UAE, AED) a customer sent to pay for a delivery. Read the amount transferred, the date, the reference number and the sender. If it is not a successful transfer receipt, say so in note. Use null for anything not clearly printed.\n\n" +
-      "Also check carefully whether it could be FAKE or EDITED: digits or text in a different font, size, colour or alignment from the rest; blurred, smudged or pasted-looking patches around the amount, date or name; numbers that don't add up; a missing or odd-looking reference / transaction ID; layout that doesn't match a real UAE bank app or bank slip; status pending / failed / scheduled / draft; a beneficiary that isn't a courier company; a photo of a screen showing an editing app; a date in the future. Give fakeRisk low when it looks like a normal genuine receipt.",
+      "Also check carefully whether it could be FAKE or EDITED: digits or text in a different font, size, colour or alignment from the rest; blurred, smudged or pasted-looking patches around the amount, date or name; numbers that don't add up; a missing or odd-looking reference / transaction ID; layout that doesn't match a real UAE bank app or bank slip; status pending / failed / scheduled / draft; a beneficiary that isn't a courier company; a photo of a screen showing an editing app; a date in the future. Give fakeRisk low when it looks like a normal genuine receipt.\n\n" +
+      "These are NORMAL in real UAE bank receipts and are NOT signs of a fake: masked names or account numbers (e.g. 'L*** C***', '****910001'); a short or cut-off beneficiary name (e.g. 'THE OPC', 'THE FUTURE CARGO AND'); wording like 'You have initiated a fund transfer' or 'Transfer details'; a plain PDF made by the bank app; a photo of a phone screen showing the bank app or email; no time shown, only a date; the beneficiary account 14140235920001 / IBAN AE190030014140235920001 (that is the courier company's own ADCB account — a match is a good sign). " +
+      "Use fakeRisk high only for clear signs of editing or a failed/pending/draft transfer; use medium only when something specific looks wrong.",
     1200
   );
   await prisma.bankReceipt.update({
@@ -136,7 +138,7 @@ async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, 
   const r = await prisma.bankReceipt.findUnique({ where: { id } });
   if (!r) return;
   const why: string[] = [];
-  if (risk === "high" || risk === "medium") why.push(...(signs.length ? signs : [`LOOKS ${risk === "high" ? "FAKE" : "DOUBTFUL"}`]).map((x) => x.toUpperCase()));
+  if (risk === "high") why.push(...(signs.length ? signs : [`LOOKS ${risk === "high" ? "FAKE" : "DOUBTFUL"}`]).map((x) => x.toUpperCase()));
   if (r.hash) {
     const same = await prisma.bankReceipt.findFirst({ where: { hash: r.hash, id: { not: r.id }, orderId: { not: r.orderId } }, select: { cnNo: true } });
     if (same) why.push(`SAME FILE ALREADY USED FOR CN ${same.cnNo}`);
@@ -244,6 +246,7 @@ async function matchAll() {
         data: { status: "RECEIVED", checkedAt: new Date(), matchLine: `${hit.key} | ${hit.date ?? ""} · AED ${hit.amount} · ${hit.description}`.slice(0, 400) },
       });
       await prisma.order.updateMany({ where: { id: r.orderId, payment: "BANK" }, data: { bankPaymentConfirmed: true } });
+      await clearFlagIfPaid(r.id);
       received++;
     } else if (coveredTo && day <= coveredTo) {
       // The statement covers the receipt's day but the money isn't there.
@@ -252,6 +255,16 @@ async function matchAll() {
     }
   }
   return { received, notReceived };
+}
+
+/** Money found on the statement → the "looks fake" flag goes, unless the same file / reference was used for another CN. */
+const REUSE = /SAME FILE|SAME REFERENCE/;
+async function clearFlagIfPaid(id: string) {
+  const r = await prisma.bankReceipt.findUnique({ where: { id }, select: { suspect: true, suspectWhy: true, status: true } });
+  if (!r || r.status !== "RECEIVED" || !r.suspect) return;
+  const keep = (r.suspectWhy ?? "").split(" · ").filter((x) => REUSE.test(x));
+  await prisma.bankReceipt.update({ where: { id }, data: { suspect: keep.length > 0, suspectWhy: keep.length ? keep.join(" · ") : null } });
+  emitGlobal("bankreceipt:suspect", {});
 }
 
 /** Remove receipt files older than 7 days (rows and results stay). */
@@ -264,6 +277,8 @@ void pruneBankReceipts();
 
 /** After a restart: statements left half-read are marked failed (upload again), and receipts that could not be read are read again. */
 async function recoverOnStart() {
+  const paid = await prisma.bankReceipt.findMany({ where: { status: "RECEIVED", suspect: true }, select: { id: true } }).catch(() => [] as { id: string }[]);
+  for (const p of paid) await clearFlagIfPaid(p.id).catch(() => undefined);
   await prisma.bankStatement
     .updateMany({ where: { state: "READING" }, data: { state: "FAILED", result: "READING WAS INTERRUPTED — PLEASE UPLOAD THE STATEMENT AGAIN" } })
     .catch(() => undefined);
@@ -501,6 +516,7 @@ router.post(
     const { status } = z.object({ status: z.enum(["RECEIVED", "NOT_RECEIVED", "WAITING"]) }).parse(req.body);
     const r = await prisma.bankReceipt.update({ where: { id: req.params.id }, data: { status, checkedAt: new Date(), matchLine: status === "RECEIVED" ? "manual | MARKED BY ADMIN" : null } });
     await prisma.order.updateMany({ where: { id: r.orderId, payment: "BANK" }, data: { bankPaymentConfirmed: status === "RECEIVED" } });
+    if (status === "RECEIVED") await clearFlagIfPaid(r.id);
     res.json({ ok: true });
   })
 );
