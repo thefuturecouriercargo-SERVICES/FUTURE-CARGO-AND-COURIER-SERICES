@@ -7,6 +7,7 @@ import { dubaiDateStr } from "../utils/dates";
 import { writeAuditLog } from "../services/audit.service";
 import { emitGlobal } from "../lib/socket";
 import { createHash } from "crypto";
+import { checkReceiptPdf, fileNameRefMismatch } from "../lib/pdfForensics";
 import { BANK_CHECK_FROM_DATE, BANK_CHECK_FROM_TIME } from "../lib/bankCheck";
 
 /**
@@ -139,7 +140,7 @@ const RECEIPT_TOOL = {
   },
 };
 
-async function readReceipt(id: string) {
+async function readReceipt(id: string, fileName?: string | null) {
   const r = await prisma.bankReceipt.findUnique({ where: { id } });
   if (!r?.data) return;
   const out = await readWithClaude<{
@@ -169,14 +170,22 @@ async function readReceipt(id: string) {
       readNote: out ? out.note ?? null : "COULD NOT READ",
     },
   });
-  await checkSuspect(id, out?.fakeRisk ?? null, out?.fakeSigns ?? []);
+  // Hard file-detail checks (PDF maker, created/modified dates, edit layer, file-name reference).
+  const hard: string[] = [];
+  if (r.mime === "application/pdf") {
+    const printed = out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : dateFromRef(out?.reference);
+    hard.push(...(await checkReceiptPdf(Buffer.from(r.data), printed)).flags);
+  }
+  const nameMiss = fileNameRefMismatch(fileName, out?.reference);
+  if (nameMiss) hard.push(nameMiss);
+  await checkSuspect(id, out?.fakeRisk ?? null, [...hard, ...(out?.fakeSigns ?? [])], hard);
 }
 
 /** Flags a receipt that looks fake or reused, and rings the admin bell. */
-async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, signs: string[]) {
+async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, signs: string[], hard: string[] = []) {
   const r = await prisma.bankReceipt.findUnique({ where: { id } });
   if (!r) return;
-  const why: string[] = [];
+  const why: string[] = [...hard];
   if (risk === "high") why.push(...(signs.length ? signs : [`LOOKS ${risk === "high" ? "FAKE" : "DOUBTFUL"}`]).map((x) => x.toUpperCase()));
   if (r.hash) {
     const same = await prisma.bankReceipt.findFirst({ where: { hash: r.hash, id: { not: r.id }, orderId: { not: r.orderId } }, select: { cnNo: true } });
@@ -310,7 +319,8 @@ async function matchAll() {
 }
 
 /** Money found on the statement → the "looks fake" flag goes, unless the same file / reference was used for another CN. */
-const REUSE = /SAME FILE|SAME REFERENCE/;
+// These stay even when the money shows on the statement — admin must check them.
+const REUSE = /SAME FILE|SAME REFERENCE|PDF |FILE NAME/;
 async function clearFlagIfPaid(id: string) {
   const r = await prisma.bankReceipt.findUnique({ where: { id }, select: { suspect: true, suspectWhy: true, status: true } });
   if (!r || r.status !== "RECEIVED" || !r.suspect) return;
@@ -350,7 +360,7 @@ router.post(
   "/",
   requireRole("DRIVER", "SUPER_ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const { orderId, dataUrl } = z.object({ orderId: z.string().min(1), dataUrl: z.string().min(20) }).parse(req.body);
+    const { orderId, dataUrl, fileName } = z.object({ orderId: z.string().min(1), dataUrl: z.string().min(20), fileName: z.string().max(200).optional() }).parse(req.body);
     const order = await prisma.order.findUnique({ where: { id: orderId }, include: { employee: { select: { id: true, name: true } } } });
     if (!order) throw new ApiError(404, "CN not found");
     if (req.user!.role === "DRIVER" && order.employeeId !== req.user!.sub) throw new ApiError(403, "This CN is not yours");
@@ -370,7 +380,7 @@ router.post(
       },
       select: { id: true },
     });
-    void readReceipt(r.id).then(() => matchAll()).catch(() => undefined);
+    void readReceipt(r.id, fileName).then(() => matchAll()).catch(() => undefined);
     res.json({ ok: true, id: r.id });
   })
 );

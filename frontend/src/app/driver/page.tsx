@@ -2147,7 +2147,7 @@ function StatusModal({
               fr.readAsDataURL(receipt);
             })
           : await shrink(receipt, 1600, 0.82);
-        await apiFetch("/bank-receipts", { method: "POST", body: { orderId: order.id, dataUrl } });
+        await apiFetch("/bank-receipts", { method: "POST", body: { orderId: order.id, dataUrl, fileName: receipt.name } });
         setHasReceipt(true);
         setReceipt(null);
       }
