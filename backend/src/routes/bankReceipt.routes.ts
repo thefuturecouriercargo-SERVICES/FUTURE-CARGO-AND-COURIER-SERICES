@@ -81,6 +81,46 @@ function parseDataUrl(dataUrl: string, maxBytes: number) {
 
 // ---------- Receipt reading ----------
 
+/** What genuine receipts from each UAE bank look like (from real receipts the owner shared, 24 Nov 2026). */
+const BANK_GUIDE = [
+  "OUR ACCOUNT: Future Cargo's account is ADCB 14140235920001, IBAN AE190030014140235920001 (often shown as AE xxx001, XXXX…001 or ****920001). Seeing it is a GOOD sign.",
+  "Our name is written MANY ways and all are fine: THE FUTURE CARGO AND COURIER SERVICE(S) LLC OPC, The future cargo, future cargo, THE FUTURE CARGO LLC, Future Cargo And Corrier Service, The future courier services llc, The future car service llc, THE OPC, cut-off names, or masked like THE*** FUT*** CAR*** / THEXXXX FUTXXXX.",
+  "GENUINE LAYOUTS (none of these is a sign of a fake):",
+  "- ADCB app PDF 'Transfer details': masked sender (L*** C***), To 'THE OPC', reference like 049299826327AS7X. ADCB app screen 'Transfer initiated — Your transaction has been initiated successfully' with only a reference number (no amount) is normal.",
+  "- Mashreq / Mashreq NEO 'Fund transfer e-receipt — You have initiated a fund transfer', reference MLC + DDMMYY + digits (MLC2311261575509 = 23 Nov 2026), NO separate date printed. Mashreq app screen 'Transfer successfully initiated! … expected to be credited instantly' is normal.",
+  "- Emirates NBD / Emirates Islamic PDF 'Transfer Details' saved from iPhone, 12-character hex reference, line 'Full information of this transaction receipt will be available shortly' — normal, NOT pending.",
+  "- Emirates Islamic / DIB-style app screen 'Within the UAE — Your transfer's complete!', reference FT + YY + day-of-year + letters (FT26322GPCTJ).",
+  "- ADIB 'Receipt' with status 'Submitted' and reference 530P… — Submitted is normal, NOT pending. A small fee (AED 0.5) is normal.",
+  "- Al Maryah Community Bank: 'Transaction Initiated Successfully!', reference IPP-YYYYMMDD-nnnnn, 'Name as per Beneficiary Bank THEXXXX FUTXXXX…', 'Amount Deducted' includes charges.",
+  "- Wio: 'Success! Beneficiary added and transfer completed', Transaction ID BNK + YY + day-of-year…, Account type 'Individual'.",
+  "- Zand / similar: 'Recipient type Individual', 'Status Delivered', reference like EPHC…",
+  "- 'Transfer advice' with Status Success and Total amount including charges & VAT.",
+  "- 'Domestic Transfer' screen with 'Transfer On: Now' and Fees — normal confirmation screen.",
+  "ALSO NORMAL: wording 'initiated', 'submitted', 'expected to be credited'; purposes like Family Support, Commission, Personal transfer, Own Account Transfer, Cards and Mobile wallet, Financial services; 'Individual' account type; photos of a phone screen; masked names/accounts; no time; no sender name (only 'Savings Account' / 'Smart Account').",
+  "AMOUNT: give the TRANSFER amount (e.g. 'Amount', 'Transfer amount', 'Net credit amount') — NOT the total debited with fees/VAT (235.50 → 235, 295.51 → 295). If no amount is shown, use null.",
+  "DATE: if no date is printed, take it from the reference when it carries one (MLC DDMMYY…, IPP-YYYYMMDD-…).",
+  "Mark fakeRisk high ONLY for clear editing (mismatched fonts/alignment/pasted patches), a FAILED / REJECTED / CANCELLED transfer, money sent to a different account number than ours, or something that is not a transfer at all.",
+].join("\n");
+
+/** Date hidden inside a reference: MLC DDMMYY…, IPP-YYYYMMDD-…, FT/BNK YY + day-of-year. */
+function dateFromRef(ref: string | null | undefined): string | null {
+  const t = String(ref ?? "").toUpperCase().replace(/\s/g, "");
+  let m = t.match(/^MLC(\d{2})(\d{2})(\d{2})/);
+  if (m) return ok(`20${m[3]}-${m[2]}-${m[1]}`);
+  m = t.match(/^IPP-?(\d{4})(\d{2})(\d{2})/);
+  if (m) return ok(`${m[1]}-${m[2]}-${m[3]}`);
+  m = t.match(/^(?:FT|BNK)(\d{2})(\d{3})/);
+  if (m) {
+    const d = new Date(Date.UTC(2000 + Number(m[1]), 0, Number(m[2])));
+    return ok(d.toISOString().slice(0, 10));
+  }
+  return null;
+  function ok(d: string) {
+    const x = new Date(d);
+    return Number.isNaN(x.getTime()) || x.toISOString().slice(0, 10) !== d ? null : d;
+  }
+}
+
 const RECEIPT_TOOL = {
   name: "bank_receipt",
   description: "Details printed on a bank transfer / payment receipt.",
@@ -113,10 +153,9 @@ async function readReceipt(id: string) {
   }>(
     { type: r.mime === "application/pdf" ? "document" : "image", mime: r.mime, base64: Buffer.from(r.data).toString("base64") },
     RECEIPT_TOOL,
-    "This is a bank transfer / payment receipt (UAE, AED) a customer sent to pay for a delivery. Read the amount transferred, the date, the reference number and the sender. If it is not a successful transfer receipt, say so in note. Use null for anything not clearly printed.\n\n" +
-      "Also check carefully whether it could be FAKE or EDITED: digits or text in a different font, size, colour or alignment from the rest; blurred, smudged or pasted-looking patches around the amount, date or name; numbers that don't add up; a missing or odd-looking reference / transaction ID; layout that doesn't match a real UAE bank app or bank slip; status pending / failed / scheduled / draft; a beneficiary that isn't a courier company; a photo of a screen showing an editing app; a date in the future. Give fakeRisk low when it looks like a normal genuine receipt.\n\n" +
-      "These are NORMAL in real UAE bank receipts and are NOT signs of a fake: masked names or account numbers (e.g. 'L*** C***', '****910001'); a short or cut-off beneficiary name (e.g. 'THE OPC', 'THE FUTURE CARGO AND'); wording like 'You have initiated a fund transfer' or 'Transfer details'; a plain PDF made by the bank app; a photo of a phone screen showing the bank app or email; no time shown, only a date; the beneficiary account 14140235920001 / IBAN AE190030014140235920001 (that is the courier company's own ADCB account — a match is a good sign). " +
-      "Use fakeRisk high only for clear signs of editing or a failed/pending/draft transfer; use medium only when something specific looks wrong.",
+    "This is a bank transfer / payment receipt (UAE, AED) a customer sent to pay for a delivery. Read the amount transferred, the date, the reference number and the sender. Use null for anything not clearly printed. In note write ONLY if the transfer FAILED / was REJECTED / CANCELLED or it is not a transfer at all — otherwise null.\n\n" +
+      "Also check carefully whether it could be FAKE or EDITED: digits or text in a different font, size, colour or alignment from the rest; blurred, smudged or pasted-looking patches around the amount, date or name; numbers that don't add up; money sent to a different account number; a photo of a screen showing an editing app; a date in the future. Give fakeRisk low when it looks like a normal genuine receipt.\n\n" +
+      BANK_GUIDE,
     1200
   );
   await prisma.bankReceipt.update({
@@ -124,7 +163,7 @@ async function readReceipt(id: string) {
     data: {
       readDone: true,
       readAmount: out?.amount ?? null,
-      readDate: out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : null,
+      readDate: out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : dateFromRef(out?.reference),
       readRef: out?.reference ?? null,
       readFrom: out?.from ?? null,
       readNote: out ? out.note ?? null : "COULD NOT READ",
@@ -156,7 +195,8 @@ async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, 
     if (gap < -1) why.push(`RECEIPT DATE ${r.readDate} IS IN THE FUTURE`);
     else if (gap > 3) why.push(`RECEIPT DATED ${r.readDate} — ${Math.round(gap)} DAYS BEFORE DELIVERY`);
   }
-  if (r.readNote && /fail|pending|schedul|draft|not a/i.test(r.readNote)) why.push(r.readNote.toUpperCase());
+  // Only a clearly failed / rejected transfer or a non-receipt — "initiated", "submitted", "pending" wording is normal.
+  if (r.readNote && /\b(fail|failed|reject|rejected|declin|cancell?ed|not a (transfer|receipt))/i.test(r.readNote)) why.push(r.readNote.toUpperCase());
   const unique = [...new Set(why)];
   const suspect = unique.length > 0;
   await prisma.bankReceipt.update({ where: { id }, data: { suspect, suspectWhy: suspect ? unique.join(" · ").slice(0, 600) : null } });
@@ -198,9 +238,21 @@ const norm = (s: string | null | undefined) => String(s ?? "").toUpperCase().rep
 /** Sender name words (3+ letters) from a receipt, e.g. "MUHAMMED ANSHAD S IBRAHIM" → MUHAMMED, ANSHAD, IBRAHIM. */
 const nameWords = (s: string | null | undefined) =>
   String(s ?? "").toUpperCase().split(/[^A-Z]+/).filter((w) => w.length >= 3 && !["MR", "MRS", "MBTRF", "THE", "AND", "LLC"].includes(w));
-const nameHits = (words: string[], text: string) => {
+const nameHits = (words: string[], text: string, from?: string | null) => {
   const t = String(text ?? "").toUpperCase().replace(/[^A-Z]+/g, " ");
-  return words.filter((w) => t.includes(w)).length;
+  let n = words.filter((w) => t.includes(w)).length;
+  // ADCB masks the sender: "L*** C***" → initials L, C in order (LUBAIB CHERAPARAMBIL).
+  const initials = (String(from ?? "").toUpperCase().match(/\b([A-Z])[*X]{2,}/g) ?? []).map((x) => x[0]);
+  if (initials.length >= 2) {
+    const tw = t.split(" ").filter((w) => w.length >= 2 && !["BO", "MBTRF"].includes(w));
+    for (let i = 0; i + initials.length <= tw.length; i++) {
+      if (initials.every((c, k) => tw[i + k][0] === c)) {
+        n += initials.length;
+        break;
+      }
+    }
+  }
+  return n;
 };
 
 /** Check every receipt that is not RECEIVED yet against all statements from the last 30 days. */
@@ -233,8 +285,8 @@ async function matchAll() {
         const ra = ref.length >= 5 && norm(a.description).includes(ref) ? 0 : 1;
         const rb = ref.length >= 5 && norm(b.description).includes(ref) ? 0 : 1;
         if (ra !== rb) return ra - rb;
-        const na = nameHits(names, a.description);
-        const nb = nameHits(names, b.description);
+        const na = nameHits(names, a.description, r.readFrom);
+        const nb = nameHits(names, b.description, r.readFrom);
         if (na !== nb) return nb - na;
         return Math.abs(new Date(a.date ?? day).getTime() - t) - Math.abs(new Date(b.date ?? day).getTime() - t);
       });
