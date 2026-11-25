@@ -17,7 +17,9 @@ export function orderToLabel(o: Order): Booking {
     address: b?.address ?? "",
     emirate: b?.emirate || o.emirate,
     items: b?.items ?? null,
-    codAmount: b && !b.manual ? b.codAmount : o.payment === "CASH" ? o.total : 0,
+    // The consignment's own amount wins — editing it on Daily Entry must change the label.
+    // (booking.codAmount is only what the vendor first entered.)
+    codAmount: b && !b.manual ? o.total : o.payment === "CASH" ? o.total : 0,
     notes: b?.notes ?? null,
     status: "ACCEPTED",
     createdBy: "ADMIN",
