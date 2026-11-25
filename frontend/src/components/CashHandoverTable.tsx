@@ -413,10 +413,10 @@ export default function CashHandoverTable({
             <td className="px-4 py-3 text-[#d4af5a]">Total</td>
             <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.exp))}</td>
             <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.pur))}</td>
-            <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.due))}</td>
-            <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.received ?? 0))}</td>
+            <td className="px-4 py-3 text-right"><span className="pr-[11px]">{fmtNumber(sum((v) => v.due))}</span></td>
+            <td className="px-4 py-3 text-right"><span className="pr-[11px]">{fmtNumber(sum((v) => v.received ?? 0))}</span></td>
             <td className="px-4 py-3 text-right">
-              <Diff value={totDiff} onDark />
+              <span className="pr-[11px]"><Diff value={totDiff} onDark /></span>
             </td>
             <td />
           </tr>
