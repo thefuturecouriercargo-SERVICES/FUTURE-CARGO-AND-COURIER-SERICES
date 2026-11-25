@@ -492,7 +492,7 @@ return (
             <h2 className="mb-3 border-b border-line pb-2.5 font-display text-[18px] font-semibold text-navy">
               Cash Handover — {fmtDate(useRange ? toDate : date)}
             </h2>
-            <CashHandoverTable date={useRange ? toDate : date} showSpend />
+            <CashHandoverTable date={useRange ? toDate : date} />
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_1fr]">

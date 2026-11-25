@@ -9,7 +9,6 @@ import EmptyState from "@/components/ui/EmptyState";
 import Icon from "@/components/Icon";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
-import { Vendor } from "@/types";
 
 interface Row {
   driver: { id: string; name: string };
@@ -52,17 +51,11 @@ interface HistoryRow {
   diff: number;
   note: string | null;
 }
-interface Purchase {
-  id: string;
-  employeeId: string;
-  amount: number;
-  vendor?: { id: string; name: string } | null;
-}
 type LessReason = "SALARY" | "SHORT" | "OTHER";
 const REASON_LABEL: Record<LessReason, string> = { SALARY: "Salary", SHORT: "Short", OTHER: "Other" };
 type Input = { received: string; less: string; reason: LessReason | ""; note: string };
 const EMPTY: Input = { received: "", less: "", reason: "", note: "" };
-type Panel = "less" | "history" | "purchases";
+type Panel = "breakdown" | "less" | "history";
 
 /** "80 short" / "20 extra" / "0", coloured. Positive = driver gave less than due. */
 function Diff({ value, onDark }: { value: number | null; onDark?: boolean }) {
@@ -78,21 +71,19 @@ const initials = (name: string) => {
 };
 
 /**
- * Driver cash handover table: Driver · (Expenses · Purchases) · Actual · Received · Difference,
- * totals under each column. Used on the Cash Handover page and on the dashboard
- * (with showSpend, which adds the Expenses and Purchases columns and lets admin add
- * or remove purchases — paid to vendors — from the Purchases cell).
+ * Driver cash handover table: Driver · Actual · Received · Difference, totals under
+ * each column. Tap Actual for the breakdown (collected − expenses − purchases − less),
+ * tap Difference to add a less amount / reason / note. Used on the Cash Handover page
+ * and on the dashboard.
  */
 export default function CashHandoverTable({
   date,
   onDateChange,
   onStartDate,
-  showSpend = false,
 }: {
   date: string;
   onDateChange?: (d: string) => void;
   onStartDate?: (d: string) => void;
-  showSpend?: boolean;
 }) {
   const { user } = useAuth();
   const [data, setData] = useState<DayData | null>(null);
@@ -100,17 +91,9 @@ export default function CashHandoverTable({
   const [saving, setSaving] = useState<string | null>(null);
   const [open, setOpen] = useState<{ id: string; panel: Panel } | null>(null);
   const [history, setHistory] = useState<HistoryRow[] | null>(null);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [newPurchase, setNewPurchase] = useState<{ amount: string; vendorId: string }>({ amount: "", vendorId: "" });
-
   const load = useCallback(async () => {
-    const [d, p] = await Promise.all([
-      apiFetch<DayData>("/cash-handover", { query: { date } }),
-      showSpend ? apiFetch<Purchase[]>("/purchases", { query: { date } }) : Promise.resolve([] as Purchase[]),
-    ]);
+    const d = await apiFetch<DayData>("/cash-handover", { query: { date } });
     setData(d);
-    setPurchases(p);
     onStartDate?.(d.startDate);
     setInputs(
       Object.fromEntries(
@@ -126,7 +109,7 @@ export default function CashHandoverTable({
       )
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, showSpend]);
+  }, [date]);
   useLiveRefresh(load);
 
   useEffect(() => {
@@ -134,10 +117,6 @@ export default function CashHandoverTable({
     setOpen(null);
     load().catch((e) => toast("Could not load cash handover", "error", e instanceof Error ? e.message : undefined));
   }, [load]);
-
-  useEffect(() => {
-    if (showSpend) apiFetch<Vendor[]>("/vendors").then(setVendors).catch(() => setVendors([]));
-  }, [showSpend]);
 
   const historyId = open?.panel === "history" ? open.id : null;
   useEffect(() => {
@@ -148,7 +127,6 @@ export default function CashHandoverTable({
 
   function toggle(id: string, panel: Panel) {
     setOpen((o) => (o?.id === id && o.panel === panel ? null : { id, panel }));
-    if (panel === "purchases") setNewPurchase({ amount: "", vendorId: "" });
   }
 
   function lessOf(inp: Input) {
@@ -202,25 +180,6 @@ export default function CashHandoverTable({
     load();
   }
 
-  async function addPurchase(employeeId: string) {
-    const amount = Math.round(Number(newPurchase.amount));
-    if (!amount || amount <= 0) return toast("Enter the purchase amount", "warning");
-    setSaving(employeeId);
-    try {
-      await apiFetch("/purchases", { method: "POST", body: { date, amount, employeeId, vendorId: newPurchase.vendorId || undefined } });
-      setNewPurchase({ amount: "", vendorId: "" });
-      await load();
-    } catch (e) {
-      toast("Could not add purchase", "error", e instanceof Error ? e.message : undefined);
-    } finally {
-      setSaving(null);
-    }
-  }
-  async function removePurchase(id: string) {
-    await apiFetch(`/purchases/${id}`, { method: "DELETE" });
-    await load();
-  }
-
   if (!data) return <PageSkeleton rows={6} cards={0} />;
   if (data.beforeStart) return <EmptyState title={`Cash handover starts from ${fmtDate(data.startDate)}`} />;
   if (data.rows.length === 0) return <EmptyState title="No active drivers" />;
@@ -253,19 +212,18 @@ export default function CashHandoverTable({
   const sum = (fn: (v: (typeof view)[number]) => number) => view.reduce((s, v) => s + fn(v), 0);
   const anyReceived = view.some((v) => v.received !== null);
   const totDiff = anyReceived ? sum((v) => v.diff ?? 0) : null;
-  const cols = showSpend ? 7 : 5;
+  const cols = 5;
 
   const iconBtn = "flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-soft hover:border-brass hover:text-navy";
   const onIcon = "border-brass text-navy";
+  const cellBtn = (on: boolean) => `rounded-lg border px-2.5 py-1 text-right ${on ? "border-brass bg-paper-2" : "border-transparent hover:border-line"}`;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-white">
-      <table className={`w-full ${showSpend ? "min-w-[820px]" : "min-w-[620px]"} border-collapse text-sm tabular-nums`}>
+      <table className="w-full min-w-[620px] border-collapse text-sm tabular-nums">
         <thead>
           <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-brass">
             <th className="px-4 py-3">Driver</th>
-            {showSpend && <th className="px-4 py-3 text-right">Expenses</th>}
-            {showSpend && <th className="px-4 py-3 text-right">Purchases</th>}
             <th className="px-4 py-3 text-right">Actual</th>
             <th className="px-4 py-3 text-right">Received</th>
             <th className="px-4 py-3 text-right">Difference</th>
@@ -277,7 +235,6 @@ export default function CashHandoverTable({
             const id = r.driver.id;
             const busy = saving === id;
             const panel = open?.id === id ? open.panel : null;
-            const mine = purchases.filter((p) => p.employeeId === id);
             return (
               <Fragment key={id}>
                 <tr className="border-b border-line align-middle">
@@ -290,28 +247,11 @@ export default function CashHandoverTable({
                       </div>
                     </div>
                   </td>
-                  {showSpend && <td className={`px-4 py-2.5 text-right ${exp ? "text-cancelled" : "text-ink-soft"}`}>{exp ? fmtNumber(exp) : "—"}</td>}
-                  {showSpend && (
-                    <td className="px-4 py-2.5 text-right">
-                      <button
-                        onClick={() => toggle(id, "purchases")}
-                        title="Purchases (paid to vendors) — tap to add or remove"
-                        className={`rounded-lg border px-2.5 py-1 ${panel === "purchases" ? "border-brass" : "border-transparent hover:border-line"} ${pur ? "text-cancelled" : "text-ink-soft"}`}
-                      >
-                        {pur ? fmtNumber(pur) : "—"}
-                        <span className="ml-1.5 text-ink-soft">
-                          <Icon name="plus" size="0.9em" />
-                        </span>
-                      </button>
-                    </td>
-                  )}
                   <td className="px-4 py-2.5 text-right">
-                    <p className="font-semibold text-navy">{fmtNumber(due)}</p>
-                    {less > 0 && (
-                      <p className="text-[11px] text-cancelled">
-                        −{fmtNumber(less)} {inp.reason ? REASON_LABEL[inp.reason] : ""}
-                      </p>
-                    )}
+                    <button onClick={() => toggle(id, "breakdown")} title="Show breakdown" className={cellBtn(panel === "breakdown")}>
+                      <span className="block font-semibold text-navy">{fmtNumber(due)}</span>
+                      {(exp > 0 || pur > 0 || less > 0) && <span className="block text-[10.5px] text-ink-soft">of {fmtNumber(r.collected)}</span>}
+                    </button>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-1.5">
@@ -336,7 +276,18 @@ export default function CashHandoverTable({
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold">
-                    <Diff value={diff} />
+                    <button onClick={() => toggle(id, "less")} title="Add reason / note" className={cellBtn(panel === "less")}>
+                      <span className="block">
+                        <Diff value={diff} />
+                      </span>
+                      {less > 0 && inp.reason ? (
+                        <span className="block text-[10.5px] font-normal text-ink-soft">
+                          less {fmtNumber(less)} {REASON_LABEL[inp.reason]}
+                        </span>
+                      ) : inp.note ? (
+                        <span className="block max-w-[140px] truncate text-[10.5px] font-normal text-ink-soft">{inp.note}</span>
+                      ) : null}
+                    </button>
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1.5">
@@ -345,9 +296,6 @@ export default function CashHandoverTable({
                           <Icon name="check" />
                         </button>
                       )}
-                      <button onClick={() => toggle(id, "less")} title="Less (salary / short) and note" aria-label="Less and note" className={`${iconBtn} ${panel === "less" || less > 0 || inp.note ? onIcon : ""}`}>
-                        <Icon name="minus" />
-                      </button>
                       <button onClick={() => toggle(id, "history")} title="History" aria-label="History" className={`${iconBtn} ${panel === "history" ? onIcon : ""}`}>
                         <Icon name="clock" />
                       </button>
@@ -360,48 +308,26 @@ export default function CashHandoverTable({
                   </td>
                 </tr>
 
-                {panel === "purchases" && (
+                {panel === "breakdown" && (
                   <tr className="border-b border-line bg-paper-2">
                     <td colSpan={cols} className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {mine.map((p) => (
-                          <span key={p.id} className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs">
-                            <b className="text-navy">{fmtNumber(p.amount)}</b>
-                            {p.vendor && <span className="rounded bg-brass/20 px-1.5 text-[10px] uppercase text-brass">{p.vendor.name}</span>}
-                            <button onClick={() => removePurchase(p.id)} title="Remove" aria-label="Remove purchase" className="text-ink-soft hover:text-cancelled">
-                              <Icon name="trash" size="0.95em" />
-                            </button>
-                          </span>
-                        ))}
-                        <select
-                          aria-label="Vendor"
-                          value={newPurchase.vendorId}
-                          onChange={(e) => setNewPurchase((s) => ({ ...s, vendorId: e.target.value }))}
-                          className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs"
-                        >
-                          <option value="">No vendor</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          inputMode="numeric"
-                          placeholder="Amount"
-                          aria-label="Purchase amount"
-                          value={newPurchase.amount}
-                          onChange={(e) => setNewPurchase((s) => ({ ...s, amount: e.target.value.replace(/[^0-9]/g, "") }))}
-                          onKeyDown={(e) => e.key === "Enter" && addPurchase(id)}
-                          className="w-24 rounded-lg border border-line bg-white px-2.5 py-1.5 text-right text-xs"
-                        />
-                        <button
-                          onClick={() => addPurchase(id)}
-                          disabled={busy}
-                          className="rounded-lg bg-navy px-3 py-1.5 text-[11px] font-semibold uppercase text-paper hover:bg-navy-2 disabled:opacity-50"
-                        >
-                          Add
-                        </button>
+                      <div className="ml-auto grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-xs">
+                        <span className="text-ink-soft">
+                          Total collected ({r.cashParcels} cash{r.bankParcels ? `, ${r.bankParcels} bank not counted` : ""})
+                        </span>
+                        <span className="text-right font-semibold text-navy">{fmtNumber(r.collected)}</span>
+                        <span className="text-ink-soft">Expenses</span>
+                        <span className="text-right text-cancelled">{exp ? `−${fmtNumber(exp)}` : "0"}</span>
+                        <span className="text-ink-soft">Purchases</span>
+                        <span className="text-right text-cancelled">{pur ? `−${fmtNumber(pur)}` : "0"}</span>
+                        {less > 0 && (
+                          <>
+                            <span className="text-ink-soft">Less{inp.reason ? ` (${REASON_LABEL[inp.reason]})` : ""}</span>
+                            <span className="text-right text-cancelled">−{fmtNumber(less)}</span>
+                          </>
+                        )}
+                        <span className="border-t border-line pt-1 font-semibold text-navy">Actual</span>
+                        <span className="border-t border-line pt-1 text-right font-semibold text-navy">{fmtNumber(due)}</span>
                       </div>
                     </td>
                   </tr>
@@ -410,7 +336,7 @@ export default function CashHandoverTable({
                 {panel === "less" && (
                   <tr className="border-b border-line bg-paper-2">
                     <td colSpan={cols} className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <input
                           inputMode="numeric"
                           placeholder="Less"
@@ -420,7 +346,7 @@ export default function CashHandoverTable({
                           className="w-24 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
                         />
                         <select
-                          aria-label="Less reason"
+                          aria-label="Reason"
                           value={inp.reason}
                           onChange={(e) => setInp(id, { reason: e.target.value as LessReason | "" })}
                           className={`rounded-lg border bg-white px-3 py-1.5 text-sm ${less > 0 && !inp.reason ? "border-cancelled" : "border-line"}`}
@@ -436,14 +362,17 @@ export default function CashHandoverTable({
                           maxLength={300}
                           onChange={(e) => setInp(id, { note: e.target.value })}
                           onKeyDown={(e) => e.key === "Enter" && save(r)}
-                          className="min-w-[160px] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
+                          className="min-w-[180px] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
                         />
-                        <span className="text-xs text-ink-soft">
-                          Collected {fmtNumber(r.collected)}
-                          {r.spent ? ` · spent −${fmtNumber(r.spent)}` : ""} · {r.cashParcels} cash
-                          {r.bankParcels ? ` · ${r.bankParcels} bank` : ""}
-                          {r.handover?.byName ? ` · by ${r.handover.byName}` : ""}
-                        </span>
+                        {received !== null && changed && (
+                          <button
+                            onClick={() => save(r)}
+                            disabled={busy}
+                            className="rounded-lg bg-navy px-3 py-1.5 text-[11px] font-semibold uppercase text-paper hover:bg-navy-2 disabled:opacity-50"
+                          >
+                            {busy ? "…" : r.handover ? "Update" : "Save"}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -502,8 +431,6 @@ export default function CashHandoverTable({
         <tfoot>
           <tr className="bg-navy font-semibold text-white">
             <td className="px-4 py-3 text-brass">Total</td>
-            {showSpend && <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.exp))}</td>}
-            {showSpend && <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.pur))}</td>}
             <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.due))}</td>
             <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.received ?? 0))}</td>
             <td className="px-4 py-3 text-right">
