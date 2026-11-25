@@ -212,7 +212,7 @@ export default function CashHandoverTable({
   const sum = (fn: (v: (typeof view)[number]) => number) => view.reduce((s, v) => s + fn(v), 0);
   const anyReceived = view.some((v) => v.received !== null);
   const totDiff = anyReceived ? sum((v) => v.diff ?? 0) : null;
-  const cols = 5;
+  const cols = 7;
 
   const iconBtn = "flex h-8 w-8 items-center justify-center rounded-lg border border-line text-ink-soft hover:border-brass hover:text-navy";
   const onIcon = "border-brass text-navy";
@@ -220,10 +220,12 @@ export default function CashHandoverTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-white">
-      <table className="w-full min-w-[620px] border-collapse text-sm tabular-nums">
+      <table className="w-full min-w-[620px] md:min-w-[820px] border-collapse text-sm tabular-nums">
         <thead>
           <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-brass">
             <th className="px-4 py-3">Driver</th>
+            <th className="hidden md:table-cell px-4 py-3 text-right">Expenses</th>
+            <th className="hidden md:table-cell px-4 py-3 text-right">Purchases</th>
             <th className="px-4 py-3 text-right">Actual</th>
             <th className="px-4 py-3 text-right">Received</th>
             <th className="px-4 py-3 text-right">Difference</th>
@@ -247,6 +249,8 @@ export default function CashHandoverTable({
                       </div>
                     </div>
                   </td>
+                  <td className={`hidden md:table-cell px-4 py-2.5 text-right ${exp ? "text-cancelled" : "text-ink-soft"}`}>{exp ? fmtNumber(exp) : "—"}</td>
+                  <td className={`hidden md:table-cell px-4 py-2.5 text-right ${pur ? "text-cancelled" : "text-ink-soft"}`}>{pur ? fmtNumber(pur) : "—"}</td>
                   <td className="px-4 py-2.5 text-right">
                     <button onClick={() => toggle(id, "breakdown")} title="Show breakdown" className={cellBtn(panel === "breakdown")}>
                       <span className="block font-semibold text-navy">{fmtNumber(due)}</span>
@@ -407,6 +411,8 @@ export default function CashHandoverTable({
         <tfoot>
           <tr className="bg-navy font-semibold text-white">
             <td className="px-4 py-3 text-brass">Total</td>
+            <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.exp))}</td>
+            <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.pur))}</td>
             <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.due))}</td>
             <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.received ?? 0))}</td>
             <td className="px-4 py-3 text-right">
