@@ -276,17 +276,11 @@ export default function CashHandoverTable({
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold">
-                    <button onClick={() => toggle(id, "less")} title="Add reason / note" className={cellBtn(panel === "less")}>
+                    <button onClick={() => toggle(id, "less")} title="Add note" className={cellBtn(panel === "less")}>
                       <span className="block">
                         <Diff value={diff} />
                       </span>
-                      {less > 0 && inp.reason ? (
-                        <span className="block text-[10.5px] font-normal text-ink-soft">
-                          less {fmtNumber(less)} {REASON_LABEL[inp.reason]}
-                        </span>
-                      ) : inp.note ? (
-                        <span className="block max-w-[140px] truncate text-[10.5px] font-normal text-ink-soft">{inp.note}</span>
-                      ) : null}
+                      {inp.note && <span className="block max-w-[140px] truncate text-[10.5px] font-normal text-ink-soft">{inp.note}</span>}
                     </button>
                   </td>
                   <td className="px-3 py-2.5">
@@ -338,26 +332,8 @@ export default function CashHandoverTable({
                     <td colSpan={cols} className="px-4 py-3">
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <input
-                          inputMode="numeric"
-                          placeholder="Less"
-                          aria-label="Less amount"
-                          value={inp.less}
-                          onChange={(e) => setInp(id, { less: e.target.value.replace(/[^0-9]/g, "") })}
-                          className="w-24 rounded-lg border border-line bg-white px-3 py-1.5 text-sm"
-                        />
-                        <select
-                          aria-label="Reason"
-                          value={inp.reason}
-                          onChange={(e) => setInp(id, { reason: e.target.value as LessReason | "" })}
-                          className={`rounded-lg border bg-white px-3 py-1.5 text-sm ${less > 0 && !inp.reason ? "border-cancelled" : "border-line"}`}
-                        >
-                          <option value="">Reason…</option>
-                          <option value="SALARY">Salary</option>
-                          <option value="SHORT">Short</option>
-                          <option value="OTHER">Other</option>
-                        </select>
-                        <input
-                          placeholder="Note"
+                          placeholder="Note for the difference"
+                          autoFocus
                           value={inp.note}
                           maxLength={300}
                           onChange={(e) => setInp(id, { note: e.target.value })}
