@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { REFRESH_EVENT, type RefreshSource } from "@/lib/useLiveRefresh";
 import AuthGate from "@/components/AuthGate";
 import { apiFetch, ApiClientError } from "@/lib/api";
 import { revealEditForm } from "@/lib/editForm";
 import { addDays, fmtNumber, todayStr, agingDays, agingBadgeClass, fmtDayDate, fmtDate, fmtDateTime } from "@/lib/format";
-import { useSocketEvent } from "@/lib/useSocketEvent";
 
 // Minimal typing for the Web Speech API (not in default TS lib).
 interface SpeechRecognitionResultLike {
@@ -66,7 +66,6 @@ import RowActions from "@/components/ui/RowActions";
 import OrderDrawer from "@/components/OrderDrawer";
 import ContactEditModal from "@/components/ContactEditModal";
 import { printOrderLabels } from "@/lib/orderLabels";
-import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import Icon from "@/components/Icon";
 const emptyForm = {
   cnNo: "",
@@ -207,8 +206,16 @@ const [duplicateGroups, setDuplicateGroups] = useState<{ cnNo: number; orders: O
     load();
   }, [load]);
 
-  useSocketEvent("order:changed", load);
-  useLiveRefresh(load, { socket: false });
+  // Daily Entry refreshes by itself ONLY when you come back to it from another tab/app
+  // (owner's rule, 26 Nov 2026) — never on live updates from drivers/other staff, never on a timer.
+  // Otherwise it reloads only after your own save/edit/delete, a date change, or the gold R.
+  useEffect(() => {
+    const onRefresh = (e: Event) => {
+      if ((e as CustomEvent<{ source: RefreshSource }>).detail?.source === "resume") void load();
+    };
+    window.addEventListener(REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(REFRESH_EVENT, onRefresh);
+  }, [load]);
 
  const selectedVendor = useMemo(() => vendors.find((v) => v.id === form.vendorId), [vendors, form.vendorId]);
 
