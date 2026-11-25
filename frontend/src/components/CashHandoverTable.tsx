@@ -222,7 +222,7 @@ export default function CashHandoverTable({
     <div className="overflow-x-auto rounded-xl border border-line bg-white">
       <table className="w-full min-w-[620px] md:min-w-[820px] border-collapse text-sm tabular-nums">
         <thead>
-          <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-brass">
+          <tr className="bg-[#0b1530] text-left text-[11px] font-semibold uppercase tracking-wider text-[#d4af5a]">
             <th className="px-4 py-3">Driver</th>
             <th className="hidden md:table-cell px-4 py-3 text-right">Expenses</th>
             <th className="hidden md:table-cell px-4 py-3 text-right">Purchases</th>
@@ -242,7 +242,7 @@ export default function CashHandoverTable({
                 <tr className="border-b border-line align-middle">
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-brass">{initials(r.driver.name)}</span>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#d4af5a]/50 bg-[#0b1530] text-[10px] font-bold text-[#d4af5a]">{initials(r.driver.name)}</span>
                       <div className="min-w-0">
                         <p className="font-semibold text-navy">{r.driver.name}</p>
                         {r.handover?.stale && <p className="text-[11px] text-pending">Changed after saving — save again</p>}
@@ -409,8 +409,8 @@ export default function CashHandoverTable({
           })}
         </tbody>
         <tfoot>
-          <tr className="bg-navy font-semibold text-white">
-            <td className="px-4 py-3 text-brass">Total</td>
+          <tr className="bg-[#0b1530] font-semibold text-white">
+            <td className="px-4 py-3 text-[#d4af5a]">Total</td>
             <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.exp))}</td>
             <td className="hidden md:table-cell px-4 py-3 text-right">{fmtNumber(sum((v) => v.pur))}</td>
             <td className="px-4 py-3 text-right">{fmtNumber(sum((v) => v.due))}</td>
