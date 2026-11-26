@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -225,7 +226,7 @@ export async function createBooking(
   };
 
   const pref = opts.preferredCn;
-  if (pref && Number.isSafeInteger(pref) && pref > 0 && pref < CN_START && (await isCnFree(pref))) {
+  if (pref && isCnInt(pref) && pref > 0 && pref < CN_START && (await isCnFree(pref))) {
     try {
       return await prisma.booking.create({ data: { ...base, cnNo: pref, cnSource: "VENDOR" }, include: { vendor: true } });
     } catch (err) {
@@ -291,7 +292,7 @@ export async function acceptBooking(
     // number is free.
     let cnNo = booking.cnNo;
     const own = Number(booking.vendorRef);
-    if (booking.createdBy === "WEBSITE" && booking.cnSource === "SYSTEM" && Number.isSafeInteger(own) && own > 0 && own < CN_START) {
+    if (booking.createdBy === "WEBSITE" && booking.cnSource === "SYSTEM" && isCnInt(own) && own > 0 && own < CN_START) {
       const taken =
         (await tx.order.findFirst({ where: { cnNo: own, ...recentOrders }, select: { id: true } })) ??
         (await tx.booking.findFirst({ where: { cnNo: own, id: { not: booking.id } }, select: { id: true } }));
@@ -359,7 +360,7 @@ export async function assignByScan(
 ): Promise<ScanAssignResult> {
   const digits = code.trim().replace(/^0+(?=\d)/, "");
   const cnNo = Number(digits);
-  if (!/^\d+$/.test(digits) || !Number.isSafeInteger(cnNo)) throw new ApiError(400, `"${code}" is not a CN number`);
+  if (!/^\d+$/.test(digits) || !isCnInt(cnNo)) throw new ApiError(400, `"${code}" is not a CN number`);
 
   const employee = await prisma.user.findUnique({ where: { id: employeeId } });
   if (!employee || employee.role !== "DRIVER" || !employee.active) throw new ApiError(404, "Driver not found or inactive");

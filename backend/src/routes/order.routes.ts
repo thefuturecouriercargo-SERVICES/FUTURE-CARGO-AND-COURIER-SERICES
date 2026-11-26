@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { Router } from "express";
 import { assertDeliveryStarted } from "../services/km.service";
 import { z } from "zod";
@@ -79,13 +80,13 @@ function buildWhere(query: Record<string, unknown>): Prisma.OrderWhereInput {
   if (query.emirate) where.emirate = (query.emirate as string).toUpperCase();
   if (query.cn) {
     const cnNum = Number(query.cn);
-    if (!Number.isNaN(cnNum)) where.cnNo = cnNum;
+    if (isCnInt(cnNum)) where.cnNo = cnNum;
   }
   if (query.search) {
     const search = query.search as string;
     const cnNum = Number(search);
     where.OR = [
-      ...(Number.isNaN(cnNum) ? [] : [{ cnNo: cnNum }]),
+      ...(search.trim() !== "" && isCnInt(cnNum) ? [{ cnNo: cnNum }] : []),
       { brandName: { contains: search, mode: "insensitive" as const } },
     ];
   }

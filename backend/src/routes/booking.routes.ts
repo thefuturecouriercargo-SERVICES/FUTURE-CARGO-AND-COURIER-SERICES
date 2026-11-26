@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { Router } from "express";
 import { correctEmirate, outsideAreaOf, OUTSIDE_AREAS } from "../lib/deliveryCharge";
 import { z } from "zod";
@@ -180,7 +181,7 @@ router.get(
         ...(q
           ? {
               OR: [
-                ...(Number.isSafeInteger(qNum) && qNum > 0 ? [{ cnNo: qNum }] : []),
+                ...(isCnInt(qNum) && qNum > 0 ? [{ cnNo: qNum }] : []),
                 { vendorRef: { contains: q, mode: "insensitive" as const } },
                 { customerName: { contains: q, mode: "insensitive" as const } },
                 { customerPhone: { contains: q } },
@@ -216,7 +217,7 @@ router.get(
     const code = req.params.cn.trim();
     const cnNo = Number(code);
     const booking =
-      (Number.isSafeInteger(cnNo) ? await prisma.booking.findUnique({ where: { cnNo }, include: INCLUDE }) : null) ??
+      (isCnInt(cnNo) ? await prisma.booking.findUnique({ where: { cnNo }, include: INCLUDE }) : null) ??
       (await prisma.booking.findFirst({ where: { vendorRef: code }, include: INCLUDE, orderBy: { createdAt: "desc" } }));
     if (!booking) throw new ApiError(404, "No booking with that CN or order No.");
     res.json(booking);

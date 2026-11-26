@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { Router } from "express";
 import { correctEmirate } from "../lib/deliveryCharge";
 import { prisma } from "../lib/prisma";
@@ -311,7 +312,7 @@ router.get(
       where: {
         vendorId,
         OR: [
-          ...(Number.isSafeInteger(cn) ? [{ cnNo: cn }] : []),
+          ...(isCnInt(cn) ? [{ cnNo: cn }] : []),
           { booking: { customerName: text } },
           ...(phoneIds.length ? [{ booking: { id: { in: phoneIds } } }] : []),
           { booking: { address: text } },

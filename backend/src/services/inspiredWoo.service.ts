@@ -108,7 +108,7 @@ async function wooGet<T>(conn: string, path: string, params: Record<string, stri
   const cfg = wooConfig(conn);
   if (!cfg.configured) throw new Error(`${cfg.vendorName} website not connected — add ${conn}_WC_URL, ${conn}_WC_KEY and ${conn}_WC_SECRET in Railway`);
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${cfg.url}/wp-json/wc/v3/${path}${qs ? `?${qs}` : ""}`, {
+  const doFetch = () => fetch(`${cfg.url}/wp-json/wc/v3/${path}${qs ? `?${qs}` : ""}`, {
     method,
     headers: {
       Authorization: "Basic " + Buffer.from(`${cfg.key}:${cfg.secret}`).toString("base64"),
@@ -119,6 +119,16 @@ async function wooGet<T>(conn: string, path: string, params: Record<string, stri
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(20000),
   });
+  let res: Response;
+  try {
+    res = await doFetch();
+  } catch (err) {
+    // The website sometimes doesn't answer in time — try once more after a short
+    // pause (reads only, so nothing is ever sent twice).
+    if (method !== "GET") throw err;
+    await new Promise((r) => setTimeout(r, 5000));
+    res = await doFetch();
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let msg = text.slice(0, 200);

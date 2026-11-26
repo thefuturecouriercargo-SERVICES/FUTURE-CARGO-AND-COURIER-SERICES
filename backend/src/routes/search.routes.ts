@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { Router } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
@@ -90,7 +91,7 @@ router.get(
       phoneIds = rows.map((r) => r.id);
     }
 
-    const cnFilter = Number.isSafeInteger(cn) ? [{ cnNo: cn }] : [];
+    const cnFilter = isCnInt(cn) ? [{ cnNo: cn }] : [];
 
     // ---- Bookings (every portal / website / photo entry, whatever its stage) ----
     const bookingWhere: Prisma.BookingWhereInput = {

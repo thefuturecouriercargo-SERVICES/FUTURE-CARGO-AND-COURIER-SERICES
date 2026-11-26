@@ -1,3 +1,4 @@
+import { isCnInt } from "../lib/cn";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
@@ -56,7 +57,7 @@ router.post(
     const cnNums = new Set<number>();
     for (const [cn, r] of byCn) {
       const n = toNum(cn);
-      if (Number.isSafeInteger(n)) cnNums.add(n);
+      if (isCnInt(n)) cnNums.add(n);
     }
 
     const orders = await prisma.order.findMany({
@@ -93,7 +94,7 @@ router.post(
     const items = [...byCn.entries()].map(([cn, r]) => {
       const target = targetOf(r.status);
       const n = toNum(cn);
-      const order = Number.isSafeInteger(n) ? orderByCn.get(n) : undefined;
+      const order = isCnInt(n) ? orderByCn.get(n) : undefined;
       const matchedBy: "cn" | "sender" | null = order ? "cn" : null;
       // Only the tracking number counts. Sender Name is the vendor's bill no (repeats),
       // so matching on it hit unrelated old orders — never used.
@@ -103,7 +104,7 @@ router.post(
       const fixAmount = amountDiff && target === "DELIVERED" && r.source !== "excel";
 
       let action: "change" | "already" | "conflict" | "pending" | "notFound" | "awaiting" | "driver" | "waitPdf";
-      if (!order) action = Number.isSafeInteger(n) && waitingSet.has(n) ? "awaiting" : "notFound";
+      if (!order) action = isCnInt(n) && waitingSet.has(n) ? "awaiting" : "notFound";
       // Never touch consignments held by our own drivers — only the agent's.
       else if (!order.employee?.isAgent) action = "driver";
       else if (target === "PENDING") action = "pending";
@@ -515,7 +516,7 @@ router.get(
     const paidSet = new Set(paid.map((p) => p.cn));
     const missing = delivered.filter((d) => !paidSet.has(d.cn));
 
-    const nums = missing.map((m) => (m.cn.length <= 9 ? Number(m.cn) : NaN)).filter((n) => Number.isSafeInteger(n));
+    const nums = missing.map((m) => (m.cn.length <= 9 ? Number(m.cn) : NaN)).filter((n) => isCnInt(n));
     const orders = await prisma.order.findMany({
       where: { cnNo: { in: nums } },
       select: {
@@ -587,7 +588,7 @@ const isPickupBooking = (b: { notes: string | null; items: string | null } | nul
 const pickupStartTs = () => new Date(parseDateParam(PICKUP_START).getTime() - 4 * 3600 * 1000); // Dubai midnight
 
 async function pickupOrders(cns: string[]) {
-  const nums = cns.map((c) => (c.length <= 9 ? Number(c) : NaN)).filter((n) => Number.isSafeInteger(n));
+  const nums = cns.map((c) => (c.length <= 9 ? Number(c) : NaN)).filter((n) => isCnInt(n));
   const orders = await prisma.order.findMany({
     where: { cnNo: { in: nums } },
     select: {
