@@ -190,23 +190,82 @@ async function readReceipt(id: string, fileName?: string | null) {
   await checkSuspect(id, out?.fakeRisk ?? null, [...hard, ...(out?.fakeSigns ?? [])], hard);
 }
 
+/** Last 9 digits of a phone — "+971 55 123 4567" and "0551234567" are the same customer. */
+const phoneKey = (p: string | null | undefined) => String(p ?? "").replace(/\D/g, "").slice(-9);
+
+/**
+ * Other CNs this same receipt (same file or same bank reference) was added for, and whether
+ * they all belong to the same customer (one transfer paying for several of their orders).
+ */
+async function receiptGroup(r: { id: string; orderId: string; hash: string | null; readRef: string | null }) {
+  const ref = norm(r.readRef);
+  const others = await prisma.bankReceipt.findMany({
+    where: { id: { not: r.id }, orderId: { not: r.orderId }, OR: [...(r.hash ? [{ hash: r.hash }] : []), ...(ref.length >= 5 ? [{ readRef: { not: null } }] : [])] },
+    select: { id: true, orderId: true, cnNo: true, amount: true, hash: true, readRef: true },
+    orderBy: { createdAt: "desc" },
+    take: 2000,
+  });
+  const same = others.filter((o) => (r.hash && o.hash === r.hash) || (ref.length >= 5 && norm(o.readRef) === ref));
+  const byOrder = new Map<string, (typeof same)[number]>();
+  for (const o of same) if (!byOrder.has(o.orderId)) byOrder.set(o.orderId, o);
+  const group = [...byOrder.values()];
+  if (!group.length) return { group, sameCustomer: false };
+  const orders = await prisma.order.findMany({
+    where: { id: { in: [r.orderId, ...group.map((g) => g.orderId)] } },
+    select: { id: true, custPhone: true, booking: { select: { customerPhone: true } } },
+  });
+  const keys = orders.map((o) => phoneKey(o.booking?.customerPhone || o.custPhone));
+  const sameCustomer = orders.length === group.length + 1 && keys.every((k) => k.length >= 7 && k === keys[0]);
+  return { group, sameCustomer };
+}
+
+/** Reuse + amount flags for one receipt. One transfer for several orders of the SAME customer is fine when the CNs add up. */
+async function reuseAndAmountFlags(r: { id: string; orderId: string; cnNo: number; hash: string | null; readRef: string | null; readAmount: number | null; amount: number }) {
+  const why: string[] = [];
+  const { group, sameCustomer } = await receiptGroup(r);
+  const ref = norm(r.readRef);
+  if (group.length && !sameCustomer) {
+    const byFile = group.find((g) => r.hash && g.hash === r.hash);
+    if (byFile) why.push(`SAME FILE ALREADY USED FOR CN ${byFile.cnNo}`);
+    const byRef = group.find((g) => ref.length >= 5 && norm(g.readRef) === ref);
+    if (byRef) why.push(`SAME REFERENCE ALREADY USED FOR CN ${byRef.cnNo}`);
+  }
+  if (r.readAmount != null && r.readAmount > 0) {
+    if (group.length && sameCustomer) {
+      const total = r.amount + group.reduce((s, g) => s + g.amount, 0);
+      if (Math.abs(r.readAmount - total) >= 0.5) {
+        const cns = [r.cnNo, ...group.map((g) => g.cnNo)];
+        why.push(`RECEIPT AED ${r.readAmount} BUT SAME CUSTOMER'S CNS ${cns.join(" + ")} TOTAL AED ${total}`);
+      }
+    } else if (Math.abs(r.readAmount - r.amount) >= 0.5) {
+      why.push(`RECEIPT AED ${r.readAmount} BUT CN AED ${r.amount}`);
+    }
+  }
+  return { why, group };
+}
+
+const REUSE_OR_AMOUNT = /^(SAME FILE|SAME REFERENCE|RECEIPT AED )/;
+
+/** Re-work only the reuse/amount part of an existing flag (keeps PDF checks and the visual check's reasons). */
+async function recheckReuse(id: string) {
+  const r = await prisma.bankReceipt.findUnique({ where: { id } });
+  if (!r) return;
+  const kept = (r.suspectWhy ?? "").split(" · ").filter((x) => x && !REUSE_OR_AMOUNT.test(x));
+  const { why } = await reuseAndAmountFlags(r);
+  const unique = [...new Set([...kept, ...why])];
+  const suspect = unique.length > 0;
+  await prisma.bankReceipt.update({ where: { id }, data: { suspect, suspectWhy: suspect ? unique.join(" · ").slice(0, 600) : null } });
+  emitGlobal("bankreceipt:suspect", suspect && !r.suspectOk ? { cnNo: r.cnNo } : {});
+}
+
 /** Flags a receipt that looks fake or reused, and rings the admin bell. */
 async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, signs: string[], hard: string[] = []) {
   const r = await prisma.bankReceipt.findUnique({ where: { id } });
   if (!r) return;
   const why: string[] = [...hard];
   if (risk === "high") why.push(...(signs.length ? signs : [`LOOKS ${risk === "high" ? "FAKE" : "DOUBTFUL"}`]).map((x) => x.toUpperCase()));
-  if (r.hash) {
-    const same = await prisma.bankReceipt.findFirst({ where: { hash: r.hash, id: { not: r.id }, orderId: { not: r.orderId } }, select: { cnNo: true } });
-    if (same) why.push(`SAME FILE ALREADY USED FOR CN ${same.cnNo}`);
-  }
-  const ref = norm(r.readRef);
-  if (ref.length >= 5) {
-    const others = await prisma.bankReceipt.findMany({ where: { id: { not: r.id }, orderId: { not: r.orderId }, readRef: { not: null } }, select: { cnNo: true, readRef: true }, orderBy: { createdAt: "desc" }, take: 2000 });
-    const dup = others.find((o) => norm(o.readRef) === ref);
-    if (dup) why.push(`SAME REFERENCE ALREADY USED FOR CN ${dup.cnNo}`);
-  }
-  if (r.readAmount != null && r.readAmount > 0 && Math.abs(r.readAmount - r.amount) >= 0.5) why.push(`RECEIPT AED ${r.readAmount} BUT CN AED ${r.amount}`);
+  const reuse = await reuseAndAmountFlags(r);
+  why.push(...reuse.why);
   if (r.readDate) {
     const up = dubaiDateStr(r.createdAt);
     const gap = (new Date(up).getTime() - new Date(r.readDate).getTime()) / DAY;
@@ -219,6 +278,8 @@ async function checkSuspect(id: string, risk: "low" | "medium" | "high" | null, 
   const suspect = unique.length > 0;
   await prisma.bankReceipt.update({ where: { id }, data: { suspect, suspectWhy: suspect ? unique.join(" · ").slice(0, 600) : null } });
   if (suspect && !r.suspectOk) emitGlobal("bankreceipt:suspect", { cnNo: r.cnNo });
+  // The earlier CNs sharing this receipt: their "reused" / amount flags depend on this one too.
+  for (const g of reuse.group) await recheckReuse(g.id).catch(() => undefined);
 }
 
 // ---------- Statement reading + matching ----------
@@ -290,7 +351,20 @@ async function matchAll() {
 
   let received = 0;
   let notReceived = 0;
+  // One transfer paying several CNs of the same customer: the CNs share one bank line.
+  const receivedShared = await prisma.bankReceipt.findMany({
+    where: { status: "RECEIVED", matchLine: { not: null }, createdAt: { gte: FROM_TIME } },
+    select: { id: true, orderId: true, hash: true, readRef: true, matchLine: true },
+  });
   for (const r of open) {
+    const sharedHit = receivedShared.find((x) => x.orderId !== r.orderId && ((r.hash && x.hash === r.hash) || (norm(r.readRef).length >= 5 && norm(x.readRef) === norm(r.readRef))));
+    if (sharedHit && (await receiptGroup(r)).sameCustomer) {
+      await prisma.bankReceipt.update({ where: { id: r.id }, data: { status: "RECEIVED", checkedAt: new Date(), matchLine: sharedHit.matchLine } });
+      await prisma.order.updateMany({ where: { id: r.orderId, payment: "BANK" }, data: { bankPaymentConfirmed: true } });
+      await clearFlagIfPaid(r.id);
+      received++;
+      continue;
+    }
     const want = r.readAmount != null && r.readAmount > 0 ? r.readAmount : r.amount;
     const day = r.readDate ?? dubaiDateStr(r.createdAt);
     const t = new Date(day).getTime();
@@ -317,6 +391,7 @@ async function matchAll() {
       });
       await prisma.order.updateMany({ where: { id: r.orderId, payment: "BANK" }, data: { bankPaymentConfirmed: true } });
       await clearFlagIfPaid(r.id);
+      receivedShared.push({ id: r.id, orderId: r.orderId, hash: r.hash, readRef: r.readRef, matchLine: `${hit.key} | ${hit.date ?? ""} · AED ${hit.amount} · ${hit.description}`.slice(0, 400) });
       received++;
     } else if (coveredTo && day <= coveredTo) {
       // The statement covers the receipt's day but the money isn't there.
@@ -358,6 +433,10 @@ async function recoverOnStart() {
       await prisma.bankReceipt.update({ where: { id: n.id }, data: { readNote: fixed, ...(refDate ? { readDate: refDate } : {}) } }).catch(() => undefined);
     }
   }
+  const flagged = await prisma.bankReceipt
+    .findMany({ where: { suspect: true, suspectOk: false, createdAt: { gte: new Date(Date.now() - 14 * DAY) } }, select: { id: true } })
+    .catch(() => [] as { id: string }[]);
+  for (const f of flagged) await recheckReuse(f.id).catch(() => undefined);
   const paid = await prisma.bankReceipt.findMany({ where: { status: "RECEIVED", suspect: true }, select: { id: true } }).catch(() => [] as { id: string }[]);
   for (const p of paid) await clearFlagIfPaid(p.id).catch(() => undefined);
   await prisma.bankStatement
