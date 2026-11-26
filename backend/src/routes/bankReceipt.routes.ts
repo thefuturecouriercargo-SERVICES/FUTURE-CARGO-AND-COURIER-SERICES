@@ -138,7 +138,7 @@ const RECEIPT_TOOL = {
     type: "object",
     properties: {
       amount: { type: ["number", "null"], description: "Amount transferred in AED. null if not clearly printed." },
-      date: { type: ["string", "null"], description: "Transfer date as YYYY-MM-DD" },
+      date: { type: ["string", "null"], description: "Transfer date as YYYY-MM-DD, ONLY if a date is printed on the receipt. null when no date is printed — never guess." },
       reference: { type: ["string", "null"], description: "Transaction / reference number" },
       from: { type: ["string", "null"], description: "Sender name or account" },
       note: { type: ["string", "null"], description: "Anything odd, e.g. 'failed', 'pending', 'not a receipt'" },
@@ -173,7 +173,7 @@ async function readReceipt(id: string, fileName?: string | null) {
     data: {
       readDone: true,
       readAmount: out?.amount ?? null,
-      readDate: out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : dateFromRef(out?.reference),
+      readDate: dateFromRef(out?.reference) ?? (out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : null),
       readRef: out?.reference ?? null,
       readFrom: out?.from ?? null,
       readNote: out ? shortNote(out.note) : "COULD NOT READ",
@@ -182,7 +182,7 @@ async function readReceipt(id: string, fileName?: string | null) {
   // Hard file-detail checks (PDF maker, created/modified dates, edit layer, file-name reference).
   const hard: string[] = [];
   if (r.mime === "application/pdf") {
-    const printed = out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : dateFromRef(out?.reference);
+    const printed = dateFromRef(out?.reference) ?? (out?.date && /^\d{4}-\d{2}-\d{2}$/.test(out.date) ? out.date : null);
     hard.push(...(await checkReceiptPdf(Buffer.from(r.data), printed)).flags);
   }
   const nameMiss = fileNameRefMismatch(fileName, out?.reference);
@@ -433,6 +433,22 @@ async function recoverOnStart() {
       await prisma.bankReceipt.update({ where: { id: n.id }, data: { readNote: fixed, ...(refDate ? { readDate: refDate } : {}) } }).catch(() => undefined);
     }
   }
+  // Dates the reader guessed while the bank reference carries the real one (BNK26330… = 26 Nov 2026).
+  const withRef = await prisma.bankReceipt
+    .findMany({ where: { readRef: { not: null }, createdAt: { gte: new Date(Date.now() - 14 * DAY) } }, select: { id: true, readRef: true, readDate: true, createdAt: true, suspectWhy: true, suspectOk: true, cnNo: true, status: true } })
+    .catch(() => [] as { id: string; readRef: string | null; readDate: string | null; createdAt: Date; suspectWhy: string | null; suspectOk: boolean; cnNo: number; status: string }[]);
+  for (const w of withRef) {
+    const refDate = dateFromRef(w.readRef);
+    if (!refDate || refDate === w.readDate) continue;
+    const kept = (w.suspectWhy ?? "").split(" · ").filter((x) => x && !/^RECEIPT DATE/.test(x));
+    const gap = (new Date(dubaiDateStr(w.createdAt)).getTime() - new Date(refDate).getTime()) / DAY;
+    if (gap < -1) kept.push(`RECEIPT DATE ${refDate} IS IN THE FUTURE`);
+    else if (gap > 3) kept.push(`RECEIPT DATED ${refDate} — ${Math.round(gap)} DAYS BEFORE DELIVERY`);
+    await prisma.bankReceipt
+      .update({ where: { id: w.id }, data: { readDate: refDate, ...(w.status === "NOT_RECEIVED" ? { status: "WAITING", checkedAt: null } : {}), suspect: kept.length > 0, suspectWhy: kept.length ? kept.join(" · ").slice(0, 600) : null } })
+      .catch(() => undefined);
+  }
+  if (withRef.length) emitGlobal("bankreceipt:suspect", {});
   const flagged = await prisma.bankReceipt
     .findMany({ where: { suspect: true, suspectOk: false, createdAt: { gte: new Date(Date.now() - 14 * DAY) } }, select: { id: true } })
     .catch(() => [] as { id: string }[]);
