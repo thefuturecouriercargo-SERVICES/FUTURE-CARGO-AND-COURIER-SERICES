@@ -11,7 +11,7 @@ import StatusDoughnut from "@/components/charts/StatusDoughnut";
 import OrderDetails from "@/components/OrderDetails";
 import ContactEditModal from "@/components/ContactEditModal";
 import BarcodeScanner, { beep, pickClashChoice } from "@/components/BarcodeScanner";
-import { DEFAULT_AREA_ROUTE, detectArea } from "@/lib/areas";
+import { DEFAULT_AREA_ROUTE, detectArea, emirateOfAreaName } from "@/lib/areas";
 import PrepaidBadge, { isPrepaid } from "@/components/PrepaidBadge";
 import { scanFeedback, scannerOpenFx } from "@/lib/scanFx";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -202,6 +202,14 @@ const isUrgent = (o: Order) => (o.status === "PENDING" || o.status === "TRANSFER
 /** Area of a parcel: driver's choice first, otherwise guessed from the address. */
 const areaOf = (o: Order) => o.area || detectArea(o.booking?.address, o.emirate);
 
+/** Emirate used only to GROUP the driver's By Area cards — the parcel's saved emirate is never changed.
+ *  An area that belongs to one emirate only (Al Muroor, Khalifa City…) gets one card, even when a
+ *  parcel was saved as OTHER or with a different emirate ("Khalifa City · Dubai"). */
+const groupEmirate = (o: Order, area: string) => {
+  const em = (o.emirate ?? "").toUpperCase().trim();
+  return emirateOfAreaName(area) ?? (em || "OTHER");
+};
+
 type AreaGroup = { key: string; area: string; emirate: string; orders: Order[] };
 
 /** Group parcels by emirate + area; the driver's saved route order wins, then biggest area first.
@@ -210,8 +218,9 @@ function groupByArea(list: Order[], savedOrder: string[], parcelOrder: string[] 
   const map = new Map<string, AreaGroup>();
   for (const o of list) {
     const area = areaOf(o);
-    const key = `${o.emirate}|${area}`;
-    const g = map.get(key) ?? { key, area, emirate: o.emirate, orders: [] };
+    const em = groupEmirate(o, area);
+    const key = `${em}|${area}`;
+    const g = map.get(key) ?? { key, area, emirate: em, orders: [] };
     g.orders.push(o);
     map.set(key, g);
   }
@@ -678,7 +687,8 @@ export default function DriverPortalPage() {
   const areaProgress = useMemo(() => {
     const m = new Map<string, { total: number; done: number; delivered: number; cancelled: number; left: number }>();
     for (const o of orders) {
-      const k = `${o.emirate}|${areaOf(o)}`;
+      const a = areaOf(o);
+      const k = `${groupEmirate(o, a)}|${a}`;
       const v = m.get(k) ?? { total: 0, done: 0, delivered: 0, cancelled: 0, left: 0 };
       v.total += 1;
       if (o.status === "DELIVERED" || o.status === "CANCELLED") v.done += 1;

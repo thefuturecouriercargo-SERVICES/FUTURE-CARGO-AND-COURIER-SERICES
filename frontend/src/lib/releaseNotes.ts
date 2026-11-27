@@ -6,9 +6,9 @@
  * items per list. Leave a list empty to show only "bugs cleared".
  */
 export const RELEASE_NOTES = {
-  driver: [],
-  admin: [
-    "BANK RECEIPTS WITH NO PRINTED DATE NOW TAKE THE DATE FROM THE BANK REFERENCE",
-    "NO MORE WRONG \"DAYS BEFORE DELIVERY\" FAKE ALERTS FROM A GUESSED DATE",
+  driver: [
+    "BY AREA: SAME AREA NOW SHOWS IN ONE CARD ONLY",
+    "NO MORE DOUBLE AL MUROOR / KHALIFA CITY CARDS",
   ],
+  admin: [],
 };
